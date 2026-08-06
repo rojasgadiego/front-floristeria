@@ -1,0 +1,437 @@
+/* ============================================================
+ * animaciones.css — gramática de movimiento compartida
+ *
+ * Se importa una sola vez en main.js:
+ *     import '@/assets/animaciones.css'
+ *
+ * Va sin `scoped` a propósito: las clases que Vue agrega durante una
+ * transición (.desliza-enter-active, .modal-leave-to, etc.) se aplican
+ * al elemento en tiempo de ejecución, y una hoja global las alcanza sin
+ * necesitar el atributo de scope.
+ *
+ * Cada vista aporta solo lo suyo:
+ *   --destello               color del flash de un monto que cambió
+ *   .btn.btn-ocupado:disabled  color del botón mientras guarda
+ * ============================================================ */
+
+
+/* ------------------------------------------------------------
+ * 1. ENTRADA
+ * ---------------------------------------------------------- */
+
+@keyframes entra {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* Bloques de nivel superior: KPIs, cabeceras, barras de filtro.
+   El escalonado se controla con la variable --i. */
+.al-entrar {
+    animation: entra 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 55ms);
+}
+
+/* Filas de tabla y fichas de grilla. Más corta que .al-entrar porque
+   suelen ser muchas y el escalonado se acumula. */
+@keyframes aparece {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.fila {
+    animation: aparece 200ms ease-out backwards;
+}
+
+/* El escalonado corre solo cuando la vista lo pide (primera carga,
+   reordenamiento). El resto del tiempo las filas entran de una. */
+.escalonada .fila {
+    animation-duration: 300ms;
+    animation-delay: calc(var(--i, 0) * 35ms);
+}
+
+
+/* ------------------------------------------------------------
+ * 2. RESALTE
+ * Un registro que cambia de estado pero se queda en la lista pasaría
+ * desapercibido. Se animan fila y celdas a la vez: en escritorio pinta
+ * el <td> (que tapa al <tr>), en móvil la tarjeta es el <tr>.
+ * ---------------------------------------------------------- */
+
+@keyframes resalta {
+    0% {
+        background: #d1fae5;
+    }
+
+    70% {
+        background: #ecfdf5;
+    }
+
+    100% {
+        background: transparent;
+    }
+}
+
+@keyframes resalta-malo {
+    0% {
+        background: #fee2e2;
+    }
+
+    70% {
+        background: #fef2f2;
+    }
+
+    100% {
+        background: transparent;
+    }
+}
+
+.resaltada,
+.resaltada td {
+    animation: resalta 1400ms ease-out;
+}
+
+.resaltada-malo,
+.resaltada-malo td {
+    animation: resalta-malo 1400ms ease-out;
+}
+
+/* Versión para fichas de grilla, donde el resalte es el borde */
+@keyframes resalta-borde {
+    0% {
+        border-color: #059669;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+    }
+
+    70% {
+        border-color: #059669;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
+    }
+
+    100% {
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0);
+    }
+}
+
+.resaltada-borde {
+    animation: resalta-borde 1400ms ease-out;
+}
+
+
+/* ------------------------------------------------------------
+ * 3. DESTELLO
+ * Para un número que se recalcula solo. El color lo define cada vista
+ * con --destello, así el flash sobre un panel oscuro no queda ilegible.
+ * ---------------------------------------------------------- */
+
+@keyframes destello {
+    0% {
+        transform: scale(1.07);
+        color: var(--destello, #10b981);
+    }
+
+    60% {
+        color: var(--destello, #10b981);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.destella {
+    display: inline-block;
+    animation: destello 460ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+
+/* ------------------------------------------------------------
+ * 4. ACORDEÓN
+ * La altura de un <tr> no es animable y `height: auto` no interpola.
+ * La transición corre sobre un grid interno de 0fr a 1fr. El nivel de
+ * overflow:hidden intermedio evita que el padding se asome al colapsar,
+ * así que el relleno va SIEMPRE en el hijo, nunca en el <td>.
+ *
+ *   <div class="acordeon-caja">
+ *     <div class="acordeon-interior">
+ *       <div class="contenido-con-padding"> … </div>
+ * ---------------------------------------------------------- */
+
+.acordeon-caja {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.acordeon-interior {
+    overflow: hidden;
+    min-height: 0;
+}
+
+.acordeon-enter-from .acordeon-caja,
+.acordeon-leave-to .acordeon-caja {
+    grid-template-rows: 0fr;
+}
+
+.acordeon-enter-active .acordeon-interior>*,
+.acordeon-leave-active .acordeon-interior>* {
+    transition: opacity 0.24s ease;
+}
+
+.acordeon-enter-from .acordeon-interior>*,
+.acordeon-leave-to .acordeon-interior>* {
+    opacity: 0;
+}
+
+/* Contenido interno que cae escalonado una vez abierta la caja */
+.acordeon-enter-active .escalon {
+    animation: entra 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(130ms + var(--i, 0) * 40ms);
+}
+
+/* Flecha de cualquier desplegable */
+.flecha {
+    display: inline-block;
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.abierta>.flecha,
+.abierta .flecha {
+    transform: rotate(180deg);
+}
+
+
+/* ------------------------------------------------------------
+ * 5. TRANSICIONES CON NOMBRE
+ * ---------------------------------------------------------- */
+
+/* desliza — bloques que aparecen a mitad de flujo (errores, avisos) */
+.desliza-enter-active {
+    transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.desliza-leave-active {
+    transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.desliza-enter-from,
+.desliza-leave-to {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* cambio — reemplazo de bloques excluyentes. Usar con mode="out-in" */
+.cambio-enter-active {
+    transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cambio-leave-active {
+    transition: opacity 0.1s ease;
+}
+
+.cambio-enter-from {
+    opacity: 0;
+    transform: scale(0.98);
+}
+
+.cambio-leave-to {
+    opacity: 0;
+}
+
+/* brote — etiquetas y botones que asoman dentro de algo ya montado */
+.brote-enter-active {
+    transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.brote-leave-active {
+    transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.brote-enter-from,
+.brote-leave-to {
+    opacity: 0;
+    transform: scale(0.7);
+}
+
+/* linea — filas de un TransitionGroup dentro de un modal.
+   La salida necesita position:absolute; el contenedor debe ser relative. */
+.linea-enter-active {
+    transition: opacity 0.22s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.linea-leave-active {
+    transition: opacity 0.16s ease, transform 0.18s ease;
+    position: absolute;
+    width: 100%;
+}
+
+.linea-enter-from {
+    opacity: 0;
+    transform: translateX(-14px);
+}
+
+.linea-leave-to {
+    opacity: 0;
+    transform: translateX(22px);
+}
+
+.linea-move {
+    transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ficha — TransitionGroup sobre una grilla (NO sirve en tablas).
+   Requiere el hook antesDeSalir para congelar la caja del elemento. */
+.ficha-leave-active {
+    position: absolute;
+    margin: 0;
+    transition: opacity 0.24s ease, transform 0.26s cubic-bezier(0.5, 0, 0.75, 0);
+}
+
+.ficha-leave-to {
+    opacity: 0;
+    transform: scale(0.94);
+}
+
+.ficha-move {
+    transition: transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* modal — fondo y caja se animan por separado */
+.modal-enter-active,
+.modal-leave-active {
+    transition: opacity 0.18s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+    opacity: 0;
+}
+
+.modal-enter-active .modal {
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-leave-active .modal {
+    transition: transform 0.16s ease;
+}
+
+.modal-enter-from .modal {
+    transform: translateY(18px) scale(0.97);
+}
+
+.modal-leave-to .modal {
+    transform: translateY(8px) scale(0.98);
+}
+
+/* aviso — el toast asume transform: translateX(-50%) en reposo */
+.aviso-enter-active {
+    transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.aviso-leave-active {
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.aviso-enter-from,
+.aviso-leave-to {
+    opacity: 0;
+    transform: translate(-50%, 16px);
+}
+
+
+/* ------------------------------------------------------------
+ * 6. ESTADO OCUPADO
+ * ---------------------------------------------------------- */
+
+@keyframes girar {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spinner {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: girar 0.8s linear infinite;
+}
+
+/* Cada vista define el color de fondo: la especificidad de .btn:disabled
+   dentro del componente empata con una regla global de dos clases. */
+.btn.btn-ocupado:disabled {
+    opacity: 0.78;
+    cursor: wait;
+}
+
+/* Atenuado breve al cambiar de filtro */
+.atenuada {
+    opacity: 0.45;
+}
+
+
+/* ------------------------------------------------------------
+ * 7. ACCESIBILIDAD
+ * Un solo bloque para todo. Al vivir acá, ninguna vista puede olvidarlo.
+ * ---------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .al-entrar,
+    .fila,
+    .escalonada .fila,
+    .resaltada,
+    .resaltada td,
+    .resaltada-malo,
+    .resaltada-malo td,
+    .resaltada-borde,
+    .destella,
+    .spinner,
+    .acordeon-enter-active .escalon {
+        animation: none;
+    }
+
+    .flecha,
+    .acordeon-caja,
+    .acordeon-enter-active .acordeon-interior>*,
+    .acordeon-leave-active .acordeon-interior>*,
+    .desliza-enter-active,
+    .desliza-leave-active,
+    .cambio-enter-active,
+    .cambio-leave-active,
+    .brote-enter-active,
+    .brote-leave-active,
+    .linea-enter-active,
+    .linea-leave-active,
+    .linea-move,
+    .ficha-leave-active,
+    .ficha-move,
+    .modal-enter-active,
+    .modal-leave-active,
+    .modal-enter-active .modal,
+    .modal-leave-active .modal,
+    .aviso-enter-active,
+    .aviso-leave-active {
+        transition: none;
+    }
+
+    .atenuada {
+        opacity: 1;
+    }
+}

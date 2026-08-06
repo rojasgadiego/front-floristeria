@@ -1,0 +1,143 @@
+/* ============================================================
+ * tokens.css — vocabulario visual de la app
+ *
+ * Se importa una sola vez, ANTES de montar, en main.js:
+ *     import '@/assets/tokens.css'
+ *
+ * Todo lo que sea un color, una sombra o un radio sale de acá. La regla
+ * es simple: si estás escribiendo un hex dentro de un componente, falta
+ * un token.
+ *
+ * Paleta: neutro lavanda tenue + marca violeta iris.
+ * ============================================================ */
+
+:root {
+
+  /* ----------------------------------------------------------
+   * NEUTRO — lavanda tenue
+   *
+   * El neutro es levemente violeta en vez de gris azulado. Es lo que
+   * cambia la sensación de la app sin teñir ni una tarjeta: las
+   * tarjetas siguen blancas, pero todo lo que las rodea es tibio.
+   * -------------------------------------------------------- */
+
+  --pagina: #FAF8FC;
+  /* fondo del documento */
+  --tarjeta: #FFFFFF;
+  /* superficie elevada */
+  --tarjeta-hundida: #F6F3F9;
+  /* zonas internas: totales, resúmenes */
+
+  --borde: #EAE4F2;
+  /* hairline por defecto */
+  --borde-fuerte: #D8CEE6;
+  /* hover, divisores con énfasis */
+  --borde-tenue: #F2EEF7;
+  /* separadores dentro de una tarjeta */
+
+  --texto: #2B2733;
+  /* títulos y cifras */
+  --texto-medio: #55505F;
+  /* cuerpo */
+  --texto-suave: #807889;
+  /* secundario, rótulos */
+  --texto-tenue: #A099AC;
+  /* notas al pie, placeholders */
+
+
+  /* ----------------------------------------------------------
+   * MARCA — violeta iris
+   *
+   * Antes el verde hacía doble trabajo: era la marca Y era "caja
+   * abierta". Con la marca en violeta, el verde queda liberado para
+   * significar solo estado — y las promociones, que son cosa de marca
+   * y no un estado, usan este mismo color. Un color menos en total.
+   *
+   * La saturación es deliberadamente más alta que la del neutro: la
+   * armonía la da el tono compartido, la separación la da el croma.
+   * -------------------------------------------------------- */
+
+  --marca: #6E3D9C;
+  /* botones, enlaces, barra de acento */
+  --marca-fuerte: #5C3183;
+  /* hover */
+  --marca-claro: #9169C4;
+  /* extremo claro del degradado */
+  --marca-oscuro: #2F2049;
+  /* superficie oscura (KPI destacado) */
+
+  --marca-tinte: #F1ECF8;
+  /* fondo de nota o etiqueta */
+  --marca-borde: #DCCDEE;
+  --marca-texto: #542C7D;
+  /* texto sobre --marca-tinte */
+  --marca-sobre: #E4D5F5;
+  /* texto secundario sobre --marca-oscuro */
+
+
+  /* ----------------------------------------------------------
+   * ESTADOS
+   * -------------------------------------------------------- */
+
+  --exito: #0E9F6E;
+  --exito-fuerte: #07805A;
+  --exito-tinte: #E9F8F1;
+  --exito-borde: #9FDCC4;
+  --exito-texto: #076147;
+
+  --aviso: #D97706;
+  --aviso-fuerte: #B45309;
+  --aviso-tinte: #FFFBEB;
+  --aviso-borde: #FCD34D;
+  --aviso-texto: #92400E;
+
+  --error: #DC2626;
+  --error-fuerte: #B91C1C;
+  --error-tinte: #FEF2F2;
+  --error-borde: #FCA5A5;
+  --error-texto: #991B1B;
+
+
+  /* ----------------------------------------------------------
+   * SOMBRAS
+   *
+   * Dos capas, siempre: la de contacto asienta el elemento, la difusa
+   * le da aire. Una sola sombra grande flota.
+   *
+   * Y llevan el matiz del fondo. Una sombra gris azulada sobre un
+   * fondo lavanda se ve sucia, como una mancha; con el matiz correcto
+   * se ve como sombra.
+   * -------------------------------------------------------- */
+
+  --sombra: 0 1px 2px rgba(85, 65, 120, 0.05), 0 6px 16px rgba(85, 65, 120, 0.06);
+  --sombra-alta: 0 1px 2px rgba(85, 65, 120, 0.06), 0 10px 24px rgba(85, 65, 120, 0.09);
+  --sombra-modal: 0 25px 50px -12px rgba(47, 32, 73, 0.30);
+  --sombra-flotante: 0 10px 28px rgba(47, 32, 73, 0.16);
+  /* toast */
+
+
+  /* ----------------------------------------------------------
+   * FORMA
+   * -------------------------------------------------------- */
+
+  --radio: 0.5rem;
+  /* controles: botón, input */
+  --radio-tarjeta: 12px;
+  --radio-chico: 8px;
+  --radio-pill: 999px;
+
+
+  /* ----------------------------------------------------------
+   * FOCO
+   * Un solo token para que el anillo de foco sea idéntico en toda la
+   * app y nadie lo reinvente con otro color.
+   * -------------------------------------------------------- */
+
+  --foco: 0 0 0 2px var(--marca-claro);
+}
+
+/* El fondo de página va acá y no en cada vista */
+body {
+  background: var(--pagina);
+  color: var(--texto);
+}
