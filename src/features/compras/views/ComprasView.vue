@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div>
         <h2>Compras</h2>
@@ -447,14 +446,12 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter } from 'vue-router'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { textoEstado, claseEstado } from '@/features/compras/store/compras.module'
 import { TIPOS_PRESENTACION } from '@/features/compras/store/presentaciones.module'
@@ -462,8 +459,8 @@ import { aDateOnly, hoy } from '@/core/utils/fechas'
 
 export default {
   name: 'ComprasView',
-  components: { MainLayout },
-
+  components: {  },
+  
   setup () {
     const store = useStore()
     const router = useRouter()

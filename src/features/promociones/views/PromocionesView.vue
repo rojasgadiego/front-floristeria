@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div>
         <h2>Promociones</h2>
@@ -386,13 +385,11 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import {
   TIPOS, ALCANCES, DIAS, textoAlcance, valorLegible
@@ -401,7 +398,7 @@ import { haceDias, hoy } from '@/core/utils/fechas'
 
 export default {
   name: 'PromocionesView',
-  components: { MainLayout },
+  components: {  },
 
   setup () {
     const store = useStore()

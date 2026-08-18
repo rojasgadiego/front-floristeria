@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div class="titulo">
         <h2>Configuración</h2>
@@ -419,14 +418,12 @@
     <Transition name="aviso">
       <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
     </Transition>
-  </MainLayout>
 </template>
 
 <script>
 import { reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { formatearRut, rutValido } from '@/core/utils/rut'
-import MainLayout from '@/layouts/MainLayout.vue'
 import EsqueletoBloque from '@/shared/components/EsqueletoBloque.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
@@ -445,7 +442,7 @@ const TONOS = {
 
 export default {
   name: 'ConfiguracionView',
-  components: { MainLayout, EsqueletoBloque },
+  components: { EsqueletoBloque },
 
   setup() {
     const store = useStore()

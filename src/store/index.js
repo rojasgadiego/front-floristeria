@@ -14,6 +14,7 @@ import reportes from '@/features/reportes/store/reportes.module'
 import promociones from '@/features/promociones/store/promociones.module'
 import cotizaciones from '@/features/cotizaciones/store/cotizaciones.modules'
 import ventas from '@/features/ventas/store/ventas.module'
+import caja from '@/features/ventas/store/caja.module'
 
 const store = createStore({
   modules: {
@@ -31,7 +32,8 @@ const store = createStore({
     mermas,
     reportes,
     promociones,
-    ventas
+    ventas,
+    caja
   }
 })
 

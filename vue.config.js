@@ -6,7 +6,7 @@ module.exports = defineConfig({
   devServer: {
     proxy: {
       '/api': {
-        target: 'https://localhost:7265',
+        target: 'http://localhost:5042',
         changeOrigin: true,
         secure: false   // el cert de desarrollo de .NET es autofirmado
       }

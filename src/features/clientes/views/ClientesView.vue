@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div class="titulo">
         <h2>Clientes y club de puntos</h2>
@@ -538,13 +537,11 @@
     <Transition name="aviso">
       <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
     </Transition>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import EsqueletoBloque from '@/shared/components/EsqueletoBloque.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { rutValido, formatearRut, limpiarRut, digitoVerificador } from '@/core/utils/rut'
@@ -569,7 +566,7 @@ const TONOS = {
 
 export default {
   name: 'ClientesView',
-  components: { MainLayout, EsqueletoBloque },
+  components: { EsqueletoBloque },
 
   setup() {
     const store = useStore()

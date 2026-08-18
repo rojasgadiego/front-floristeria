@@ -10,6 +10,7 @@
   "dependencies": {
     "axios": "^1.19.0",
     "core-js": "^3.8.3",
+    "lucide-vue-next": "^1.0.0",
     "vue": "^3.2.13",
     "vue-router": "^4.5.1",
     "vuex": "^4.1.0"
@@ -20,23 +21,32 @@
     "@vue/cli-plugin-babel": "~5.0.0",
     "@vue/cli-plugin-eslint": "~5.0.0",
     "@vue/cli-service": "~5.0.0",
-    "eslint": "^7.32.0",
+    "eslint": "^8.57.1",
     "eslint-plugin-vue": "^8.0.3"
   },
   "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended"
-    ],
-    "parserOptions": {
-      "parser": "@babel/eslint-parser"
-    },
-    "rules": {}
+  "root": true,
+  "env": { "node": true, "browser": true, "es2022": true },
+  "extends": ["plugin:vue/vue3-essential", "eslint:recommended"],
+  "parserOptions": {
+    "parser": "@babel/eslint-parser",
+    "ecmaVersion": "latest",
+    "sourceType": "module",
+    "requireConfigFile": false
   },
+  "rules": {
+    "vue/multi-word-component-names": "off"
+  },
+  "globals": {
+    "defineProps": "readonly",
+    "defineEmits": "readonly",
+    "defineExpose": "readonly",
+    "withDefaults": "readonly",
+    "defineOptions": "readonly",
+    "defineSlots": "readonly"
+  }
+}
+,
   "browserslist": [
     "> 1%",
     "last 2 versions",

@@ -1,24 +1,12 @@
-/**
- * Menú del ERP Floristería Colibrí
- * =========================================================================
- * Un solo lugar donde viven las rutas, los íconos y a qué módulo
- * corresponde cada entrada.
- *
- * QUIÉN VE QUÉ lo decide el servidor: SesionDto trae `permisos` con las
- * claves de módulo, y `filtrarMenuPorPermisos` las contrasta contra `clave`.
- * Así el backend queda como única autoridad y el front solo obedece.
- *
- * El array `roles` de cada ítem ya NO filtra el menú. Sobrevive para las
- * tarjetas de rol de la vista Equipo, que muestran qué ve cada rol —
- * información que el servidor no expone, porque /auth/me solo habla de
- * quien está conectado. Es descriptivo, no una barrera.
- * =========================================================================
- */
-
 const ico = (contenido) =>
   `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${contenido}</svg>`
 
+/*
+ * ACTIVOS: Inicio, Punto de Venta e Inventario.
+ * Los demás módulos quedan al final del archivo, dentro de un bloque
+ * comentado y sin tocar, para devolverlos a este array cuando toque.
+ */
 export const MENU_COLIBRI = [
   // ---------------- Operación ----------------
   {
@@ -29,7 +17,26 @@ export const MENU_COLIBRI = [
     roles: ['Admin', 'Vendedor', 'Bodega'],
     icon: ico('<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/>')
   },
+ 
+
+  // ---------------- Catálogo ----------------
   {
+    path: '/inventario',
+    clave: 'inventario',
+    name: 'Inventario',
+    seccion: 'Catálogo',
+    roles: ['Admin', 'Vendedor', 'Bodega'],
+    icon: ico('<path d="M3 8l9-4 9 4v8l-9 4-9-4z"/><path d="M3 8l9 4 9-4"/><path d="M12 12v8"/>')
+  }
+]
+
+/* ============================================================
+   MÓDULOS EN PAUSA
+   Mueve el ítem que necesites de vuelta al array de arriba.
+   ============================================================
+
+  // ---------------- Operación ----------------
+   {
     path: '/pos',
     clave: 'pos',
     name: 'Punto de Venta',
@@ -55,14 +62,6 @@ export const MENU_COLIBRI = [
   },
 
   // ---------------- Catálogo ----------------
-  {
-    path: '/inventario',
-    clave: 'inventario',
-    name: 'Inventario',
-    seccion: 'Catálogo',
-    roles: ['Admin', 'Vendedor', 'Bodega'],
-    icon: ico('<path d="M3 8l9-4 9 4v8l-9 4-9-4z"/><path d="M3 8l9 4 9-4"/><path d="M12 12v8"/>')
-  },
   {
     path: '/compras',
     clave: 'compras',
@@ -137,7 +136,8 @@ export const MENU_COLIBRI = [
     roles: ['Admin'],
     icon: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/>')
   }
-]
+
+   ============================================================ */
 
 /**
  * Filtra el menú con los permisos que mandó el servidor.

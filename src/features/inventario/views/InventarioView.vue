@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div>
         <h2>Inventario</h2>
@@ -528,13 +527,11 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import ModalArmado from '@/features/inventario/components/ModalArmado.vue'
 import { TIPOS, MOTIVOS_AJUSTE } from '@/features/inventario/store/productos.module'
 import { claseMovimiento } from '@/features/inventario/store/inventario.module'
@@ -548,7 +545,7 @@ const FILTRO_TIPOS = [
 
 export default {
   name: 'InventarioView',
-  components: { MainLayout, ModalArmado },
+  components: { ModalArmado },
 
   setup() {
     const store = useStore()
@@ -931,16 +928,10 @@ export default {
   box-sizing: border-box;
 }
 
+/* ---------- Animaciones ---------- */
 @keyframes entra {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .al-entrar {
@@ -949,15 +940,8 @@ export default {
 }
 
 @keyframes aparece-fila {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
 }
 
 .fila {
@@ -965,23 +949,15 @@ export default {
   animation-delay: calc(var(--i, 0) * 25ms);
 }
 
+/* El resalte verde fijo no se veía en oscuro. Ahora se tiñe del
+   propio color de éxito, mezclado con la superficie de cada tema. */
 @keyframes resalta {
-  0% {
-    background: #d1fae5;
-  }
-
-  70% {
-    background: #ecfdf5;
-  }
-
-  100% {
-    background: transparent;
-  }
+  0%   { background: color-mix(in srgb, var(--success) 22%, var(--surface)); }
+  70%  { background: color-mix(in srgb, var(--success) 8%,  var(--surface)); }
+  100% { background: transparent; }
 }
 
-.fila.resaltada td {
-  animation: resalta 1400ms ease-out;
-}
+.fila.resaltada td { animation: resalta 1400ms ease-out; }
 
 .flecha {
   display: inline-block;
@@ -989,26 +965,20 @@ export default {
 }
 
 .ver-receta.abierta .flecha,
-.titulo-plegable.abierta .flecha {
-  transform: rotate(180deg);
-}
+.titulo-plegable.abierta .flecha { transform: rotate(180deg); }
 
 .spinner {
   display: inline-block;
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
+  border-top-color: var(--accent-contrast);
   border-radius: 50%;
   animation: girar 0.8s linear infinite;
 }
 
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
-  }
-}
+@keyframes girar { to { transform: rotate(360deg); } }
 
 /* ---------- Encabezado ---------- */
 .cabecera {
@@ -1023,13 +993,14 @@ export default {
 .cabecera h2 {
   margin: 0;
   font-size: clamp(1.25rem, 4.5vw, 1.5rem);
-  color: #0f172a;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .pista {
   margin: 4px 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 /* ---------- Botones ---------- */
@@ -1041,9 +1012,9 @@ export default {
   min-height: 44px;
   padding: 0.65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background-color: #059669;
-  color: #fff;
+  border-radius: var(--r-sm, 8px);
+  background-color: var(--accent);
+  color: var(--accent-contrast, #fff);
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -1052,41 +1023,34 @@ export default {
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover:not(:disabled) {
-  background-color: #047857;
-}
-
-.btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
+.btn:hover:not(:disabled) { background-color: var(--accent-hover, var(--accent)); }
+.btn:active:not(:disabled) { transform: scale(0.97); }
 
 .btn:disabled {
-  background-color: #a7c9bb;
+  background-color: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
+  color: color-mix(in srgb, var(--accent-contrast) 70%, transparent);
   cursor: not-allowed;
 }
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
 .btn-linea:hover:not(:disabled) {
-  background-color: #f8fafc;
-  border-color: #94a3b8;
+  background-color: var(--surface-2);
+  border-color: var(--text-faint);
+  color: var(--text);
 }
 
-.btn-linea:disabled {
-  background: transparent;
-  color: #cbd5e1;
-}
+.btn-linea:disabled { background: transparent; color: var(--text-faint); }
 
-.btn-rojo {
-  background-color: #dc2626;
-}
-
+/* En oscuro --danger es un rojo claro: texto blanco encima queda ilegible.
+   --surface se invierte solo con el tema y funciona en los dos. */
+.btn-rojo { background-color: var(--danger); color: var(--surface); }
 .btn-rojo:hover:not(:disabled) {
-  background-color: #b91c1c;
+  background-color: color-mix(in srgb, var(--danger) 82%, #000);
 }
 
 .btn-mini {
@@ -1099,36 +1063,43 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   width: 34px;
   height: 34px;
   padding: 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 7px;
-  background: #fff;
-  color: #475569;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: inherit;
   font-size: 0.9rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
 }
 
 .btn-icono:hover:not(:disabled) {
-  border-color: #059669;
-  color: #059669;
+  border-color: var(--accent);
+  color: var(--accent-text, var(--accent));
 }
 
-.btn-icono:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
+.btn-icono:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .btn-icono.peligro:hover {
-  border-color: #dc2626;
-  color: #dc2626;
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
-.btn-icono.chico {
-  width: 30px;
-  height: 30px;
+.btn-icono.chico { width: 30px; height: 30px; }
+
+/* Faltaba en toda la vista: navegando con teclado no se veía el foco */
+.btn:focus-visible,
+.btn-icono:focus-visible,
+.enlace-boton:focus-visible,
+.ver-receta:focus-visible,
+.titulo-plegable:focus-visible,
+.segmentado button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .enlace-boton {
@@ -1136,16 +1107,11 @@ export default {
   padding: 0;
   border: none;
   background: none;
-  color: #059669;
+  color: var(--accent-text, var(--accent));
   font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
-}
-
-.enlace {
-  color: #a7f3d0;
-  text-decoration: underline;
 }
 
 /* ---------- Indicadores ---------- */
@@ -1157,16 +1123,16 @@ export default {
 }
 
 .kpi {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 12px);
   padding: 16px;
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 
 .kpi:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
 }
 
 .kpi .rot {
@@ -1174,7 +1140,7 @@ export default {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-faint);
 }
 
 .kpi .val {
@@ -1183,31 +1149,29 @@ export default {
   margin-top: 5px;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 
 .kpi .pie {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-muted);
   margin-top: 3px;
 }
 
+/* El KPI lleno usaba verde oscuro fijo con textos en verde claro:
+   en la paleta rosa quedaba fuera de sistema y el contraste del pie
+   era muy bajo. Ahora es el acento con blancos translúcidos. */
 .kpi.destacado {
-  background: #064e3b;
-  border-color: #064e3b;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast, #fff);
 }
 
-.kpi.destacado .rot {
-  color: #6ee7b7;
-}
+.kpi.destacado .val { color: inherit; }
+.kpi.destacado .rot { color: color-mix(in srgb, var(--accent-contrast) 72%, transparent); }
+.kpi.destacado .pie { color: color-mix(in srgb, var(--accent-contrast) 85%, transparent); }
 
-.kpi.destacado .pie {
-  color: #a7f3d0;
-}
-
-.kpi.alerta .val {
-  color: #dc2626;
-}
+.kpi.alerta .val { color: var(--danger); }
 
 /* ---------- Bandas ---------- */
 .banda {
@@ -1216,26 +1180,24 @@ export default {
   gap: 11px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: var(--r-sm, 10px);
   margin-bottom: 16px;
   font-size: 0.875rem;
 }
 
 .banda-aviso {
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  color: #78350f;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-border, color-mix(in srgb, var(--warn) 30%, transparent));
+  color: var(--warn);
 }
 
 .banda-error {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border, color-mix(in srgb, var(--danger) 30%, transparent));
+  color: var(--danger);
 }
 
-.banda .btn {
-  margin-left: auto;
-}
+.banda .btn { margin-left: auto; }
 
 /* ---------- Filtros ---------- */
 .barra-filtros {
@@ -1252,17 +1214,18 @@ export default {
   gap: 9px;
   flex: 1 1 240px;
   min-width: 0;
-  background: #fff;
-  border: 1px solid #cbd5e1;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
   padding: 0 12px;
   min-height: 44px;
+  color: var(--text);
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 
 .buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .buscador input {
@@ -1271,46 +1234,43 @@ export default {
   border: 0;
   outline: 0;
   background: none;
+  color: var(--text);
   font-size: max(0.9rem, 16px);
   font-family: inherit;
 }
+
+.buscador input::placeholder { color: var(--text-faint); }
 
 .campo {
   width: 100%;
   min-height: 44px;
   padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm, 8px);
+  background: var(--surface);
   font-family: inherit;
   font-size: max(0.9rem, 16px);
-  color: #0f172a;
+  color: var(--text);
   outline: none;
   transition: border-color 0.18s, box-shadow 0.18s;
 }
 
 .campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-.campo-corto {
-  width: auto;
-  flex: 0 1 210px;
-}
+.campo-corto { width: auto; flex: 0 1 210px; }
 
 .segmentado {
   display: inline-flex;
-  background: #f1f5f9;
+  background: var(--surface-2);
   border-radius: 9px;
   padding: 3px;
   gap: 3px;
 }
 
-.segmentado.ancho-total {
-  display: flex;
-  width: 100%;
-}
+.segmentado.ancho-total { display: flex; width: 100%; }
 
 .segmentado button {
   flex: 1;
@@ -1319,7 +1279,7 @@ export default {
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: #475569;
+  color: var(--text-muted);
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -1328,29 +1288,32 @@ export default {
 }
 
 .segmentado button.on {
-  background: #fff;
-  color: #047857;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--surface);
+  color: var(--accent-text, var(--accent));
+  box-shadow: var(--shadow-sm);
 }
 
-.segmentado button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
+.segmentado button:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* Es un <label>, así que heredaba la regla global de label: mayúsculas,
+   0.68rem y letter-spacing. Se veía como un título, no como una casilla. */
 .check {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  margin-bottom: 0;
   font-size: 0.85rem;
-  color: #475569;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
   cursor: pointer;
 }
 
 .check input {
   width: 17px;
   height: 17px;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -1362,7 +1325,7 @@ export default {
   letter-spacing: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text);
   cursor: pointer;
   margin-bottom: 4px;
 }
@@ -1371,89 +1334,87 @@ export default {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
 /* ---------- Tabla ---------- */
 .tabla-envoltura {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
-  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 12px);
+
+  /*
+    Antes: overflow: hidden seguido de overflow-x: auto. El scroll existía,
+    pero la tabla nunca lo activaba porque width:100% sin min-width la
+    obliga a caber siempre. Con min-width en la tabla, ocho columnas ya no
+    caben en pantallas medianas y aparece el desplazamiento horizontal.
+  */
+  overflow: auto;
+  overscroll-behavior-x: contain;
+
+  /*
+    Alto máximo para que la tabla tenga su propio scroll vertical y el
+    encabezado quede a la vista. Si prefieres que scrollee la página
+    completa, borra estas dos líneas y el position:sticky del th.
+  */
+  max-height: min(65vh, 720px);
+
   transition: opacity 0.14s ease;
 }
 
-.tabla-envoltura.atenuada {
-  opacity: 0.45;
-}
+.tabla-envoltura.atenuada { opacity: 0.45; }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  min-width: 940px;   /* ← lo que faltaba para que exista el scroll */
+  border-collapse: separate;   /* separate: si no, el borde del th sticky desaparece */
+  border-spacing: 0;
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   text-align: left;
   padding: 11px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 td {
   padding: 11px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 0.875rem;
+  color: var(--text);
   vertical-align: middle;
 }
 
-tbody tr:last-child td {
-  border-bottom: 0;
-}
+tbody tr:last-child td { border-bottom: 0; }
 
-tr.inactiva {
-  opacity: 0.5;
-}
+tr.inactiva { opacity: 0.5; }
 
-.fila.abierta td {
-  background: #f8fafc;
-}
+.fila.abierta td { background: var(--surface-2); }
+.fila td { transition: background-color 0.16s ease; }
+.fila:hover td { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 
-.fila td {
-  transition: background-color 0.16s ease;
-}
-
-.der {
-  text-align: right;
-}
-
-.suave {
-  color: #64748b;
-}
-
-.mini {
-  font-size: 0.78rem;
-}
-
-.min0 {
-  min-width: 0;
-}
+.der { text-align: right; }
+.suave { color: var(--text-muted); }
+.mini { font-size: 0.78rem; }
+.min0 { min-width: 0; }
 
 .dato {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
-.negativo {
-  color: #dc2626;
-}
+.negativo { color: var(--danger); }
 
 .celda-producto {
   display: flex;
@@ -1469,7 +1430,7 @@ tr.inactiva {
 
 .nombre {
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1478,7 +1439,7 @@ tr.inactiva {
 
 .codigo {
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
 }
@@ -1491,7 +1452,7 @@ tr.inactiva {
   padding: 0;
   border: none;
   background: none;
-  color: #059669;
+  color: var(--accent-text, var(--accent));
   font-family: inherit;
   font-size: 0.72rem;
   font-weight: 600;
@@ -1501,31 +1462,20 @@ tr.inactiva {
 
 .desglose {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   margin-top: 2px;
   white-space: nowrap;
 }
 
-.stock-cero {
-  color: #dc2626;
-}
-
-.stock-bajo {
-  color: #d97706;
-}
-
-.margen-ok {
-  color: #059669;
-}
-
-.margen-bajo {
-  color: #d97706;
-}
+.stock-cero { color: var(--danger); }
+.stock-bajo { color: var(--warn); }
+.margen-ok { color: var(--success); }
+.margen-bajo { color: var(--warn); }
 
 .etiqueta {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-full, 999px);
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1533,35 +1483,12 @@ tr.inactiva {
   white-space: nowrap;
 }
 
-.et-verde {
-  background: #d1fae5;
-  color: #047857;
-}
-
-.et-rosa {
-  background: #fce7f3;
-  color: #be185d;
-}
-
-.et-ambar {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.et-gris {
-  background: #f1f5f9;
-  color: #64748b;
-}
-
-.et-azul {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.et-rojo {
-  background: #fee2e2;
-  color: #991b1b;
-}
+.et-verde { background: var(--success-soft); color: var(--success); }
+.et-rosa  { background: var(--accent-soft);  color: var(--accent-text, var(--accent)); }
+.et-ambar { background: var(--warn-soft);    color: var(--warn); }
+.et-gris  { background: var(--surface-2);    color: var(--text-muted); }
+.et-azul  { background: var(--info-soft);    color: var(--info); }
+.et-rojo  { background: var(--danger-soft);  color: var(--danger); }
 
 .acciones {
   display: flex;
@@ -1570,18 +1497,14 @@ tr.inactiva {
   align-items: center;
 }
 
-.acciones-col {
-  width: 1%;
-  white-space: nowrap;
-}
+.acciones-col { width: 1%; white-space: nowrap; }
 
-.fila-receta td {
-  background: #f8fafc;
-}
+/* En escritorio los botones son solo ícono: el texto del title vive
+   en el tooltip. En móvil se muestra (ver más abajo). */
+.btn-icono::after { content: none; }
 
-.receta {
-  padding: 4px 0;
-}
+.fila-receta td { background: var(--surface-2); }
+.receta { padding: 4px 0; }
 
 .receta ul {
   margin: 6px 0 0;
@@ -1596,12 +1519,11 @@ tr.inactiva {
   justify-content: center;
   gap: 14px;
   margin: 14px 0 0;
+  color: var(--text-muted);
 }
 
 /* ---------- Movimientos ---------- */
-.movimientos {
-  margin-top: 24px;
-}
+.movimientos { margin-top: 24px; }
 
 .titulo-plegable {
   display: flex;
@@ -1614,27 +1536,25 @@ tr.inactiva {
   font-family: inherit;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text);
   cursor: pointer;
 }
 
-.titulo-plegable .flecha {
-  color: #64748b;
-}
+.titulo-plegable .flecha { color: var(--text-muted); }
 
 /* ---------- Vacío ---------- */
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md, 12px);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
+  color: var(--text);
   font-size: 1.05rem;
   margin-bottom: 5px;
 }
@@ -1647,7 +1567,7 @@ tr.inactiva {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .modal {
@@ -1657,35 +1577,36 @@ tr.inactiva {
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg, 14px);
+  box-shadow: var(--shadow-lg);
 }
 
-.modal.ancho {
-  max-width: 700px;
-}
+.modal.ancho { max-width: 700px; }
 
 .modal-cab {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-cab h3 {
   margin: 0;
   font-size: 1.15rem;
-  color: #0f172a;
+  color: var(--text);
 }
 
 .modal-cab p {
   margin: 4px 0 0;
   font-size: 0.82rem;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .modal-cuerpo {
   padding: 18px 20px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-pie {
@@ -1694,7 +1615,7 @@ tr.inactiva {
   justify-content: flex-end;
   flex-wrap: wrap;
   padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 label {
@@ -1704,12 +1625,10 @@ label {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-muted);
 }
 
-.grupo {
-  margin-bottom: 15px;
-}
+.grupo { margin-bottom: 15px; }
 
 .rejilla {
   display: grid;
@@ -1726,7 +1645,7 @@ label {
 .ayuda {
   margin: 5px 0 0;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   line-height: 1.5;
   text-transform: none;
   letter-spacing: 0;
@@ -1737,39 +1656,39 @@ label {
   margin: 0 0 12px;
   font-size: 0.875rem;
   line-height: 1.55;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .error {
   padding: 10px 13px;
   margin-bottom: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
+  border-radius: var(--r-sm, 8px);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: 0.85rem;
 }
 
 .nota {
   padding: 10px 13px;
   margin-top: 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
+  border-radius: 0 var(--r-sm, 8px) var(--r-sm, 8px) 0;
+  border-left: 3px solid var(--success);
+  background: var(--success-soft);
   font-size: 0.85rem;
-  color: #475569;
+  color: var(--text-muted);
   line-height: 1.5;
 }
 
 .nota.alerta {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 .constructor {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm, 10px);
   overflow: hidden;
   margin-bottom: 15px;
 }
@@ -1779,32 +1698,28 @@ label {
   align-items: center;
   gap: 9px;
   padding: 9px 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 0.85rem;
-  background: #fff;
+  background: var(--surface);
 }
 
-.constructor-fila:last-child {
-  border-bottom: 0;
-}
-
-.constructor-fila .crece {
-  flex: 1;
-  min-width: 0;
-}
+.constructor-fila:last-child { border-bottom: 0; }
+.constructor-fila .crece { flex: 1; min-width: 0; }
 
 .constructor-vacio {
   padding: 20px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-faint);
   font-size: 0.85rem;
 }
 
 .entrada-tabla {
   width: 72px;
   padding: 6px 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
   font-size: max(0.85rem, 16px);
   font-variant-numeric: tabular-nums;
@@ -1815,54 +1730,44 @@ label {
   flex-wrap: wrap;
   gap: 20px;
   padding: 12px 14px;
-  background: #f8fafc;
+  background: var(--surface-2);
   border-radius: 9px;
   font-size: 0.85rem;
 }
 
-.resumen div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.resumen span {
-  color: #64748b;
-  font-size: 0.75rem;
-}
-
-.resumen b {
-  font-size: 1.05rem;
-}
+.resumen div { display: flex; flex-direction: column; gap: 2px; }
+.resumen span { color: var(--text-muted); font-size: 0.75rem; }
+.resumen b { font-size: 1.05rem; color: var(--text); }
 
 /* ---------- Aviso ---------- */
 .aviso {
   position: fixed;
-  bottom: 22px;
+  bottom: max(22px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 80;
   max-width: 90vw;
   padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
-  color: #fff;
+  border-radius: var(--r-sm, 10px);
+  background: var(--text);
+  color: var(--bg);
   font-size: 0.875rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-lg);
   text-align: center;
 }
 
-.aviso.malo {
-  background: #b91c1c;
-}
+.aviso.malo { background: var(--danger); color: var(--surface); }
 
-/* ---------- Móvil ---------- */
+/* ============================================================
+   MÓVIL · cada fila es una tarjeta
+   ============================================================ */
 @media (max-width: 860px) {
   .tabla-envoltura {
     border: none;
     background: transparent;
     overflow: visible;
+    max-height: none;          /* la tarjeta scrollea con la página */
   }
 
   table,
@@ -1872,76 +1777,133 @@ label {
   td {
     display: block;
     width: 100%;
+    min-width: 0;
   }
 
-  thead {
-    display: none;
-  }
+  thead { display: none; }
 
   tbody tr {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    margin-bottom: 11px;
-    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg, 14px);
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+    padding: 14px 16px;
   }
 
   tbody tr.fila-receta {
-    background: #f8fafc;
+    background: var(--surface-2);
+    box-shadow: none;
   }
 
+  /* Fila de dato: etiqueta a la izquierda, valor a la derecha */
   td {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 0;
+    align-items: baseline;
+    gap: 14px;
+    padding: 9px 0;
     border: none;
+    border-bottom: 1px solid var(--border);
     text-align: right;
   }
 
+  tbody tr td:last-child { border-bottom: none; }
+
   td::before {
-    content: attr(data-label);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #94a3b8;
+    content: attr(data-label) ":";
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--text-muted);
     text-align: left;
     flex-shrink: 0;
+    white-space: nowrap;
   }
 
-  td:not([data-label]) {
-    justify-content: flex-end;
-  }
+  /* La celda de acciones no tiene data-label: se muestra como bloque para
+     que la grilla de botones ocupe el ancho completo de la tarjeta. */
+  td:not([data-label]) { display: block; padding-bottom: 0; }
+  td:not([data-label])::before { content: none; }
 
-  td:not([data-label])::before {
-    content: none;
-  }
-
+  /* Cabecera de la tarjeta: nombre, emoji y etiquetas */
   td[data-label="Producto"] {
     display: block;
     text-align: left;
-    padding-bottom: 10px;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 0 0 12px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
   }
 
-  td[data-label="Producto"]::before {
-    content: none;
+  td[data-label="Producto"]::before { content: none; }
+
+  td[data-label="Producto"] .nombre {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 
-  .fila.resaltada {
-    animation: resalta 1400ms ease-out;
+  td[data-label="Producto"] .celda-producto .emoji { font-size: 1.5rem; }
+
+  /* Valores destacados dentro de la tarjeta */
+  td[data-label="Precio"] .dato,
+  td[data-label="Disponible"] .dato { font-size: 1rem; }
+
+  td[data-label="Disponible"] { flex-wrap: wrap; }
+  td[data-label="Disponible"] .desglose { width: 100%; text-align: right; white-space: normal; }
+
+  /* ---- Botones: ancho completo, dos por fila ---- */
+  /* .acciones-col fija width:1% para el escritorio; si no se anula, la
+     celda mide 1% de la tarjeta y la grilla de botones se desborda. */
+  .acciones-col {
+    width: 100%;
+    white-space: normal;
   }
 
-  .fila.resaltada td {
-    animation: none;
+  .acciones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding-top: 12px;
+    justify-content: stretch;
   }
 
-  .fila.abierta td {
-    background: transparent;
+  .acciones { width: 100%; }
+  .acciones > * { width: 100%; min-width: 0; }
+
+  /* Si la cantidad de botones es impar, el último ocupa la fila entera
+     en vez de dejar un hueco a la derecha. */
+  .acciones > *:nth-child(odd):last-child { grid-column: 1 / -1; }
+
+  .btn-icono {
+    width: 100%;
+    height: auto;
+    min-height: 44px;
+    padding: 0 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
   }
+
+  /* El texto sale del title, que ya está en el template:
+     "Ajustar stock", "Armar unidades", "Editar", "Dar de baja". */
+  .btn-icono[title]::after {
+    content: attr(title);
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .btn-icono.peligro {
+    border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+    color: var(--danger);
+  }
+
+  .acciones .btn-mini { min-height: 44px; }
+
+  .fila.resaltada { animation: resalta 1400ms ease-out; }
+  .fila.resaltada td { animation: none; }
+  .fila.abierta td { background: transparent; }
+  .fila:hover td { background: transparent; }
 
   .fila-receta td {
     display: block;
@@ -1949,27 +1911,18 @@ label {
     border: none;
   }
 
-  .acciones {
-    justify-content: flex-end;
-    padding-top: 8px;
-  }
+  .segmentado { width: 100%; }
+  .campo-corto { flex: 1 1 100%; width: 100%; }
+  .buscador { flex: 1 1 100%; }
 
-  .desglose {
-    white-space: normal;
-  }
+  /* La cabecera de la vista: botón de ancho completo */
+  .cabecera { align-items: stretch; }
+  .cabecera .btn { width: 100%; }
 
-  .segmentado {
-    width: 100%;
-  }
-
-  .campo-corto {
-    flex: 1 1 100%;
-    width: 100%;
-  }
+  .paginador { gap: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .btn,
   .btn-icono,
   .campo,
@@ -1978,20 +1931,14 @@ label {
   .flecha,
   .segmentado button,
   .tabla-envoltura,
-  .fila td {
-    transition: none;
-  }
+  .fila td { transition: none; }
 
   .al-entrar,
   .fila,
   .fila.resaltada,
   .fila.resaltada td,
-  .spinner {
-    animation: none;
-  }
+  .spinner { animation: none; }
 
-  .tabla-envoltura.atenuada {
-    opacity: 1;
-  }
+  .tabla-envoltura.atenuada { opacity: 1; }
 }
 </style>

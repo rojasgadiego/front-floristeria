@@ -1,7 +1,5 @@
 <template>
-  <MainLayout>
-
-    <div class="cabecera al-entrar">
+     <div class="cabecera al-entrar">
       <div>
         <h2>Reportes</h2>
         <p class="pista">
@@ -331,13 +329,11 @@
       </section>
     </template>
 
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { haceDias, hoy } from '@/core/utils/fechas'
 
@@ -350,7 +346,7 @@ const ATAJOS = [
 
 export default {
   name: 'ReportesView',
-  components: { MainLayout },
+  components: {  },
 
   setup () {
     const store = useStore()

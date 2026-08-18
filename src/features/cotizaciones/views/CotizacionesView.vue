@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <div class="cabecera al-entrar">
       <div>
         <h2>Cotizaciones y eventos</h2>
@@ -775,20 +774,18 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import {ESTADOS, MEDIOS_PAGO, TIPOS_EVENTO, textoEstado, claseEstado} from '@/features/cotizaciones/store/cotizaciones.modules'
 import { aDateOnly } from '@/core/utils/fechas'
 
 export default {
   name: 'CotizacionesView',
-  components: { MainLayout },
+  components: { },
 
   setup () {
     const store = useStore()

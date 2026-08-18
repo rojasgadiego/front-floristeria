@@ -1,7 +1,5 @@
 <template>
-    <MainLayout>
-
-        <!-- ---------- Controles: no se imprimen ---------- -->
+    <!-- ---------- Controles: no se imprimen ---------- -->
         <div class="controles">
             <div class="cabecera">
                 <div class="min0">
@@ -117,14 +115,11 @@
                 </div>
             </article>
         </div>
-
-    </MainLayout>
 </template>
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { lotesService } from '@/features/lotes/services/lotes.service'
 
 const FORMATOS = [
@@ -135,7 +130,7 @@ const FORMATOS = [
 
 export default {
     name: 'EtiquetasView',
-    components: { MainLayout },
+    components: {  },
 
     setup() {
         const route = useRoute()

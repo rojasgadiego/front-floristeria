@@ -1,6 +1,5 @@
 <template>
-    <MainLayout>
-
+    
         <div class="cabecera al-entrar">
             <div class="titulo">
                 <h2>Equipo y accesos</h2>
@@ -338,7 +337,6 @@
         <Transition name="aviso">
             <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
         </Transition>
-    </MainLayout>
 </template>
 
 <script>
@@ -347,7 +345,6 @@ import { useStore } from 'vuex'
 import { ROLES, textoRol } from '@/core/constantes/roles'
 import { modulosPorRol } from '@/config/menuColibri'
 import { LARGO_MINIMO_PASSWORD } from '@/features/usuarios/store/usuarios.module'
-import MainLayout from '@/layouts/MainLayout.vue'
 import EsqueletoBloque from '@/shared/components/EsqueletoBloque.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
@@ -372,7 +369,7 @@ const MODULOS_VISIBLES = 3
 
 export default {
     name: 'UsuariosView',
-    components: { MainLayout, EsqueletoBloque },
+    components: { EsqueletoBloque },
 
     setup() {
         const store = useStore()

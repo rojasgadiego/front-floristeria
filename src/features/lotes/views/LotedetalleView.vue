@@ -1,6 +1,4 @@
 <template>
-  <MainLayout>
-
     <!-- ---------- Cargando ---------- -->
     <div v-if="cargando" class="vacio">Buscando el lote…</div>
 
@@ -208,21 +206,19 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { useRoute } from 'vue-router'
-import MainLayout from '@/layouts/MainLayout.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { claseAlerta, textoAlerta } from '@/features/lotes/store/lotes.module'
 import { lotesService } from '@/features/lotes/services/lotes.service'
 
 export default {
   name: 'LoteDetalleView',
-  components: { MainLayout },
+  components: { },
 
   setup () {
     const store = useStore()

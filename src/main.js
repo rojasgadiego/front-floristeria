@@ -3,6 +3,7 @@ import App from './App.vue'
 import router from './router'
 import store from './store'
 import { instalarInterceptores } from '@/core/http/interceptors'
+import '@/assets/tokens.css'
 
 instalarInterceptores()
 

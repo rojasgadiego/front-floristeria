@@ -1,143 +1,170 @@
 /* ============================================================
- * tokens.css — vocabulario visual de la app
- *
- * Se importa una sola vez, ANTES de montar, en main.js:
- *     import '@/assets/tokens.css'
- *
- * Todo lo que sea un color, una sombra o un radio sale de acá. La regla
- * es simple: si estás escribiendo un hex dentro de un componente, falta
- * un token.
- *
- * Paleta: neutro lavanda tenue + marca violeta iris.
- * ============================================================ */
+   TOKENS · Botanical Rose (Premium/Boutique)
+   ============================================================ */
 
 :root {
+  /* --- Tipografía --- */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
 
-  /* ----------------------------------------------------------
-   * NEUTRO — lavanda tenue
-   *
-   * El neutro es levemente violeta en vez de gris azulado. Es lo que
-   * cambia la sensación de la app sin teñir ni una tarjeta: las
-   * tarjetas siguen blancas, pero todo lo que las rodea es tibio.
-   * -------------------------------------------------------- */
+  /* --- Neutrales (warm) — elevación escalonada --- */
+  --bg:            #faf7f5;
+  --bg-elev:       #ffffff;   /* ← AÑADIDO (existía en dark) */
+  --surface:       #ffffff;
+  --surface-2:     #f4efec;
+  --sidebar-bg:    #ffffff;   /* ← AÑADIDO */
+  --border:        #e9e0da;
+  --border-strong: #d8ccc4;
 
-  --pagina: #FAF8FC;
-  /* fondo del documento */
-  --tarjeta: #FFFFFF;
-  /* superficie elevada */
-  --tarjeta-hundida: #F6F3F9;
-  /* zonas internas: totales, resúmenes */
+  /* --- Texto: nombres alineados con dark --- */
+  --text:          #2b2320;
+  --text-muted:    #6b5e57;   /* ← RENOMBRADO desde --text-soft */
+  --text-faint:    #9a8b82;   /* ← RENOMBRADO desde --text-muted */
 
-  --borde: #EAE4F2;
-  /* hairline por defecto */
-  --borde-fuerte: #D8CEE6;
-  /* hover, divisores con énfasis */
-  --borde-tenue: #F2EEF7;
-  /* separadores dentro de una tarjeta */
+  /* Alias de compatibilidad (por si algo viejo aún los usa) */
+  --text-soft:     #6b5e57;
 
-  --texto: #2B2733;
-  /* títulos y cifras */
-  --texto-medio: #55505F;
-  /* cuerpo */
-  --texto-suave: #807889;
-  /* secundario, rótulos */
-  --texto-tenue: #A099AC;
-  /* notas al pie, placeholders */
+  /* --- Acento (Rose) --- */
+  --accent:        #c2456e;
+  --accent-hover:  #a83a5e;
+  --accent-soft:   #f9e4ec;
+  --accent-text:   #c2456e;   /* ← AÑADIDO (texto sobre soft en light = accent oscuro) */
+  --accent-contrast: #ffffff;
 
+  /* --- Secundario (Sage) --- */
+  --secondary:      #5a7d5a;
+  --secondary-soft: #e6efe6;
 
-  /* ----------------------------------------------------------
-   * MARCA — violeta iris
-   *
-   * Antes el verde hacía doble trabajo: era la marca Y era "caja
-   * abierta". Con la marca en violeta, el verde queda liberado para
-   * significar solo estado — y las promociones, que son cosa de marca
-   * y no un estado, usan este mismo color. Un color menos en total.
-   *
-   * La saturación es deliberadamente más alta que la del neutro: la
-   * armonía la da el tono compartido, la separación la da el croma.
-   * -------------------------------------------------------- */
+  /* --- Semánticos + borders (alineados con dark) --- */
+  --success:       #2f8f5b;
+  --success-soft:  #e3f4ea;
 
-  --marca: #6E3D9C;
-  /* botones, enlaces, barra de acento */
-  --marca-fuerte: #5C3183;
-  /* hover */
-  --marca-claro: #9169C4;
-  /* extremo claro del degradado */
-  --marca-oscuro: #2F2049;
-  /* superficie oscura (KPI destacado) */
+  --warn:          #c98a00;
+  --warn-soft:     #fdf3dc;
+  --warn-border:   #f0e0bc;   /* ← AÑADIDO */
 
-  --marca-tinte: #F1ECF8;
-  /* fondo de nota o etiqueta */
-  --marca-borde: #DCCDEE;
-  --marca-texto: #542C7D;
-  /* texto sobre --marca-tinte */
-  --marca-sobre: #E4D5F5;
-  /* texto secundario sobre --marca-oscuro */
+  --danger:        #d0455b;
+  --danger-soft:   #fbe4e7;
+  --danger-border: #f2c9d0;   /* ← AÑADIDO */
 
+  --info:          #3b7ea1;
+  --info-soft:     #e2f0f6;
+  --info-border:   #c9ddf0;   /* ← AÑADIDO */
 
-  /* ----------------------------------------------------------
-   * ESTADOS
-   * -------------------------------------------------------- */
+  /* --- Radios --- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
 
-  --exito: #0E9F6E;
-  --exito-fuerte: #07805A;
-  --exito-tinte: #E9F8F1;
-  --exito-borde: #9FDCC4;
-  --exito-texto: #076147;
+  /* --- Sombras: nombres alineados con dark (--shadow-*) --- */
+  --shadow-sm: 0 1px 2px rgba(43, 35, 32, .06);   /* ← AÑADIDO alias */
+  --shadow-md: 0 4px 14px rgba(43, 35, 32, .08);  /* ← AÑADIDO alias */
+  --shadow-lg: 0 12px 30px rgba(43, 35, 32, .12);
 
-  --aviso: #D97706;
-  --aviso-fuerte: #B45309;
-  --aviso-tinte: #FFFBEB;
-  --aviso-borde: #FCD34D;
-  --aviso-texto: #92400E;
+  /* Alias legacy (--sh-*) para no romper lo ya escrito */
+  --sh-sm: 0 1px 2px rgba(43, 35, 32, .06);
+  --sh-md: 0 4px 14px rgba(43, 35, 32, .08);
+  --sh-lg: 0 12px 30px rgba(43, 35, 32, .12);
+  --sh-accent: 0 6px 18px rgba(194, 69, 110, .28);
 
-  --error: #DC2626;
-  --error-fuerte: #B91C1C;
-  --error-tinte: #FEF2F2;
-  --error-borde: #FCA5A5;
-  --error-texto: #991B1B;
+  /* --- Transiciones --- */
+  --t-fast: .15s ease;
+  --t-med: .25s ease;
 
-
-  /* ----------------------------------------------------------
-   * SOMBRAS
-   *
-   * Dos capas, siempre: la de contacto asienta el elemento, la difusa
-   * le da aire. Una sola sombra grande flota.
-   *
-   * Y llevan el matiz del fondo. Una sombra gris azulada sobre un
-   * fondo lavanda se ve sucia, como una mancha; con el matiz correcto
-   * se ve como sombra.
-   * -------------------------------------------------------- */
-
-  --sombra: 0 1px 2px rgba(85, 65, 120, 0.05), 0 6px 16px rgba(85, 65, 120, 0.06);
-  --sombra-alta: 0 1px 2px rgba(85, 65, 120, 0.06), 0 10px 24px rgba(85, 65, 120, 0.09);
-  --sombra-modal: 0 25px 50px -12px rgba(47, 32, 73, 0.30);
-  --sombra-flotante: 0 10px 28px rgba(47, 32, 73, 0.16);
-  /* toast */
-
-
-  /* ----------------------------------------------------------
-   * FORMA
-   * -------------------------------------------------------- */
-
-  --radio: 0.5rem;
-  /* controles: botón, input */
-  --radio-tarjeta: 12px;
-  --radio-chico: 8px;
-  --radio-pill: 999px;
-
-
-  /* ----------------------------------------------------------
-   * FOCO
-   * Un solo token para que el anillo de foco sea idéntico en toda la
-   * app y nadie lo reinvente con otro color.
-   * -------------------------------------------------------- */
-
-  --foco: 0 0 0 2px var(--marca-claro);
+  color-scheme: light;   /* ← AÑADIDO (dark lo tiene) */
 }
 
-/* El fondo de página va acá y no en cada vista */
+
+/* ============================================================
+   DARK MODE
+   ============================================================ */
+:root[data-theme="dark"] {
+  /* Fondos: azul-gris frío, escalonado por elevación */
+  --bg:            #0f1115;   /* fondo base app */
+  --bg-elev:       #171a21;   /* content-wrapper / secciones */
+  --surface:       #1c2029;   /* tarjetas, KPIs */
+  --surface-2:     #232834;   /* hover / inputs */
+  --sidebar-bg:    #12141a;
+
+  /* Bordes sutiles pero visibles */
+  --border:        #2a2f3a;
+  --border-strong: #3a4150;
+
+  /* Texto: alto contraste, sin tinte */
+  --text:          #e8eaed;   /* títulos → BLANCO casi puro */
+  --text-muted:    #9aa1ad;   /* subtítulos */
+  --text-faint:    #6b7280;   /* labels KPI */
+
+  /* Acento rosa: más luminoso para brillar en oscuro */
+  --accent:        #e0608a;
+  --accent-hover:  #ec7ba0;
+  --accent-soft:   rgba(224, 96, 138, 0.14);  /* fondos suaves */
+  --accent-text:   #f3a5be;                    /* texto sobre soft */
+
+  /* Sage secundario */
+  --secondary:     #7fa87f;
+
+  /* Estados: fondos apenas teñidos, NO café puro */
+  --danger:        #f87171;
+  --danger-soft:   rgba(248, 113, 113, 0.12);
+  --danger-border: rgba(248, 113, 113, 0.30);
+
+  --warn:          #fbbf24;
+  --warn-soft:     rgba(251, 191, 36, 0.10);
+  --warn-border:   rgba(251, 191, 36, 0.28);
+
+  --info:          #60a5fa;
+  --info-soft:     rgba(96, 165, 250, 0.10);
+  --info-border:   rgba(96, 165, 250, 0.28);
+
+  /* Sombras: en dark casi no se usan, borde hace el trabajo */
+  --shadow-sm: none;
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+
+  color-scheme: dark;
+
+   --text-soft:      #9aa1ad;
+  --secondary-soft: rgba(127, 168, 127, 0.14);
+  --success:        #4ade80;
+  --success-soft:   rgba(74, 222, 128, 0.12);
+  --accent-contrast: #ffffff;
+
+  --sh-sm: none;
+  --sh-md: 0 4px 12px rgba(0,0,0,0.4);
+  --sh-lg: 0 12px 30px rgba(0,0,0,0.5);
+  --sh-accent: 0 6px 18px rgba(224, 96, 138, .35);
+  --shadow-lg: 0 12px 30px rgba(0,0,0,0.5);
+
+  
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 body {
-  background: var(--pagina);
-  color: var(--texto);
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background var(--t-med), color var(--t-med);
+}
+
+h1, h2, h3, h4, h5, h6, p {
+  margin: 0;
+  font-family: var(--font);
+}
+
+button, input, select, textarea {
+  font-family: inherit;
 }

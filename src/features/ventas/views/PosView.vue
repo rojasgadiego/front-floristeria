@@ -1,6 +1,5 @@
 <template>
-  <MainLayout>
-
+  
     <!-- ================= SIN CAJA ================= -->
     <div v-if="!abierta" class="apertura">
       <div class="apertura-caja">
@@ -365,19 +364,17 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-  </MainLayout>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import MainLayout from '@/layouts/MainLayout.vue'
 import ModalCobro from '@/features/ventas/components/Modalcobro.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 export default {
   name: 'PosView',
-  components: { MainLayout, ModalCobro },
+  components: { ModalCobro },
 
   setup () {
     const store = useStore()

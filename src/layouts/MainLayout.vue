@@ -34,9 +34,11 @@
         @expand-sidebar="expandSidebar"
       />
 
+      <!-- MainLayout.vue -->
       <main class="content-wrapper">
-        <slot></slot>
+        <router-view />
       </main>
+
     </div>
   </div>
 </template>
