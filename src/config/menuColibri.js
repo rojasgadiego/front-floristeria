@@ -27,13 +27,14 @@ export const MENU_COLIBRI = [
     seccion: 'Catálogo',
     roles: ['Admin', 'Vendedor', 'Bodega'],
     icon: ico('<path d="M3 8l9-4 9 4v8l-9 4-9-4z"/><path d="M3 8l9 4 9-4"/><path d="M12 12v8"/>')
-  }
-]
+  },
+
 
 /* ============================================================
    MÓDULOS EN PAUSA
    Mueve el ítem que necesites de vuelta al array de arriba.
    ============================================================
+*/
 
   // ---------------- Operación ----------------
    {
@@ -136,9 +137,7 @@ export const MENU_COLIBRI = [
     roles: ['Admin'],
     icon: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/>')
   }
-
-   ============================================================ */
-
+]
 /**
  * Filtra el menú con los permisos que mandó el servidor.
  * Un ítem sin `clave` se muestra siempre.
