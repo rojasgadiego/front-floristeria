@@ -3,10 +3,10 @@
     <header class="cabecera">
       <div class="min0">
         <h1>Clientes</h1>
-        <p class="ayuda">
+        <!-- <p class="ayuda">
           Quién compra y qué se lleva. Los puntos son plata que el local debe:
           cada uno vale {{ clp(valorPunto) }}.
-        </p>
+        </p> -->
       </div>
       <button class="btn" @click="abrirNuevo">
         <span aria-hidden="true">＋</span> Nuevo cliente

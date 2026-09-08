@@ -3,11 +3,6 @@
     <header class="cabecera">
       <div class="min0">
         <h1>Mermas</h1>
-        <p class="ayuda">
-          La flor que sale sin venderse. Registrarla mantiene el inventario
-          honesto: sin esto quedan varas fantasma y el valorizado deja de
-          servir para decidir cuánto comprar.
-        </p>
       </div>
       <button v-if="puedeEditar" class="btn" @click="registrando = true">
         <span aria-hidden="true">＋</span> Registrar merma
