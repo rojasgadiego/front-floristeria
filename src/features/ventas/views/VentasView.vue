@@ -23,7 +23,8 @@
         <div class="buscador">
           <span class="lupa" aria-hidden="true">⌕</span>
           <input v-model="busqueda" placeholder="Folio, cliente o RUT…" aria-label="Buscar boleta">
-          <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar búsqueda">✕</button>
+          <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''"
+            aria-label="Limpiar búsqueda">✕</button>
         </div>
 
         <button class="btn btn-linea filtros-btn" :class="{ activo: nFiltros > 0 }" @click="filtrosAbiertos = true"
@@ -61,7 +62,8 @@
 
       <div v-else-if="!ventas.length" class="vacio">
         <strong>{{ nFiltros || busqueda ? 'Ninguna boleta coincide' : 'Sin ventas todavía' }}</strong>
-        {{ nFiltros || busqueda ? 'Prueba con otro texto o quita los filtros.' : 'Las boletas aparecen acá al cobrar.' }}
+        {{ nFiltros || busqueda ? 'Prueba con otro texto o quita los filtros.' : 'Las boletas aparecen acá al cobrar.'
+        }}
       </div>
 
       <!-- ═══ Feed ═══ -->
@@ -144,35 +146,117 @@
         Los turnos aparecen acá al cerrarse.
       </div>
 
-      <div v-else class="feed">
-        <div class="turnos-cab" aria-hidden="true">
-          <span>Turno</span>
-          <span>Responsable</span>
-          <span class="der">Boletas</span>
-          <span class="der">Vendido</span>
-          <span class="der">Efectivo</span>
-          <span class="der">Otros medios</span>
-          <span class="der">Diferencia</span>
-        </div>
+      <!-- Un turno se lee como una ficha: quién, cuánto entró y si cuadró.
+           El resto —el desglose por medio de pago, el arqueo— es lo que se
+           mira solo cuando la diferencia llama la atención. -->
+      <div v-else class="tarjetas">
+        <article v-for="c in turnos" :key="c.id" class="turno"
+          :class="{ abierto: turnoId === c.id, sinCerrar: c.diferencia === null }">
 
-        <article v-for="c in turnos" :key="c.id" class="turno">
-          <div class="c-folio min0">
-            <div class="folio">{{ fecha(c.abiertaEn) }}</div>
-            <div class="desglose">{{ hora(c.abiertaEn) }} — {{ c.cerradaEn ? hora(c.cerradaEn) : 'abierta' }}</div>
-          </div>
-          <div class="suave">{{ c.abiertaPor || '—' }}</div>
-          <div class="der dato">
-            {{ c.boletas }}
-            <span v-if="c.anuladas" class="desglose rojo">{{ c.anuladas }} anulada(s)</span>
-          </div>
-          <div class="der dato">{{ clp(c.totalVendido) }}</div>
-          <div class="der dato">{{ clp(c.efectivo) }}</div>
-          <div class="der dato suave">{{ clp(c.debito + c.credito + c.transferencia) }}</div>
-          <div class="der">
-            <span v-if="c.diferencia === null" class="tenue">abierta</span>
-            <span v-else class="chip" :class="claseDiferencia(c.diferencia)">
-              {{ c.diferencia === 0 ? 'exacto' : clp(c.diferencia) }}
-            </span>
+          <button class="turno-cab" @click="turnoId = turnoId === c.id ? null : c.id"
+            :aria-expanded="turnoId === c.id">
+            <div class="min0">
+              <div class="turno-fecha">
+                <b>{{ fecha(c.abiertaEn) }}</b>
+                <span class="suave">
+                  {{ hora(c.abiertaEn) }} — {{ c.cerradaEn ? hora(c.cerradaEn) : 'sin cerrar' }}
+                </span>
+              </div>
+              <div class="desglose">
+                {{ c.abiertaPor }} · {{ c.boletas }} boleta(s)
+                <span v-if="c.anuladas" class="rojo">· {{ c.anuladas }} anulada(s)</span>
+              </div>
+            </div>
+
+            <div class="turno-cifras">
+              <b class="dato grande">{{ clp(c.totalVendido) }}</b>
+              <span v-if="c.diferencia === null" class="chip chico">abierta</span>
+              <span v-else class="chip chico" :class="claseDiferencia(c.diferencia)">
+                {{ c.diferencia === 0 ? 'cuadró' : (c.diferencia > 0 ? '+' : '') + clp(c.diferencia) }}
+              </span>
+            </div>
+
+            <span class="flecha" :class="{ girada: turnoId === c.id }" aria-hidden="true">›</span>
+          </button>
+
+          <div v-if="turnoId === c.id" class="turno-detalle">
+            <!-- El arqueo primero: es la razón por la que alguien abre un
+                 turno cerrado. -->
+            <div class="arqueo" :class="claseDiferencia(c.diferencia)">
+              <div>
+                <span class="rot">Debía haber</span>
+                <b class="dato">{{ clp(c.efectivoEsperado) }}</b>
+              </div>
+              <div>
+                <span class="rot">Se contó</span>
+                <b class="dato">{{ clp(c.efectivoContado) }}</b>
+              </div>
+              <div>
+                <span class="rot">Diferencia</span>
+                <b class="dato">
+                  {{ c.diferencia === 0 ? 'exacta' : clp(Math.abs(c.diferencia)) }}
+                  <template v-if="c.diferencia > 0"> de más</template>
+                  <template v-else-if="c.diferencia < 0"> de menos</template>
+                </b>
+              </div>
+            </div>
+
+            <!-- Una diferencia sin ventas no es un error de conteo del día:
+                 es plata que entró o salió del cajón sin pasar por una
+                 boleta, y eso siempre tiene una explicación concreta. -->
+            <p v-if="c.diferencia !== 0 && c.boletas === 0" class="alerta-arqueo">
+              El turno cerró {{ c.diferencia > 0 ? 'con plata de más' : 'faltando plata' }}
+              sin haber vendido nada.
+            </p>
+
+            <div class="bloque">
+              <h4>Cómo pagaron</h4>
+              <div class="medios">
+                <div class="medio destacado">
+                  <span class="rot">Efectivo</span>
+                  <b class="dato">{{ clp(c.efectivo) }}</b>
+                  <span class="pie">es lo que se cuenta</span>
+                </div>
+                <div class="medio">
+                  <span class="rot">Débito</span>
+                  <b class="dato">{{ clp(c.debito) }}</b>
+                </div>
+                <div class="medio">
+                  <span class="rot">Crédito</span>
+                  <b class="dato">{{ clp(c.credito) }}</b>
+                </div>
+                <div class="medio">
+                  <span class="rot">Transferencia</span>
+                  <b class="dato">{{ clp(c.transferencia) }}</b>
+                </div>
+              </div>
+            </div>
+
+            <div class="bloque">
+              <h4>El turno</h4>
+              <div class="fila-det">
+                <span>Fondo inicial</span><b class="dato">{{ clp(c.fondoInicial) }}</b>
+              </div>
+              <div class="fila-det">
+                <span>Duró</span><b class="dato">{{ duracion(c) }}</b>
+              </div>
+              <div v-if="c.cerradaPor" class="fila-det">
+                <span>Cerró</span><b>{{ c.cerradaPor }}</b>
+              </div>
+              <div v-if="c.totalDescuentos" class="fila-det">
+                <span>Descuentos dados</span>
+                <b class="dato verde">−{{ clp(c.totalDescuentos) }}</b>
+              </div>
+              <div v-if="c.puntosOtorgados || c.puntosCanjeados" class="fila-det">
+                <span>Puntos</span>
+                <b class="dato">
+                  +{{ c.puntosOtorgados }}
+                  <template v-if="c.puntosCanjeados"> · −{{ c.puntosCanjeados }}</template>
+                </b>
+              </div>
+            </div>
+
+            <p v-if="c.notaCierre" class="nota-cierre">{{ c.notaCierre }}</p>
           </div>
         </article>
       </div>
@@ -420,6 +504,18 @@ const iso = (d) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
+/* Cuánto duró el turno. Un turno de tres minutos con diferencia es más
+   raro que uno de ocho horas: el dato ayuda a leer el arqueo.
+   Es pura, así que puede vivir fuera de setup(). */
+const duracion = (c) => {
+  if (!c.cerradaEn) return 'sigue abierta'
+  const ms = new Date(c.cerradaEn) - new Date(c.abiertaEn)
+  const min = Math.round(ms / 60000)
+  if (min < 60) return `${min} min`
+  const h = Math.floor(min / 60)
+  return `${h}h ${min % 60}min`
+}
+
 const sumarDias = (d, n) => {
   const x = new Date(d)
   x.setDate(x.getDate() + n)
@@ -656,6 +752,10 @@ export default {
     const turnos = computed(() => store.getters['caja/historial'])
     const cargandoCaja = computed(() => store.getters['caja/cargando'])
 
+    /* Vive acá y no a nivel de módulo: si no, dos instancias de la vista
+       comparten el turno abierto y el estado sobrevive al desmontaje. */
+    const turnoId = ref(null)
+
     const irATurnos = () => {
       pestana.value = 'turnos'
       store.dispatch('caja/cargarHistorial')
@@ -703,7 +803,7 @@ export default {
       : '—')
 
     return {
-      Number, MEDIOS_PAGO, textoMedioPago, PRESETS,
+      Number, Math, MEDIOS_PAGO, textoMedioPago, PRESETS,
       esAdmin, pestana, irATurnos,
       ventas, total, totalPaginas, filtro, cargando, error, resumen, grupos,
       busqueda, filtrar, recargar,
@@ -711,7 +811,7 @@ export default {
       detalleId, detalle, cargandoDetalle, abrirDetalle, cerrarDetalle,
       ticket, verTicket,
       anulando, anulandoAhora, campoMotivo, abrirAnulacion, confirmarAnulacion,
-      turnos, cargandoCaja, claseDiferencia,
+      turnos, cargandoCaja, claseDiferencia, turnoId, duracion,
       aviso, clp, fecha, hora
     }
   }
@@ -1121,46 +1221,12 @@ h1 {
   color: var(--text-faint);
   font-size: 1.1rem;
   text-align: right;
+  flex-shrink: 0;
+  transition: transform var(--t-fast);
 }
 
-/* ─── Turnos ─── */
-
-.turnos-cab,
-.turno {
-  display: grid;
-  grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 1fr) 88px 116px 116px 124px 108px;
-  align-items: center;
-  gap: 12px;
-  padding: 0 14px;
-}
-
-.turnos-cab {
-  padding-top: 9px;
-  padding-bottom: 9px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
-  font-size: .66rem;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.turno {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-  font-size: .86rem;
-  white-space: nowrap;
-}
-
-.turno:last-of-type {
-  border-bottom: 0;
-}
-
-.turno .desglose {
-  display: block;
+.flecha.girada {
+  transform: rotate(90deg);
 }
 
 /* ─── Hojas y modales ─── */
@@ -1289,7 +1355,7 @@ h1 {
   gap: 12px;
 }
 
-.grupo > label {
+.grupo>label {
   display: block;
   font-size: .8rem;
   font-weight: 600;
@@ -1323,7 +1389,7 @@ h1 {
   flex: 1;
 }
 
-.campo-fecha > span {
+.campo-fecha>span {
   font-size: .74rem;
   font-weight: 600;
   color: var(--text-faint);
@@ -1449,6 +1515,11 @@ h1 {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.chip.chico {
+  padding: 2px 9px;
+  font-size: .7rem;
 }
 
 .pago-efectivo {
@@ -1734,6 +1805,221 @@ h1 {
   background: var(--danger);
 }
 
+/* ─── Turnos ─── */
+/* Ficha, no fila de tabla: el detalle se despliega debajo de la cabecera. */
+
+.tarjetas {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.turno {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color var(--t-fast);
+}
+
+.turno.abierto {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.turno.sinCerrar {
+  border-left: 3px solid var(--success);
+}
+
+/* La fila entera abre el detalle: buscar un botón chico con el pulgar es
+   fricción sin motivo. */
+.turno-cab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Sin esto las cifras no se van al borde derecho */
+.turno-cab>.min0 {
+  flex: 1;
+}
+
+.turno-cab:hover {
+  background: var(--surface-2);
+}
+
+.turno-cab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.turno-fecha {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.turno-fecha b {
+  font-size: .95rem;
+}
+
+.turno-fecha .suave {
+  font-size: .78rem;
+}
+
+.turno-cifras {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.turno-detalle {
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+/* El arqueo primero y en su color: es la razón por la que alguien abre un
+   turno cerrado. */
+.arqueo {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 13px 15px;
+  border-radius: var(--r-sm);
+  border: 1px solid;
+  margin-bottom: 16px;
+}
+
+.arqueo.exacto {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.arqueo.sobra {
+  background: var(--info-soft);
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+.arqueo.falta {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.arqueo .rot {
+  color: inherit;
+  opacity: .75;
+}
+
+.arqueo .dato {
+  font-size: .95rem;
+}
+
+.alerta-arqueo {
+  padding: 10px 13px;
+  margin: -6px 0 16px;
+  background: var(--warn-soft);
+  border-left: 3px solid var(--warn);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--warn);
+}
+
+.bloque {
+  margin-bottom: 16px;
+}
+
+.bloque:last-of-type {
+  margin-bottom: 0;
+}
+
+.turno-detalle h4 {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.medios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.medio {
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--r-sm);
+}
+
+/* El efectivo se destaca porque es el único que se cuenta contra el cajón:
+   los otros tres se cuadran con la liquidación del banco. */
+.medio.destacado {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+
+.medio .dato {
+  font-size: .95rem;
+  display: block;
+  margin-top: 2px;
+}
+
+.medio .pie {
+  display: block;
+  font-size: .66rem;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.fila-det {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .84rem;
+  color: var(--text-muted);
+}
+
+.fila-det:last-child {
+  border-bottom: 0;
+}
+
+.fila-det b {
+  color: var(--text);
+}
+
+.nota-cierre {
+  padding: 10px 12px;
+  margin-top: 14px;
+  background: var(--surface);
+  border-left: 3px solid var(--secondary);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: .8rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ─── Anchos intermedios ─── */
 /* Vendedor y cliente son lo primero que sobra cuando aprieta */
 
@@ -1745,7 +2031,7 @@ h1 {
   }
 
   .c-vendedor,
-  .feed-cab > span:nth-child(3) {
+  .feed-cab>span:nth-child(3) {
     display: none;
   }
 }
@@ -1754,8 +2040,7 @@ h1 {
 
 @media (max-width: 860px) {
 
-  .feed-cab,
-  .turnos-cab {
+  .feed-cab {
     display: none;
   }
 
@@ -1805,33 +2090,8 @@ h1 {
      sobran en dos renglones. */
   .c-vendedor,
   .c-desc,
-  .flecha {
+  .boleta .flecha {
     display: none;
-  }
-
-  .turnos-cab,
-  .turno {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 6px 12px;
-    padding: 12px;
-  }
-
-  .turno > div:not(.c-folio) {
-    display: flex;
-    justify-content: space-between;
-    font-size: .82rem;
-  }
-
-  .turno > div:not(.c-folio)::before {
-    content: attr(data-rot);
-    color: var(--text-muted);
-    font-weight: 400;
-  }
-
-  .turno .c-folio {
-    grid-column: 1 / -1;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
   }
 
   /* Las hojas suben desde abajo y ocupan el ancho completo */
@@ -1881,6 +2141,32 @@ h1 {
   }
 }
 
+@media (max-width: 560px) {
+
+  /* En dos columnas: tres números en 360px quedan ilegibles. */
+  .arqueo {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .arqueo>div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .turno-cab {
+    padding: 12px 13px;
+  }
+
+  .turno-detalle {
+    padding: 13px;
+  }
+
+  /* La ficha completa ya es el botón, y el estado abierto se ve por el
+     detalle desplegado. */
+  .turno-cab .flecha {
+    display: none;
+  }
+}
+
 @keyframes subir {
   from {
     transform: translateY(14px);
@@ -1890,8 +2176,10 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
 
   .hoja,
-  .hoja.alta {
+  .hoja.alta,
+  .flecha {
     animation: none;
+    transition: none;
   }
 }
 </style>

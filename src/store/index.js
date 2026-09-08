@@ -15,6 +15,7 @@ import promociones from '@/features/promociones/store/promociones.module'
 import cotizaciones from '@/features/cotizaciones/store/cotizaciones.modules'
 import ventas from '@/features/ventas/store/ventas.module'
 import caja from '@/features/ventas/store/caja.module'
+import mostrador from '@/features/ventas/store/mostrador.module'
 
 const store = createStore({
   modules: {
@@ -33,7 +34,8 @@ const store = createStore({
     reportes,
     promociones,
     ventas,
-    caja
+    caja,
+    mostrador
   }
 })
 
