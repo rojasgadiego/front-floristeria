@@ -2,10 +2,6 @@
   <div class="ventas">
     <header class="cabecera">
       <h1>Ventas y caja</h1>
-      <!-- <p class="ayuda">
-        Qué se vendió y cómo cerró cada turno. Anular una boleta devuelve al
-        inventario exactamente lo que sacó, lote por lote.
-      </p> -->
     </header>
 
     <nav class="pestanas">
@@ -20,39 +16,32 @@
 
     <!-- ═══════════════ BOLETAS ═══════════════ -->
     <template v-if="pestana === 'boletas'">
-      <!-- CAMBIO 1: buscador separado de filtros secundarios, alturas homogéneas -->
-      <div class="filtros">
+
+      <!-- Barra: buscador + un botón que abre todo lo demás.
+           Los cinco controles apilados se comían la pantalla en móvil. -->
+      <div class="barra">
         <div class="buscador">
+          <span class="lupa" aria-hidden="true">⌕</span>
           <input v-model="busqueda" placeholder="Folio, cliente o RUT…" aria-label="Buscar boleta">
-          <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
+          <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar búsqueda">✕</button>
         </div>
 
-        <select class="campo corto" :value="filtro.medioPago ?? ''"
-          @change="filtrar({ medioPago: $event.target.value || null })" aria-label="Medio de pago">
-          <option value="">Todos los medios</option>
-          <option v-for="m in MEDIOS_PAGO" :key="m.valor" :value="m.valor">{{ m.texto }}</option>
-        </select>
-
-        <label class="campo-fecha">
-          <span>Desde</span>
-          <input type="date" :value="filtro.desde ?? ''" @change="filtrar({ desde: $event.target.value || null })">
-        </label>
-
-        <label class="campo-fecha">
-          <span>Hasta</span>
-          <input type="date" :value="filtro.hasta ?? ''" @change="filtrar({ hasta: $event.target.value || null })">
-        </label>
-
-        <label class="check">
-          <input type="checkbox" :checked="filtro.incluirAnuladas"
-            @change="filtrar({ incluirAnuladas: $event.target.checked })">
-          <span>Ver anuladas</span>
-        </label>
+        <button class="btn btn-linea filtros-btn" :class="{ activo: nFiltros > 0 }" @click="filtrosAbiertos = true"
+          :aria-label="`Filtros${nFiltros ? `, ${nFiltros} activos` : ''}`">
+          Filtros
+          <span v-if="nFiltros" class="globo">{{ nFiltros }}</span>
+        </button>
       </div>
 
+      <!-- Lo que está filtrando, visible y removible: si la lista sale vacía
+           tiene que poder verse por qué sin abrir nada. -->
+      <div v-if="chips.length" class="chips">
+        <button v-for="c in chips" :key="c.clave" class="chip-filtro" @click="quitarChip(c)">
+          {{ c.texto }} <span aria-hidden="true">✕</span>
+        </button>
+        <button class="chip-limpiar" @click="limpiarFiltros">Limpiar todo</button>
+      </div>
 
-      <!-- Un vendedor solo ve sus boletas: el servidor lo decide desde el
-           token y este filtro ni siquiera se le muestra. -->
       <div v-if="esAdmin && resumen" class="tiras">
         <div class="tira">
           <span class="rot">{{ resumen.boletas }} boleta(s)</span>
@@ -71,188 +60,70 @@
       <div v-if="cargando && !ventas.length" class="vacio">Cargando boletas…</div>
 
       <div v-else-if="!ventas.length" class="vacio">
-        <strong>{{ hayFiltro ? 'Ninguna boleta coincide' : 'Sin ventas todavía' }}</strong>
-        {{ hayFiltro ? 'Prueba con otro texto o quita los filtros.' : 'Las boletas aparecen acá al cobrar.' }}
+        <strong>{{ nFiltros || busqueda ? 'Ninguna boleta coincide' : 'Sin ventas todavía' }}</strong>
+        {{ nFiltros || busqueda ? 'Prueba con otro texto o quita los filtros.' : 'Las boletas aparecen acá al cobrar.' }}
       </div>
 
-      <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
-        <table>
-          <caption class="sr-only">Listado de boletas de venta</caption>
-          <thead>
-            <tr>
-              <th class="izq">Folio</th>
-              <th class="izq">Fecha</th>
-              <th class="izq">Vendedor</th>
-              <th class="izq">Cliente</th>
-              <th class="izq">Pago</th>
-              <th>Descuentos</th>
-              <th>Total</th>
-              <th class="acciones-col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="v in ventas" :key="v.id">
-              <!-- CAMBIO 3: fila accesible por teclado -->
-              <tr class="fila" :class="{ anulada: v.anulada, abierta: detalleId === v.id }" tabindex="0" role="button"
-                :aria-expanded="detalleId === v.id" @click="alternarDetalle(v.id)"
-                @keydown.enter.prevent="alternarDetalle(v.id)" @keydown.space.prevent="alternarDetalle(v.id)">
+      <!-- ═══ Feed ═══ -->
+      <div v-else class="feed" :class="{ atenuada: cargando }">
 
-                <td data-label="Folio" class="izq">
-                  <div class="folio">{{ v.folio }}</div>
-                  <div class="desglose">
-                    #{{ v.numeroAtencion }} · {{ v.lineas }} línea(s)
-                    <span v-if="v.anulada" class="etiqueta et-roja">anulada</span>
-                  </div>
-                </td>
+        <!-- Rótulos de columna: el feed sigue teniendo la información de la
+             tabla, solo que la fecha ya la carga la cabecera de cada día. -->
+        <div class="feed-cab" aria-hidden="true">
+          <span class="c-borde"></span>
+          <span>Folio</span>
+          <span>Vendedor</span>
+          <span>Cliente</span>
+          <span>Pago</span>
+          <span class="der">Descuentos</span>
+          <span class="der">Total</span>
+          <span></span>
+        </div>
 
-                <!-- La API devuelve creadoEn, no fecha: es el momento exacto
-                     del cobro, con hora. -->
-                <td data-label="Fecha" class="izq suave">
-                  <div>{{ fecha(v.creadoEn) }}</div>
-                  <div class="desglose">{{ hora(v.creadoEn) }}</div>
-                </td>
+        <section v-for="g in grupos" :key="g.clave" class="dia">
+          <h2 class="dia-cab">
+            <span class="dia-titulo">{{ g.titulo }}</span>
+            <span class="dia-total">{{ g.boletas }} boleta(s) · {{ clp(g.total) }}</span>
+          </h2>
 
-                <td data-label="Vendedor" class="izq suave">{{ v.usuario || '—' }}</td>
+          <article v-for="v in g.ventas" :key="v.id" class="boleta" :class="{ anulada: v.anulada }" tabindex="0"
+            role="button" :aria-label="`Boleta ${v.folio}, ${clp(v.total)}`" @click="abrirDetalle(v.id)"
+            @keydown.enter.prevent="abrirDetalle(v.id)" @keydown.space.prevent="abrirDetalle(v.id)">
 
-                <td data-label="Cliente" class="izq suave">
-                  <span v-if="v.cliente">{{ v.cliente }}</span>
-                  <span v-else class="tenue">sin ficha</span>
-                </td>
+            <!-- El medio de pago se lee en el borde, sin leer texto -->
+            <span class="borde" :class="'borde-' + v.medioPago" aria-hidden="true"></span>
 
-                <td data-label="Pago" class="izq">
-                  <span class="chip" :class="'pago-' + v.medioPago">
-                    {{ textoMedioPago(v.medioPago) }}
-                  </span>
-                </td>
+            <div class="c-folio min0">
+              <div class="folio">
+                {{ v.folio }}
+                <span v-if="v.anulada" class="etiqueta et-roja">anulada</span>
+              </div>
+              <div class="desglose">
+                {{ hora(v.creadoEn) }} · #{{ v.numeroAtencion }} · {{ v.lineas }} línea(s)
+              </div>
+            </div>
 
-                <td data-label="Descuentos" class="der">
-                  <span v-if="v.descuentoTotal" class="dato verde">−{{ clp(v.descuentoTotal) }}</span>
-                  <span v-else class="tenue">—</span>
-                </td>
+            <div class="c-vendedor suave">{{ v.usuario || '—' }}</div>
 
-                <td data-label="Total" class="der dato grande">{{ clp(v.total) }}</td>
+            <div class="c-cliente suave">
+              <span v-if="v.cliente">{{ v.cliente }}</span>
+              <span v-else class="tenue">sin ficha</span>
+            </div>
 
-                <td class="acciones-col der">
-                  <span class="flecha" :class="{ girada: detalleId === v.id }" aria-hidden="true">›</span>
-                </td>
-              </tr>
+            <div class="c-pago">
+              <span class="chip" :class="'pago-' + v.medioPago">{{ textoMedioPago(v.medioPago) }}</span>
+            </div>
 
-              <!-- ═══ Detalle ═══ -->
-              <tr v-if="detalleId === v.id" class="fila-detalle">
-                <td :colspan="8">
-                  <div v-if="cargandoDetalle" class="cargando">Cargando detalle…</div>
+            <div class="c-desc der">
+              <span v-if="v.descuentoTotal" class="dato verde">−{{ clp(v.descuentoTotal) }}</span>
+              <span v-else class="tenue">—</span>
+            </div>
 
-                  <div v-else-if="detalle" class="detalle">
-                    <div class="detalle-cols">
+            <div class="c-total der dato grande">{{ clp(v.total) }}</div>
 
-                      <!-- Lo que se vendió -->
-                      <section>
-                        <h4>Qué se vendió</h4>
-                        <div v-for="i in detalle.items" :key="i.id" class="item">
-                          <span class="emoji" aria-hidden="true">{{ i.emoji }}</span>
-                          <div class="min0">
-                            <div class="item-nombre">{{ i.nombre }}</div>
-                            <div class="desglose">{{ i.cantidad }} × {{ clp(i.precioUnitario) }}</div>
-                          </div>
-                          <b class="dato">{{ clp(i.subtotal) }}</b>
-                        </div>
-                      </section>
-
-                      <!-- De dónde salió -->
-                      <!-- Es lo que hace posible anular devolviendo las varas
-                           al balde exacto, y lo que dice cuánto se ganó de
-                           verdad: el costo real, no el de ficha. -->
-                      <section v-if="detalle.consumos?.length">
-                        <h4>De qué lote salió</h4>
-                        <div v-for="c in detalle.consumos" :key="c.id" class="item">
-                          <div class="min0">
-                            <div class="item-nombre">{{ c.producto }}</div>
-                            <div class="desglose">
-                              <span v-if="c.loteCodigo" class="mono">{{ c.loteCodigo }}</span>
-                              <span v-else class="tenue">armado en local</span>
-                              · {{ c.cantidad }} × {{ clp(c.costoUnitario) }}
-                            </div>
-                          </div>
-                          <b class="dato suave">{{ clp(c.costoTotal) }}</b>
-                        </div>
-                      </section>
-
-                      <!-- Los números -->
-                      <section class="numeros">
-                        <h4>Totales</h4>
-                        <div class="fila-num"><span>Bruto</span><b class="dato">{{ clp(detalle.bruto) }}</b></div>
-
-                        <div v-if="detalle.descuentoPromo" class="fila-num verde">
-                          <span>{{ detalle.promocion || 'Promoción' }}</span>
-                          <b class="dato">−{{ clp(detalle.descuentoPromo) }}</b>
-                        </div>
-
-                        <div v-if="detalle.descuentoManual" class="fila-num verde">
-                          <span>
-                            A mano
-                            <span v-if="detalle.autorizadoPor" class="desglose">
-                              · autorizó {{ detalle.autorizadoPor }}
-                            </span>
-                          </span>
-                          <b class="dato">−{{ clp(detalle.descuentoManual) }}</b>
-                        </div>
-
-                        <div v-if="detalle.descuentoCanje" class="fila-num verde">
-                          <span>{{ detalle.puntosCanjeados }} puntos</span>
-                          <b class="dato">−{{ clp(detalle.descuentoCanje) }}</b>
-                        </div>
-
-                        <div class="fila-num"><span>Neto</span><b class="dato">{{ clp(detalle.neto) }}</b></div>
-                        <div class="fila-num">
-                          <span>IVA {{ detalle.ivaTasa }}%</span>
-                          <b class="dato">{{ clp(detalle.ivaMonto) }}</b>
-                        </div>
-
-                        <div class="fila-num total">
-                          <span>Total</span><b class="dato">{{ clp(detalle.total) }}</b>
-                        </div>
-
-                        <template v-if="detalle.recibido">
-                          <div class="fila-num"><span>Recibido</span><b class="dato">{{ clp(detalle.recibido) }}</b>
-                          </div>
-                          <div class="fila-num"><span>Vuelto</span><b class="dato">{{ clp(detalle.vuelto) }}</b></div>
-                        </template>
-
-                        <!-- El margen sale de los consumos: lo que realmente
-                             valían las varas que salieron de la cámara, no el
-                             costo que dice la ficha del producto. -->
-                        <div v-if="esAdmin && detalle.margen != null" class="fila-num margen">
-                          <span>Margen real</span>
-                          <b class="dato" :class="detalle.margen < 25 ? 'rojo' : 'verde'">
-                            {{ Number(detalle.margen).toFixed(0) }}%
-                          </b>
-                        </div>
-                      </section>
-                    </div>
-
-                    <div v-if="detalle.anulada" class="banda banda-error">
-                      <span aria-hidden="true">🚫</span>
-                      <span>
-                        Anulada por <b>{{ detalle.anulador }}</b> el {{ fecha(detalle.anuladaEn) }}
-                        · {{ detalle.motivoAnulacion }}
-                      </span>
-                    </div>
-
-                    <div class="detalle-pie">
-                      <button class="btn btn-linea btn-mini" @click.stop="verTicket(v.id)">
-                        🧾 Ver ticket
-                      </button>
-                      <button v-if="esAdmin && !detalle.anulada" class="btn btn-linea btn-mini peligro"
-                        @click.stop="abrirAnulacion(detalle)">
-                        Anular boleta
-                      </button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
+            <span class="flecha" aria-hidden="true">›</span>
+          </article>
+        </section>
       </div>
 
       <p v-if="totalPaginas > 1" class="paginador">
@@ -273,53 +144,208 @@
         Los turnos aparecen acá al cerrarse.
       </div>
 
-      <div v-else class="tabla-envoltura">
-        <table>
-          <caption class="sr-only">Historial de turnos de caja</caption>
-          <thead>
-            <tr>
-              <th class="izq">Turno</th>
-              <th class="izq">Responsable</th>
-              <th>Boletas</th>
-              <th>Vendido</th>
-              <th>Efectivo</th>
-              <th>Otros medios</th>
-              <th>Diferencia</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="c in turnos" :key="c.id" class="fila-turno">
-              <td data-label="Turno" class="izq">
-                <div class="folio">{{ fecha(c.abiertaEn) }}</div>
-                <div class="desglose">
-                  {{ hora(c.abiertaEn) }} — {{ c.cerradaEn ? hora(c.cerradaEn) : 'abierta' }}
-                </div>
-              </td>
-              <td data-label="Responsable" class="izq suave">{{ c.abiertaPor || '—' }}</td>
-              <td data-label="Boletas" class="der dato">
-                {{ c.boletas }}
-                <span v-if="c.anuladas" class="desglose rojo">{{ c.anuladas }} anulada(s)</span>
-              </td>
-              <td data-label="Vendido" class="der dato">{{ clp(c.totalVendido) }}</td>
-              <td data-label="Efectivo" class="der dato">{{ clp(c.efectivo) }}</td>
-              <td data-label="Otros medios" class="der dato suave">
-                {{ clp(c.debito + c.credito + c.transferencia) }}
-              </td>
-              <td data-label="Diferencia" class="der">
-                <span v-if="c.diferencia === null" class="tenue">abierta</span>
-                <span v-else class="chip" :class="claseDiferencia(c.diferencia)">
-                  {{ c.diferencia === 0 ? 'exacto' : clp(c.diferencia) }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="feed">
+        <div class="turnos-cab" aria-hidden="true">
+          <span>Turno</span>
+          <span>Responsable</span>
+          <span class="der">Boletas</span>
+          <span class="der">Vendido</span>
+          <span class="der">Efectivo</span>
+          <span class="der">Otros medios</span>
+          <span class="der">Diferencia</span>
+        </div>
+
+        <article v-for="c in turnos" :key="c.id" class="turno">
+          <div class="c-folio min0">
+            <div class="folio">{{ fecha(c.abiertaEn) }}</div>
+            <div class="desglose">{{ hora(c.abiertaEn) }} — {{ c.cerradaEn ? hora(c.cerradaEn) : 'abierta' }}</div>
+          </div>
+          <div class="suave">{{ c.abiertaPor || '—' }}</div>
+          <div class="der dato">
+            {{ c.boletas }}
+            <span v-if="c.anuladas" class="desglose rojo">{{ c.anuladas }} anulada(s)</span>
+          </div>
+          <div class="der dato">{{ clp(c.totalVendido) }}</div>
+          <div class="der dato">{{ clp(c.efectivo) }}</div>
+          <div class="der dato suave">{{ clp(c.debito + c.credito + c.transferencia) }}</div>
+          <div class="der">
+            <span v-if="c.diferencia === null" class="tenue">abierta</span>
+            <span v-else class="chip" :class="claseDiferencia(c.diferencia)">
+              {{ c.diferencia === 0 ? 'exacto' : clp(c.diferencia) }}
+            </span>
+          </div>
+        </article>
       </div>
     </template>
 
+    <!-- ═══ Hoja de filtros ═══ -->
+    <div v-if="filtrosAbiertos" class="fondo" @click.self="filtrosAbiertos = false">
+      <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-filtros">
+        <div class="hoja-cab">
+          <span class="agarre" aria-hidden="true"></span>
+          <h3 id="titulo-filtros">Filtros</h3>
+          <button class="btn-icono" @click="filtrosAbiertos = false" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="hoja-cuerpo">
+          <div class="grupo">
+            <label for="f-medio">Medio de pago</label>
+            <select id="f-medio" class="campo" :value="filtro.medioPago ?? ''"
+              @change="filtrar({ medioPago: $event.target.value || null, pagina: 1 })">
+              <option value="">Todos los medios</option>
+              <option v-for="m in MEDIOS_PAGO" :key="m.valor" :value="m.valor">{{ m.texto }}</option>
+            </select>
+          </div>
+
+          <!-- Nadie tipea un rango a mano en el mostrador -->
+          <div class="grupo">
+            <label>Periodo</label>
+            <div class="presets">
+              <button v-for="p in PRESETS" :key="p.clave" class="preset" :class="{ on: presetActivo === p.clave }"
+                @click="aplicarPreset(p.clave)">{{ p.texto }}</button>
+            </div>
+          </div>
+
+          <div v-if="presetActivo === 'personalizado'" class="grupo par">
+            <label class="campo-fecha">
+              <span>Desde</span>
+              <input type="date" :value="filtro.desde ?? ''"
+                @change="filtrar({ desde: $event.target.value || null, pagina: 1 })">
+            </label>
+            <label class="campo-fecha">
+              <span>Hasta</span>
+              <input type="date" :value="filtro.hasta ?? ''"
+                @change="filtrar({ hasta: $event.target.value || null, pagina: 1 })">
+            </label>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" :checked="filtro.incluirAnuladas"
+              @change="filtrar({ incluirAnuladas: $event.target.checked, pagina: 1 })">
+            <span>Ver boletas anuladas</span>
+          </label>
+        </div>
+
+        <div class="hoja-pie">
+          <button class="btn btn-linea" @click="limpiarFiltros">Limpiar</button>
+          <button class="btn" @click="filtrosAbiertos = false">Ver {{ total }} boleta(s)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Hoja de detalle ═══ -->
+    <!-- Antes era un acordeón dentro de la tabla. La hoja evita el truco de
+         pegar dos filas con border-top: none para que parezcan una card. -->
+    <div v-if="detalleId" class="fondo" @click.self="cerrarDetalle">
+      <div class="hoja alta" role="dialog" aria-modal="true" aria-labelledby="titulo-detalle">
+        <div class="hoja-cab">
+          <span class="agarre" aria-hidden="true"></span>
+          <div class="min0">
+            <h3 id="titulo-detalle">{{ detalle?.folio || 'Boleta' }}</h3>
+            <p v-if="detalle">{{ fecha(detalle.creadoEn) }} · {{ hora(detalle.creadoEn) }}</p>
+          </div>
+          <button class="btn-icono" @click="cerrarDetalle" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="hoja-cuerpo">
+          <div v-if="cargandoDetalle" class="cargando">Cargando detalle…</div>
+
+          <div v-else-if="detalle" class="detalle-cols">
+            <section>
+              <h4>Qué se vendió</h4>
+              <div v-for="i in detalle.items" :key="i.id" class="item">
+                <span class="emoji" aria-hidden="true">{{ i.emoji }}</span>
+                <div class="min0">
+                  <div class="item-nombre">{{ i.nombre }}</div>
+                  <div class="desglose">{{ i.cantidad }} × {{ clp(i.precioUnitario) }}</div>
+                </div>
+                <b class="dato">{{ clp(i.subtotal) }}</b>
+              </div>
+            </section>
+
+            <!-- Es lo que hace posible anular devolviendo las varas al balde
+                 exacto, y lo que dice cuánto se ganó de verdad. -->
+            <section v-if="detalle.consumos?.length">
+              <h4>De qué lote salió</h4>
+              <div v-for="c in detalle.consumos" :key="c.id" class="item">
+                <div class="min0">
+                  <div class="item-nombre">{{ c.producto }}</div>
+                  <div class="desglose">
+                    <span v-if="c.loteCodigo" class="mono">{{ c.loteCodigo }}</span>
+                    <span v-else class="tenue">armado en local</span>
+                    · {{ c.cantidad }} × {{ clp(c.costoUnitario) }}
+                  </div>
+                </div>
+                <b class="dato suave">{{ clp(c.costoTotal) }}</b>
+              </div>
+            </section>
+
+            <section class="numeros">
+              <h4>Totales</h4>
+              <div class="fila-num"><span>Bruto</span><b class="dato">{{ clp(detalle.bruto) }}</b></div>
+
+              <div v-if="detalle.descuentoPromo" class="fila-num verde">
+                <span>{{ detalle.promocion || 'Promoción' }}</span>
+                <b class="dato">−{{ clp(detalle.descuentoPromo) }}</b>
+              </div>
+
+              <div v-if="detalle.descuentoManual" class="fila-num verde">
+                <span>
+                  A mano
+                  <span v-if="detalle.autorizadoPor" class="desglose">· autorizó {{ detalle.autorizadoPor }}</span>
+                </span>
+                <b class="dato">−{{ clp(detalle.descuentoManual) }}</b>
+              </div>
+
+              <div v-if="detalle.descuentoCanje" class="fila-num verde">
+                <span>{{ detalle.puntosCanjeados }} puntos</span>
+                <b class="dato">−{{ clp(detalle.descuentoCanje) }}</b>
+              </div>
+
+              <div class="fila-num"><span>Neto</span><b class="dato">{{ clp(detalle.neto) }}</b></div>
+              <div class="fila-num">
+                <span>IVA {{ detalle.ivaTasa }}%</span>
+                <b class="dato">{{ clp(detalle.ivaMonto) }}</b>
+              </div>
+
+              <div class="fila-num total"><span>Total</span><b class="dato">{{ clp(detalle.total) }}</b></div>
+
+              <template v-if="detalle.recibido">
+                <div class="fila-num"><span>Recibido</span><b class="dato">{{ clp(detalle.recibido) }}</b></div>
+                <div class="fila-num"><span>Vuelto</span><b class="dato">{{ clp(detalle.vuelto) }}</b></div>
+              </template>
+
+              <!-- El margen sale de los consumos: lo que realmente valían las
+                   varas que salieron de la cámara, no el costo de la ficha. -->
+              <div v-if="esAdmin && detalle.margen != null" class="fila-num margen">
+                <span>Margen real</span>
+                <b class="dato" :class="detalle.margen < 25 ? 'rojo' : 'verde'">
+                  {{ Number(detalle.margen).toFixed(0) }}%
+                </b>
+              </div>
+            </section>
+          </div>
+
+          <div v-if="detalle?.anulada" class="banda banda-error">
+            <span aria-hidden="true">🚫</span>
+            <span>
+              Anulada por <b>{{ detalle.anulador }}</b> el {{ fecha(detalle.anuladaEn) }}
+              · {{ detalle.motivoAnulacion }}
+            </span>
+          </div>
+        </div>
+
+        <div v-if="detalle" class="hoja-pie">
+          <button class="btn btn-linea" @click="verTicket(detalle.id)">🧾 Ver ticket</button>
+          <button v-if="esAdmin && !detalle.anulada" class="btn btn-linea peligro" @click="abrirAnulacion(detalle)">
+            Anular boleta
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ Modal de anulación ═══ -->
-    <!-- CAMBIO 5: cierre con Escape -->
-    <div v-if="anulando" class="fondo" @click.self="anulando = null" @keydown.esc="anulando = null">
+    <div v-if="anulando" class="fondo" @click.self="anulando = null">
       <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-anulacion">
         <div class="modal-cab">
           <h3 id="titulo-anulacion">Anular boleta {{ anulando.folio }}</h3>
@@ -329,8 +355,8 @@
         <div class="modal-cuerpo">
           <div v-if="anulando.error" class="error">{{ anulando.error }}</div>
 
-          <!-- Lo que va a volver al inventario. Verlo antes de confirmar
-               evita anular la boleta equivocada, que después no se deshace. -->
+          <!-- Verlo antes de confirmar evita anular la boleta equivocada, que
+               después no se deshace. -->
           <div class="devolucion">
             <div class="rot">Vuelve al inventario</div>
             <div v-for="c in anulando.consumos" :key="c.id" class="item">
@@ -365,7 +391,6 @@
       </div>
     </div>
 
-    <!-- ═══ Ticket ═══ -->
     <TicketBoleta v-if="ticket" :ticket="ticket" @cerrar="ticket = null" />
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
@@ -378,6 +403,28 @@ import { useStore } from 'vuex'
 import { MEDIOS_PAGO, textoMedioPago } from '@/features/ventas/store/ventas.module'
 import TicketBoleta from '@/features/ventas/components/TicketBoleta.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
+
+const PRESETS = [
+  { clave: 'todo', texto: 'Todo' },
+  { clave: 'hoy', texto: 'Hoy' },
+  { clave: 'ayer', texto: 'Ayer' },
+  { clave: '7d', texto: '7 días' },
+  { clave: 'mes', texto: 'Este mes' },
+  { clave: 'personalizado', texto: 'Otro rango' }
+]
+
+/* YYYY-MM-DD en hora local. new Date().toISOString() da UTC y en Chile
+   adelanta el día durante la tarde. */
+const iso = (d) => {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+const sumarDias = (d, n) => {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
 
 export default {
   name: 'VentasView',
@@ -400,9 +447,39 @@ export default {
     const cargando = computed(() => store.getters['ventas/cargando'])
     const error = computed(() => store.getters['ventas/error'])
 
-    const hayFiltro = computed(() => {
-      const f = filtro.value
-      return !!(f.buscar || f.medioPago || f.desde || f.hasta || f.incluirAnuladas)
+    const filtrar = (cambios) => store.dispatch('ventas/filtrar', cambios)
+    const recargar = () => store.dispatch('ventas/cargar')
+
+    /* ---------------- Agrupado por día ---------------- */
+    /* El orden lo pone el servidor (creadoEn desc). Map conserva el orden de
+       inserción, así que los días salen como vinieron: no reordenamos acá.
+       Si el backend deja de ordenar, esto se rompe en silencio. */
+    const tituloDia = (d) => {
+      const hoy = new Date()
+      if (iso(d) === iso(hoy)) return 'Hoy'
+      if (iso(d) === iso(sumarDias(hoy, -1))) return 'Ayer'
+      return d.toLocaleDateString('es-CL', {
+        weekday: 'short', day: 'numeric', month: 'short',
+        year: d.getFullYear() === hoy.getFullYear() ? undefined : 'numeric'
+      })
+    }
+
+    const grupos = computed(() => {
+      const mapa = new Map()
+      for (const v of ventas.value) {
+        const d = new Date(v.creadoEn)
+        const clave = iso(d)
+        if (!mapa.has(clave)) {
+          mapa.set(clave, { clave, titulo: tituloDia(d), ventas: [], boletas: 0, total: 0 })
+        }
+        const g = mapa.get(clave)
+        g.ventas.push(v)
+        if (!v.anulada) {
+          g.boletas++
+          g.total += v.total
+        }
+      }
+      return [...mapa.values()]
     })
 
     /* Resumen de lo que se está viendo. Se calcula sobre la página actual, no
@@ -418,15 +495,77 @@ export default {
       }
     })
 
+    /* ---------------- Filtros ---------------- */
+    const filtrosAbiertos = ref(false)
+    const rangoManual = ref(false)
+
     const busqueda = ref(filtro.value.buscar || '')
     let tmr = null
     watch(busqueda, (v) => {
       clearTimeout(tmr)
-      tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
+      tmr = setTimeout(() => filtrar({ buscar: v.trim(), pagina: 1 }), 350)
     })
 
-    const filtrar = (cambios) => store.dispatch('ventas/filtrar', cambios)
-    const recargar = () => store.dispatch('ventas/cargar')
+    const rangoPreset = (clave) => {
+      const hoy = new Date()
+      switch (clave) {
+        case 'hoy': return { desde: iso(hoy), hasta: iso(hoy) }
+        case 'ayer': return { desde: iso(sumarDias(hoy, -1)), hasta: iso(sumarDias(hoy, -1)) }
+        case '7d': return { desde: iso(sumarDias(hoy, -6)), hasta: iso(hoy) }
+        case 'mes': return { desde: iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), hasta: iso(hoy) }
+        default: return { desde: null, hasta: null }
+      }
+    }
+
+    /* Qué preset corresponde al rango que hay puesto. Se deduce, no se guarda,
+       para que un rango que llegó por URL o por el store se refleje solo. */
+    const presetActivo = computed(() => {
+      const { desde, hasta } = filtro.value
+      if (!desde && !hasta) return rangoManual.value ? 'personalizado' : 'todo'
+      for (const p of ['hoy', 'ayer', '7d', 'mes']) {
+        const r = rangoPreset(p)
+        if (r.desde === desde && r.hasta === hasta) return p
+      }
+      return 'personalizado'
+    })
+
+    const aplicarPreset = (clave) => {
+      rangoManual.value = clave === 'personalizado'
+      if (clave === 'personalizado') return
+      filtrar({ ...rangoPreset(clave), pagina: 1 })
+    }
+
+    const chips = computed(() => {
+      const f = filtro.value
+      const out = []
+      if (f.medioPago) {
+        out.push({ clave: 'medioPago', texto: textoMedioPago(f.medioPago), cambio: { medioPago: null } })
+      }
+      if (f.desde || f.hasta) {
+        const p = PRESETS.find(x => x.clave === presetActivo.value)
+        const texto = presetActivo.value === 'personalizado'
+          ? `${f.desde || '…'} a ${f.hasta || '…'}`
+          : p?.texto
+        out.push({ clave: 'fechas', texto, cambio: { desde: null, hasta: null } })
+      }
+      if (f.incluirAnuladas) {
+        out.push({ clave: 'anuladas', texto: 'Con anuladas', cambio: { incluirAnuladas: false } })
+      }
+      return out
+    })
+
+    const nFiltros = computed(() => chips.value.length)
+
+    const quitarChip = (c) => {
+      if (c.clave === 'fechas') rangoManual.value = false
+      filtrar({ ...c.cambio, pagina: 1 })
+    }
+
+    const limpiarFiltros = () => {
+      rangoManual.value = false
+      busqueda.value = ''
+      filtrar({ buscar: '', medioPago: null, desde: null, hasta: null, incluirAnuladas: false, pagina: 1 })
+    }
 
     /* ---------------- Detalle ---------------- */
     const detalleId = ref(null)
@@ -436,13 +575,7 @@ export default {
     /* El detalle se pide al abrir, no al cargar la lista: son dos consultas
        más por boleta —líneas y consumos— y traerlas para veinte filas que
        nadie va a expandir sería trabajo perdido. */
-    const alternarDetalle = async (id) => {
-      if (detalleId.value === id) {
-        detalleId.value = null
-        detalle.value = null
-        return
-      }
-
+    const abrirDetalle = async (id) => {
       detalleId.value = id
       detalle.value = null
       cargandoDetalle.value = true
@@ -455,6 +588,11 @@ export default {
       } finally {
         cargandoDetalle.value = false
       }
+    }
+
+    const cerrarDetalle = () => {
+      detalleId.value = null
+      detalle.value = null
     }
 
     /* ---------------- Ticket ---------------- */
@@ -525,17 +663,29 @@ export default {
 
     const claseDiferencia = (d) => (d === 0 ? 'exacto' : d > 0 ? 'sobra' : 'falta')
 
-    /* ---------------- Carga ---------------- */
+    /* ---------------- Carga y teclado ---------------- */
     let control = null
+
+    /* Escape iba en @keydown del div de fondo, donde nunca llegaba: ese div no
+       recibe foco. Va en document, y cierra la capa de más arriba. */
+    const alTeclado = (e) => {
+      if (e.key !== 'Escape') return
+      if (anulando.value) anulando.value = null
+      else if (ticket.value) ticket.value = null
+      else if (detalleId.value) cerrarDetalle()
+      else if (filtrosAbiertos.value) filtrosAbiertos.value = false
+    }
 
     onMounted(() => {
       control = new AbortController()
       store.dispatch('ventas/cargar', { signal: control.signal })
+      document.addEventListener('keydown', alTeclado)
     })
 
     onUnmounted(() => {
       control?.abort()
       clearTimeout(tmr)
+      document.removeEventListener('keydown', alTeclado)
     })
 
     /* ---------------- Utilidades ---------------- */
@@ -544,20 +694,21 @@ export default {
     })
     const clp = (n) => fmt.format(Math.round(n || 0))
 
-    const fecha = (iso) => (iso
-      ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+    const fecha = (iso_) => (iso_
+      ? new Date(iso_).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
       : '—')
 
-    const hora = (iso) => (iso
-      ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+    const hora = (iso_) => (iso_
+      ? new Date(iso_).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
       : '—')
 
     return {
-      Number, MEDIOS_PAGO, textoMedioPago,
+      Number, MEDIOS_PAGO, textoMedioPago, PRESETS,
       esAdmin, pestana, irATurnos,
-      ventas, total, totalPaginas, filtro, cargando, error, hayFiltro, resumen,
+      ventas, total, totalPaginas, filtro, cargando, error, resumen, grupos,
       busqueda, filtrar, recargar,
-      detalleId, detalle, cargandoDetalle, alternarDetalle,
+      filtrosAbiertos, presetActivo, aplicarPreset, chips, nFiltros, quitarChip, limpiarFiltros,
+      detalleId, detalle, cargandoDetalle, abrirDetalle, cerrarDetalle,
       ticket, verTicket,
       anulando, anulandoAhora, campoMotivo, abrirAnulacion, confirmarAnulacion,
       turnos, cargandoCaja, claseDiferencia,
@@ -576,10 +727,6 @@ export default {
 
 .min0 {
   min-width: 0;
-}
-
-.izq {
-  text-align: left;
 }
 
 .der {
@@ -641,29 +788,12 @@ export default {
   margin-top: 6px;
 }
 
-/* Solo para lectores de pantalla */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ─── Cabecera ─── */
 
 h1 {
   font-size: clamp(1.2rem, 5vw, 1.5rem);
   font-weight: 700;
   letter-spacing: -.02em;
-}
-
-.cabecera .ayuda {
-  max-width: 60ch;
 }
 
 .pestanas {
@@ -701,22 +831,20 @@ h1 {
   border-radius: var(--r-sm);
 }
 
-/* ─── Filtros ─── */
-/* CAMBIO 1: alturas homogéneas, buscador separado de filtros secundarios */
+/* ─── Barra de búsqueda ─── */
 
-.filtros {
+.barra {
   display: flex;
-  flex-wrap: nowrap;      /* fuerza fila única en desktop */
-  align-items: flex-end;  /* alinea por la base (las fechas tienen label arriba) */
-  gap: 12px;
+  gap: 10px;
+  align-items: stretch;
 }
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 auto;         /* absorbe el espacio sobrante */
-  min-width: 200px;
+  flex: 1 1 auto;
+  min-width: 0;
   height: 44px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
@@ -730,6 +858,12 @@ h1 {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.buscador .lupa {
+  color: var(--text-faint);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
 .buscador input {
   flex: 1;
   min-width: 0;
@@ -741,96 +875,63 @@ h1 {
   font-size: max(.9rem, 16px);
 }
 
-/* Elimina la clase .filtros-grupo (ya no existe) */
-
-.campo {
-  height: 44px;           /* altura fija, no min-height, para alinear exacto */
-  padding: 0 .75rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: max(.9rem, 16px);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-}
-
-/* El campo del modal necesita padding vertical */
-.grupo .campo {
-  width: 100%;
-  height: auto;
-  min-height: 44px;
-  padding: .6rem .75rem;
-}
-
-.campo:focus {
-  outline: 0;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.campo.corto {
+.filtros-btn {
   flex: 0 0 auto;
-  width: 170px;
+  gap: 8px;
 }
 
-.campo-fecha {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 0 0 auto;
-}
-
-.campo-fecha > span {
-  font-size: .66rem;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-
-.campo-fecha input {
-  height: 44px;
-  width: 150px;
-  padding: 0 .6rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: max(.85rem, 16px);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-}
-
-.campo-fecha input:focus {
-  outline: 0;
+.filtros-btn.activo {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  color: var(--accent-text);
 }
 
-.check {
+.globo {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 44px;
-  flex: 0 0 auto;
-  padding: 0 4px;
-  font-size: .85rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  white-space: nowrap;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .7rem;
+  font-weight: 700;
 }
 
-.check input {
-  width: 17px;
-  height: 17px;
-  accent-color: var(--accent);
+/* ─── Chips de filtro activo ─── */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-filtro,
+.chip-limpiar {
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 600;
+  padding: 4px 11px;
   cursor: pointer;
+}
+
+.chip-limpiar {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+.chip-filtro:hover,
+.chip-limpiar:hover {
+  filter: brightness(1.08);
 }
 
 /* ─── Tiras de resumen ─── */
-/* CAMBIO 4: total como protagonista, alerta diferenciada */
 
 .tiras {
   display: flex;
@@ -849,7 +950,6 @@ h1 {
   min-width: 140px;
 }
 
-/* La primera tira (total vendido) es la protagonista */
 .tira:first-child {
   background: color-mix(in srgb, var(--accent) 6%, var(--surface));
   border-color: var(--accent-soft);
@@ -870,33 +970,35 @@ h1 {
   opacity: .8;
 }
 
-/* ─── Tabla ─── */
+/* ─── Feed ─── */
 
-.tabla-envoltura {
+.feed {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  overflow: auto;
+  overflow: hidden;
   transition: opacity .14s ease;
 }
 
-.tabla-envoltura.atenuada {
+.feed.atenuada {
   opacity: .45;
 }
 
-table {
-  width: 100%;
-  min-width: 860px;
-  border-collapse: separate;
-  border-spacing: 0;
+/* La grilla es una sola definición y la comparten rótulos, cabecera de día y
+   boletas: si se agrega una columna, se agrega en un solo lugar. */
+.feed-cab,
+.boleta {
+  display: grid;
+  grid-template-columns: 3px minmax(140px, 1fr) 130px minmax(120px, 1fr) 108px 104px 116px 16px;
+  align-items: center;
+  gap: 12px;
 }
 
-th {
+.feed-cab {
   position: sticky;
   top: 0;
-  z-index: 2;
-  text-align: right;
-  padding: 10px 12px;
+  z-index: 3;
+  padding: 9px 14px 9px 0;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   font-size: .66rem;
@@ -907,51 +1009,106 @@ th {
   white-space: nowrap;
 }
 
-th.izq {
-  text-align: left;
+.feed-cab .c-borde {
+  display: block;
 }
 
-td {
-  padding: 11px 12px;
+/* La cabecera de día lleva la fecha y el total del día: por eso la boleta ya
+   no necesita columna de fecha, y el hueco central se llena con los datos que
+   antes estaban en la tabla. */
+.dia-cab {
+  position: sticky;
+  top: 33px;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+}
+
+.dia:first-of-type .dia-cab {
+  border-top: 0;
+}
+
+.dia-titulo {
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  text-transform: capitalize;
+}
+
+.dia-total {
+  font-size: .76rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.boleta {
+  padding: 0 14px 0 0;
   border-bottom: 1px solid var(--border);
   font-size: .86rem;
-  vertical-align: middle;
+  cursor: pointer;
   white-space: nowrap;
 }
 
-tbody tr:last-child td {
+.dia:last-of-type .boleta:last-of-type {
   border-bottom: 0;
 }
 
-/* La fila entera abre el detalle: en una tabla de boletas, buscar un botón
-   chiquito para ver qué se vendió es fricción sin motivo. */
-.fila {
-  cursor: pointer;
-}
-
-.fila:hover td {
+.boleta:hover {
   background: color-mix(in srgb, var(--accent) 4%, var(--surface));
 }
 
-/* CAMBIO 3: foco visible para navegación por teclado */
-.fila:focus-visible {
+.boleta:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
-.fila.abierta td {
-  background: var(--surface-2);
-  border-bottom-color: transparent;
-}
-
-/* Una boleta anulada se atenúa pero no se esconde: el folio existe y el
-   hueco en el correlativo tiene que poder explicarse. */
-.fila.anulada {
+/* Una boleta anulada se atenúa pero no se esconde: el folio existe y el hueco
+   en el correlativo tiene que poder explicarse. */
+.boleta.anulada {
   opacity: .55;
 }
 
-.fila.anulada .folio {
+.boleta.anulada .folio {
   text-decoration: line-through;
+}
+
+/* El medio de pago en el borde: en una lista larga se distingue el efectivo
+   de la transferencia sin leer. */
+.borde {
+  align-self: stretch;
+  min-height: 46px;
+}
+
+.borde-efectivo {
+  background: var(--success);
+}
+
+.borde-debito {
+  background: var(--info);
+}
+
+.borde-credito {
+  background: var(--accent);
+}
+
+.borde-transferencia {
+  background: var(--border-strong);
+}
+
+.c-folio {
+  padding: 10px 0;
+}
+
+.c-vendedor,
+.c-cliente {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .folio {
@@ -961,40 +1118,262 @@ tbody tr:last-child td {
 }
 
 .flecha {
-  display: inline-block;
   color: var(--text-faint);
   font-size: 1.1rem;
-  transition: transform var(--t-fast);
+  text-align: right;
 }
 
-.flecha.girada {
-  transform: rotate(90deg);
+/* ─── Turnos ─── */
+
+.turnos-cab,
+.turno {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(110px, 1fr) 88px 116px 116px 124px 108px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
 }
 
-.acciones-col {
-  width: 1%;
+.turnos-cab {
+  padding-top: 9px;
+  padding-bottom: 9px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.turno {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: .86rem;
+  white-space: nowrap;
+}
+
+.turno:last-of-type {
+  border-bottom: 0;
+}
+
+.turno .desglose {
+  display: block;
+}
+
+/* ─── Hojas y modales ─── */
+
+.fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--overlay);
+}
+
+.hoja {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.hoja.alta {
+  max-width: 640px;
+}
+
+.hoja-cab {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hoja-cab h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.hoja-cab p {
+  font-size: .8rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.hoja-cab .min0 {
+  flex: 1;
+}
+
+.hoja-cab .btn-icono {
+  margin-left: auto;
+}
+
+/* El agarre solo existe cuando la hoja sube desde abajo */
+.agarre {
+  display: none;
+}
+
+.hoja-cuerpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+
+.hoja-pie {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.hoja-pie .btn {
+  flex: 1;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset {
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background-color var(--t-fast);
+}
+
+.preset:hover {
+  color: var(--text);
+}
+
+.preset.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.preset:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.grupo {
+  margin-bottom: 18px;
+}
+
+.grupo:last-child {
+  margin-bottom: 0;
+}
+
+.grupo.par {
+  display: flex;
+  gap: 12px;
+}
+
+.grupo > label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 7px;
+}
+
+.campo {
+  width: 100%;
+  min-height: 44px;
+  padding: .6rem .75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.campo:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.campo-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+}
+
+.campo-fecha > span {
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.campo-fecha input {
+  height: 44px;
+  width: 100%;
+  padding: 0 .6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+}
+
+.campo-fecha input:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ─── Detalle ─── */
 
-.fila-detalle td {
-  padding: 0;
-  background: var(--surface-2);
-  white-space: normal;
-}
-
-.detalle {
-  padding: 18px 20px 16px;
-  border-bottom: 2px solid var(--accent-soft);
-}
-
 .detalle-cols {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 22px;
 }
 
-.detalle h4 {
+.detalle-cols h4 {
   font-size: .68rem;
   font-weight: 700;
   letter-spacing: .08em;
@@ -1053,14 +1432,6 @@ tbody tr:last-child td {
   border-top: 1px dashed var(--border-strong);
 }
 
-.detalle-pie {
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
 .cargando {
   padding: 24px;
   text-align: center;
@@ -1080,8 +1451,6 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
-/* Cada medio con su color: en una lista larga, el efectivo se distingue de
-   la transferencia sin leer. */
 .pago-efectivo {
   background: var(--success-soft);
   color: var(--success);
@@ -1133,17 +1502,7 @@ tbody tr:last-child td {
   color: var(--danger);
 }
 
-/* ─── Modal ─── */
-
-.fondo {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: var(--overlay);
-}
+/* ─── Modal de anulación ─── */
 
 .modal {
   width: 100%;
@@ -1190,18 +1549,6 @@ tbody tr:last-child td {
 
 .modal-pie .btn {
   flex: 1;
-}
-
-.grupo {
-  margin-top: 16px;
-}
-
-.grupo label {
-  display: block;
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
 }
 
 .devolucion {
@@ -1290,8 +1637,8 @@ tbody tr:last-child td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -1324,8 +1671,8 @@ tbody tr:last-child td {
   color: var(--danger);
 }
 
-.detalle .banda {
-  margin-top: 14px;
+.hoja-cuerpo .banda {
+  margin-top: 16px;
 }
 
 .banda .btn {
@@ -1387,148 +1734,164 @@ tbody tr:last-child td {
   background: var(--danger);
 }
 
+/* ─── Anchos intermedios ─── */
+/* Vendedor y cliente son lo primero que sobra cuando aprieta */
+
+@media (max-width: 1080px) {
+
+  .feed-cab,
+  .boleta {
+    grid-template-columns: 3px minmax(140px, 1fr) minmax(110px, 1fr) 104px 100px 112px 16px;
+  }
+
+  .c-vendedor,
+  .feed-cab > span:nth-child(3) {
+    display: none;
+  }
+}
+
 /* ─── Móvil ─── */
-/* CAMBIO 2: detalle unido a su card + CAMBIO 5: zona muerta */
 
 @media (max-width: 860px) {
 
-    /* Bajo el breakpoint sí se apilan: en móvil una sola fila no cabe */
-  .filtros {
-    flex-wrap: wrap;
-  }
-
-  .buscador { flex: 1 1 100%; }
-
-  .campo.corto,
-  .campo-fecha,
-  .campo-fecha input {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  .check { flex: 1 1 100%; }
-
-
-  table,
-  thead,
-  tbody,
-  tr,
-  td {
-    display: block;
-    width: 100%;
-    min-width: 0;
-  }
-
-  /* sin scroll horizontal bajo el breakpoint */
-  table {
-    min-width: 0;
-  }
-
-  thead {
+  .feed-cab,
+  .turnos-cab {
     display: none;
   }
 
-  /* Filas de boleta (interactivas) y de turno (estáticas) como card */
-  tbody tr.fila,
-  tbody tr.fila-turno {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    margin-bottom: 10px;
-    padding: 12px 14px;
+  .dia-cab {
+    top: 0;
   }
 
-  tbody tr.fila td,
-  tbody tr.fila-turno td {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 14px;
-    padding: 5px 0;
-    border: none;
+  /* Dos renglones: folio y total arriba, todo lo demás abajo. La misma
+     información que en escritorio, apilada. */
+  .boleta {
+    grid-template-columns: 3px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "borde folio  total"
+      "borde cliente pago";
+    row-gap: 4px;
+    padding: 0 12px 0 0;
     white-space: normal;
   }
 
-  tbody tr.fila td::before,
-  tbody tr.fila-turno td::before {
-    content: attr(data-label) ":";
-    font-size: .76rem;
-    color: var(--text-muted);
-    flex-shrink: 0;
+  .borde {
+    grid-area: borde;
   }
 
-  td[data-label="Folio"],
-  td[data-label="Turno"] {
-    display: block;
+  .c-folio {
+    grid-area: folio;
+    padding: 10px 0 0;
+  }
+
+  .c-cliente {
+    grid-area: cliente;
     padding-bottom: 10px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid var(--border);
+    font-size: .8rem;
   }
 
-  td[data-label="Folio"]::before,
-  td[data-label="Turno"]::before {
-    content: none;
+  .c-pago {
+    grid-area: pago;
+    padding-bottom: 10px;
+    text-align: right;
   }
 
-  .acciones-col {
+  .c-total {
+    grid-area: total;
+    padding-top: 10px;
+  }
+
+  /* El vendedor se lee dentro del desglose del folio; descuento y flecha
+     sobran en dos renglones. */
+  .c-vendedor,
+  .c-desc,
+  .flecha {
     display: none;
   }
 
-  /* La fila abierta se une visualmente con su detalle */
-  tbody tr.fila.abierta {
-    margin-bottom: 0;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+  .turnos-cab,
+  .turno {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 12px;
   }
 
-  /* ✅ El detalle: continuación de la card de arriba, no card suelta */
-  tbody tr.fila-detalle {
-    margin-top: 0;
-    margin-bottom: 10px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-top: none;
-    border-radius: 0 0 var(--r-sm) var(--r-sm);
+  .turno > div:not(.c-folio) {
+    display: flex;
+    justify-content: space-between;
+    font-size: .82rem;
+  }
+
+  .turno > div:not(.c-folio)::before {
+    content: attr(data-rot);
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+
+  .turno .c-folio {
+    grid-column: 1 / -1;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Las hojas suben desde abajo y ocupan el ancho completo */
+  .fondo {
+    place-items: end center;
     padding: 0;
   }
 
-  tbody tr.fila-detalle td {
+  .hoja,
+  .hoja.alta {
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    animation: subir .18s ease-out;
+  }
+
+  .hoja-cab {
+    position: relative;
+    padding-top: 22px;
+  }
+
+  .agarre {
     display: block;
-    padding: 0;
-    border: none;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 4px;
+    border-radius: var(--r-full);
+    background: var(--border-strong);
   }
 
-  tbody tr.fila-detalle td::before {
-    content: none;
+  .hoja-pie {
+    flex-direction: column-reverse;
   }
 
-  .detalle {
-    padding: 14px;
-    border-bottom: none;
-  }
-
-  /* una sola columna en móvil */
   .detalle-cols {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 18px;
   }
 
-  .detalle-pie {
-    flex-direction: column;
-  }
-
-  .detalle-pie .btn {
-    width: 100%;
-  }
-
-  .campo.corto {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  /* CAMBIO en recomendación 4: paginador cómodo en móvil */
   .paginador .btn {
     flex: 1;
+  }
+}
+
+@keyframes subir {
+  from {
+    transform: translateY(14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .hoja,
+  .hoja.alta {
+    animation: none;
   }
 }
 </style>
