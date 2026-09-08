@@ -19,7 +19,6 @@
         </div>
 
         <div v-if="foco === 'bodega' && bajoMinimo.length" class="banda banda-aviso">
-            <!-- <span class="banda-icono" aria-hidden="true">📦</span> -->
             <span class="banda-texto">
                 <span class="banda-rotulo">Reponer</span>
                 {{bajoMinimo.slice(0, 5).map(p => p.nombre).join(', ')}}
@@ -28,7 +27,6 @@
                 </span>
             </span>
         </div>
-
 
         <!-- Filtros -->
         <div class="barra-filtros">
@@ -99,12 +97,27 @@
                 <tbody>
                     <tr v-for="(p, idx) in productosVista" :key="p.id" class="fila"
                         :style="{ '--i': Math.min(idx, 12) }"
-                        :class="{ inactiva: !p.activo, resaltada: p.id === resalte?.id }">
+                        :class="{ inactiva: !p.activo, resaltada: p.id === resalte?.id, abierta: abiertoId === p.id }">
 
-                        <!-- Nombre y código en una línea: el código va detrás, en
-                             tenue, y no obliga a una segunda fila. -->
+                        <!-- En escritorio esta celda es una línea más de la tabla.
+                             Bajo el breakpoint se convierte en la cabecera del
+                             acordeón: nombre y cantidad, nada más. Lo que hoy es
+                             la tarjeta pasa a ser el cuerpo desplegado. -->
                         <td data-label="Producto" class="col-producto">
-                            <div class="celda-producto">
+                            <button v-if="esMovil" class="cab" :aria-expanded="abiertoId === p.id"
+                                @click="alternar(p.id)">
+                                <span class="chevron" aria-hidden="true">›</span>
+                                <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
+                                <span class="nombre">{{ p.nombre }}</span>
+                                <span v-if="!p.activo" class="etiqueta et-gris">off</span>
+                                <span class="cantidad dato" :class="foco === 'bodega' ? claseBodega(p) : ''">
+                                    {{ (foco === 'bodega' ? p.enBodega : p.enVenta) ?? 0 }}
+                                </span>
+                            </button>
+
+                            <!-- Nombre y código en una línea: el código va detrás, en
+                                 tenue, y no obliga a una segunda fila. -->
+                            <div v-else class="celda-producto">
                                 <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
                                 <span class="nombre">{{ p.nombre }}</span>
                                 <span class="cod">{{ p.codigo }}</span>
@@ -115,6 +128,14 @@
                                     :title="p.tipo"></span>
                                 <span v-if="!p.activo" class="etiqueta et-gris">off</span>
                             </div>
+                        </td>
+
+                        <!-- El código y el tipo salen de la cabecera mínima, así que
+                             en móvil se recuperan acá dentro. -->
+                        <td v-if="esMovil" data-label="Código" class="suave">
+                            <span class="cod">{{ p.codigo }}</span>
+                            <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"
+                                :title="p.tipo"></span>
                         </td>
 
                         <td v-if="foco === 'bodega'" data-label="Categoría" class="suave col-categoria">
@@ -226,6 +247,10 @@ const FILTRO_TIPOS = [
     { valor: 'armado', texto: 'Armados' }
 ]
 
+/* El mismo valor que el @media del bloque de abajo. Si se cambia uno hay que
+   cambiar el otro: no hay forma de leer un breakpoint de CSS desde JS. */
+const MOVIL = '(max-width: 860px)'
+
 export default {
     name: 'TablaProductos',
     props: {
@@ -253,6 +278,32 @@ export default {
         const categorias = computed(() => store.getters['inventario/categorias'])
         const bajoMinimo = computed(() => store.getters['inventario/bajoMinimo'])
 
+        /* ---------------- Acordeón ---------------- */
+        /* Se decide en JS y no solo con CSS porque la cabecera es un <button>
+           real, y en escritorio ese botón sería un tab-stop de más por cada
+           fila: veinte paradas para llegar a la primera acción. */
+        const esMovil = ref(false)
+        const abiertoId = ref(null)
+        let mql = null
+
+        /* Una abierta a la vez. Con varias vuelve la muralla de tarjetas, que
+           es justo lo que el acordeón viene a resolver. */
+        const alternar = (id) => {
+            abiertoId.value = abiertoId.value === id ? null : id
+        }
+
+        const alCambiarAncho = (e) => {
+            esMovil.value = e.matches
+            if (!e.matches) abiertoId.value = null
+        }
+
+        /* Al cambiar de página o de filtro, lo que estaba abierto ya no está en
+           pantalla: dejarlo marcado abriría otra fila al volver. */
+        watch(
+            () => [filtro.value.pagina, filtro.value.buscar, filtro.value.categoriaId],
+            () => { abiertoId.value = null }
+        )
+
         let control = null
         onMounted(() => {
             control = new AbortController()
@@ -263,8 +314,16 @@ export default {
                 store.dispatch('inventario/cargarCategorias', señal)
                 store.dispatch('inventario/cargarBajoMinimo', señal)
             }
+
+            mql = window.matchMedia(MOVIL)
+            esMovil.value = mql.matches
+            mql.addEventListener('change', alCambiarAncho)
         })
-        onUnmounted(() => control?.abort())
+
+        onUnmounted(() => {
+            control?.abort()
+            mql?.removeEventListener('change', alCambiarAncho)
+        })
 
         const recargar = () => store.dispatch('productos/cargar')
         const filtrar = (cambios) => store.dispatch('productos/filtrar', cambios)
@@ -343,6 +402,7 @@ export default {
             productos, productosVista, total, totalPaginas, filtro, cargando, error, hayFiltro,
             categorias, bajoMinimo, mensajeVacio,
             recargar, filtrar, busqueda, soloConStock,
+            esMovil, abiertoId, alternar,
             cambiarEstado, abrirEdicion, abrirBaja,
             resalte, claseBodega, avisarSinBajar, clp
         }
@@ -468,7 +528,7 @@ export default {
 
 .banda {
     display: flex;
-    align-items: baseline; /* baseline, no center: el ícono y el texto se alinean por la base de la letra */
+    align-items: baseline;
     gap: 10px;
     flex-wrap: wrap;
     padding: 12px 16px;
@@ -503,7 +563,6 @@ export default {
     font-weight: 400;
 }
 
-/* Si quieres que la banda de error siga el mismo patrón: */
 .banda-error {
     background: var(--danger-soft);
     border: 1px solid var(--danger-border, transparent);
@@ -514,7 +573,6 @@ export default {
 .banda-error .banda-rotulo {
     color: var(--danger);
 }
-
 
 /* ─── Filtros ─── */
 
@@ -777,11 +835,12 @@ tr.inactiva {
 
 /* El tipo como punto de color en vez de etiqueta de texto. */
 .punto {
+    display: inline-block;
     width: 7px;
     height: 7px;
     border-radius: 50%;
     flex-shrink: 0;
-    margin-left: 2px;
+    margin-left: 6px;
     cursor: help;
 }
 
@@ -933,7 +992,6 @@ tr.inactiva {
     color: var(--accent-contrast, #fff);
 }
 
-
 /* El retorno es la excepción, no la rutina: mismo color, solo el contorno. */
 .acc-subir {
     border-color: var(--accent);
@@ -975,7 +1033,12 @@ tr.inactiva {
     margin-bottom: 5px;
 }
 
-/* ─── Móvil: la tabla se vuelve tarjetas ─── */
+/* La cabecera del acordeón no existe en escritorio */
+.cab {
+    display: none;
+}
+
+/* ─── Móvil: la tabla se vuelve acordeón ─── */
 
 @media (max-width: 860px) {
     .tabla-envoltura {
@@ -999,31 +1062,123 @@ tr.inactiva {
         display: none;
     }
 
+    /* Cerrada, la fila es una línea. El relleno vive en la cabecera y en las
+       celdas del cuerpo, no en la fila, para que colapse sin dejar aire. */
     tbody tr {
         background: var(--surface);
         border: 1px solid var(--border);
-        border-radius: var(--r-lg, 14px);
-        box-shadow: var(--shadow-sm);
-        margin-bottom: 12px;
-        padding: 14px 16px;
+        border-radius: var(--r-md, 12px);
+        margin-bottom: 8px;
+        padding: 0;
+        overflow: hidden;
     }
 
-    /* El alto fijo y el nowrap son para la vista de tabla; acá cada dato es
-       una línea de tarjeta y necesita respirar. */
-    td {
+    tbody tr.abierta {
+        border-color: var(--border-strong);
+        box-shadow: var(--shadow-sm);
+    }
+
+    /* El hover de escritorio pinta el fondo de cada td; en móvil eso deja la
+       fila abierta con manchas al arrastrar el dedo. */
+    .fila:hover td {
+        background: transparent;
+    }
+
+    /* ── Cabecera: nombre y cantidad, nada más ── */
+
+    td[data-label="Producto"] {
+        display: block;
+        padding: 0;
+        margin: 0;
+        border: none;
+        text-align: left;
+        max-width: none;
+    }
+
+    td[data-label="Producto"]::before {
+        content: none;
+    }
+
+    tr.abierta td[data-label="Producto"] {
+        border-bottom: 1px solid var(--border);
+    }
+
+    .cab {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 54px;
+        padding: 0 14px;
+        border: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .cab:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+        border-radius: var(--r-md, 12px);
+    }
+
+    .cab .emoji {
+        font-size: 1.25rem;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+
+    .cab .nombre {
+        flex: 1;
+        min-width: 0;
+        font-size: .95rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* La cantidad es lo único que compite con el nombre por atención, y por
+       eso es lo único más a la derecha. */
+    .cab .cantidad {
+        font-size: 1.05rem;
+        flex-shrink: 0;
+    }
+
+    .chevron {
+        flex-shrink: 0;
+        color: var(--text-faint);
+        font-size: 1.15rem;
+        line-height: 1;
+        transition: transform .16s ease;
+    }
+
+    tr.abierta .chevron {
+        transform: rotate(90deg);
+    }
+
+    /* ── Cuerpo: la tarjeta de antes ── */
+
+    tbody tr:not(.abierta) td:not([data-label="Producto"]) {
+        display: none;
+    }
+
+    tr.abierta td:not([data-label="Producto"]) {
         display: flex;
         justify-content: space-between;
         align-items: baseline;
         gap: 14px;
         height: auto;
-        padding: 9px 0;
+        padding: 9px 14px;
         border: none;
         border-bottom: 1px solid var(--border);
         text-align: right;
         white-space: normal;
     }
 
-    tbody tr td:last-child {
+    tr.abierta td:last-child {
         border-bottom: none;
     }
 
@@ -1037,34 +1192,8 @@ tr.inactiva {
         white-space: nowrap;
     }
 
-    td[data-label="Producto"] {
-        display: block;
-        text-align: left;
-        padding: 0 0 12px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid var(--border);
-    }
-
-    td[data-label="Producto"]::before {
-        content: none;
-    }
-
-    td[data-label="Producto"] .nombre {
-        font-size: 1rem;
-        font-weight: 700;
-        letter-spacing: -.01em;
-    }
-
-    td[data-label="Producto"] .celda-producto .emoji {
-        font-size: 1.5rem;
-    }
-
     td[data-label="Acciones"]::before {
         content: none;
-    }
-
-    .col-producto {
-        max-width: none;
     }
 
     .col-dinero,
@@ -1085,11 +1214,17 @@ tr.inactiva {
         white-space: normal;
     }
 
+    tr.abierta td[data-label="Acciones"] {
+        display: block;
+        padding-top: 4px;
+        padding-bottom: 14px;
+    }
+
     .acciones {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
-        padding-top: 12px;
+        padding-top: 8px;
         width: 100%;
     }
 
@@ -1138,6 +1273,12 @@ tr.inactiva {
 
     .buscador {
         flex: 1 1 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chevron {
+        transition: none;
     }
 }
 </style>
