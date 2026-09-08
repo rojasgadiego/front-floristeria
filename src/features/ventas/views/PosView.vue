@@ -1,382 +1,313 @@
 <template>
-  
-    <!-- ================= SIN CAJA ================= -->
-    <div v-if="!abierta" class="apertura">
-      <div class="apertura-caja">
-        <span class="apertura-icono" aria-hidden="true">🔒</span>
-        <h2>La caja está cerrada</h2>
-        <p class="pista">
-          Sin caja abierta no se puede vender ni recibir abonos. Cuenta el
-          fondo del cajón antes de empezar: es contra ese número que se
-          calcula la diferencia al cerrar.
-        </p>
 
-        <div v-if="errorCaja" class="error">{{ errorCaja }}</div>
+  <!-- ================= SIN CAJA ================= -->
+  <div v-if="!abierta" class="apertura">
+    <div class="apertura-caja">
+      <span class="apertura-icono" aria-hidden="true">🔒</span>
+      <h2>La caja está cerrada</h2>
+      <!-- <p class="pista">
+        Sin caja abierta no se puede vender ni recibir abonos. Cuenta el
+        fondo del cajón antes de empezar: es contra ese número que se
+        calcula la diferencia al cerrar.
+      </p> -->
 
-        <label for="fondo">Fondo inicial</label>
-        <input id="fondo" class="campo grande dato" type="number" min="0" step="1000"
-          v-model.number="fondoInicial" @keyup.enter="abrirCaja">
+      <div v-if="errorCaja" class="error">{{ errorCaja }}</div>
 
-        <button class="btn grande ancho" :disabled="guardandoCaja" @click="abrirCaja">
-          <span v-if="guardandoCaja" class="spinner" aria-hidden="true"></span>
-          {{ guardandoCaja ? 'Abriendo…' : 'Abrir caja' }}
-        </button>
-      </div>
+      <label for="fondo">Fondo inicial</label>
+      <input id="fondo" class="campo grande dato" type="number" min="0" step="1000" v-model.number="fondoInicial"
+        @keyup.enter="abrirCaja">
+
+      <button class="btn grande ancho" :disabled="guardandoCaja" @click="abrirCaja">
+        <span v-if="guardandoCaja" class="spinner" aria-hidden="true"></span>
+        {{ guardandoCaja ? 'Abriendo…' : 'Abrir caja' }}
+      </button>
     </div>
+  </div>
 
-    <!-- ================= PUNTO DE VENTA ================= -->
-    <template v-else>
+  <!-- ================= PUNTO DE VENTA ================= -->
+  <template v-else>
 
-      <div class="barra-caja">
-        <div class="caja-datos">
-          <span class="punto" aria-hidden="true"></span>
-          <div class="min0">
-            <b>Caja abierta</b>
-            <div class="mini suave">
-              {{ caja.abiertaPor }} · desde {{ hora(caja.abiertaEn) }} ·
-              {{ caja.boletas }} boleta(s) · {{ clp(caja.totalVendido) }}
-            </div>
+    <div class="barra-caja">
+      <div class="caja-datos">
+        <span class="punto" aria-hidden="true"></span>
+        <div class="min0">
+          <b>Caja abierta</b>
+          <div class="mini suave">
+            {{ caja.abiertaPor }} · desde {{ hora(caja.abiertaEn) }} ·
+            {{ caja.boletas }} boleta(s) · {{ clp(caja.totalVendido) }}
           </div>
         </div>
-        <button class="btn btn-linea btn-mini" @click="abrirCierre">Cerrar caja</button>
       </div>
+      <button class="btn btn-linea btn-mini" @click="abrirCierre">Cerrar caja</button>
+    </div>
 
-      <div class="tablero">
+    <div class="tablero">
 
-        <!-- ---------- Catálogo ---------- -->
-        <section class="catalogo">
-          <div class="busqueda">
-            <div class="buscador">
-              <span aria-hidden="true">🔎</span>
-              <input v-model="busqueda" placeholder="Buscar producto…" aria-label="Buscar producto">
-              <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''"
-                aria-label="Limpiar">✕</button>
-            </div>
+      <!-- ---------- Catálogo ---------- -->
+      <section class="catalogo">
+        <div class="busqueda">
+          <div class="buscador">
+            <span aria-hidden="true">🔎</span>
+            <input v-model="busqueda" placeholder="Buscar producto…" aria-label="Buscar producto">
+            <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
+          </div>
 
-            <!--
+          <!--
               Entrada del código: sirve para el lector de barras —que teclea
               y manda Enter— y para tipear el código del lote cuando la
               etiqueta está borrosa. El escáner de cámara reemplaza este
               campo, no lo elimina.
             -->
-            <div class="buscador codigo">
-              <span aria-hidden="true">🏷️</span>
-              <input ref="campoCodigo" v-model="codigo" placeholder="Código de producto o lote…"
-                aria-label="Código" @keyup.enter="buscarPorCodigo">
-              <span v-if="buscandoCodigo" class="spinner oscuro" aria-hidden="true"></span>
+          <div class="buscador codigo">
+            <span aria-hidden="true">🏷️</span>
+            <input ref="campoCodigo" v-model="codigo" placeholder="Código de producto o lote…" aria-label="Código"
+              @keyup.enter="buscarPorCodigo">
+            <span v-if="buscandoCodigo" class="spinner oscuro" aria-hidden="true"></span>
+          </div>
+        </div>
+
+        <div v-if="avisoCodigo" class="banda" :class="avisoCodigo.malo ? 'banda-error' : 'banda-ok'">
+          <span>{{ avisoCodigo.texto }}</span>
+        </div>
+
+        <div class="categorias">
+          <button class="pastilla" :class="{ on: categoriaId === null }" @click="categoriaId = null">Todo</button>
+          <button v-for="c in categorias" :key="c.id" class="pastilla" :class="{ on: categoriaId === c.id }"
+            @click="categoriaId = c.id">
+            {{ c.nombre }}
+          </button>
+        </div>
+
+        <div v-if="!visibles.length" class="vacio">
+          {{ busqueda ? 'Ningún producto coincide.' : 'Sin productos disponibles.' }}
+        </div>
+
+        <div v-else class="grilla">
+          <button v-for="p in visibles" :key="p.id" class="producto" :class="{ agotado: p.enVenta <= 0 }"
+            :disabled="p.enVenta <= 0" @click="agregar(p)">
+            <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
+            <span class="nombre">{{ p.nombre }}</span>
+            <b class="precio dato">{{ clp(p.precio) }}</b>
+            <span class="stock mini" :class="{ poco: p.enVenta <= 3 }">
+              {{ p.enVenta }} disp.
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ---------- Carrito ---------- -->
+      <aside class="carrito" :class="{ abierto: carritoAbierto }">
+        <header class="carrito-cab">
+          <h3>Venta</h3>
+          <button v-if="hayCarrito" class="enlace-boton" @click="vaciar">Vaciar</button>
+        </header>
+
+        <!-- Cliente -->
+        <div class="cliente">
+          <template v-if="cliente">
+            <div class="min0">
+              <b>{{ cliente.nombre }}</b>
+              <div class="mini suave">
+                {{ cliente.rut }}
+                <span v-if="clubActivo"> · ⭐ {{ cliente.puntos }} puntos</span>
+              </div>
             </div>
-          </div>
+            <button class="btn-icono chico" @click="quitarCliente" aria-label="Quitar cliente">✕</button>
+          </template>
 
-          <div v-if="avisoCodigo" class="banda" :class="avisoCodigo.malo ? 'banda-error' : 'banda-ok'">
-            <span>{{ avisoCodigo.texto }}</span>
-          </div>
-
-          <div class="categorias">
-            <button class="pastilla" :class="{ on: categoriaId === null }"
-              @click="categoriaId = null">Todo</button>
-            <button v-for="c in categorias" :key="c.id" class="pastilla"
-              :class="{ on: categoriaId === c.id }" @click="categoriaId = c.id">
-              {{ c.nombre }}
+          <template v-else>
+            <input class="campo chico dato" v-model="rutCliente" placeholder="RUT del cliente…"
+              aria-label="RUT del cliente" @keyup.enter="buscarCliente">
+            <button class="btn btn-linea btn-mini" :disabled="buscandoCliente" @click="buscarCliente">
+              Buscar
             </button>
-          </div>
+          </template>
+        </div>
 
-          <div v-if="!visibles.length" class="vacio">
-            {{ busqueda ? 'Ningún producto coincide.' : 'Sin productos disponibles.' }}
-          </div>
+        <!-- Líneas -->
+        <div class="lineas">
+          <p v-if="!hayCarrito" class="vacio-carrito">
+            Toca un producto para agregarlo.
+          </p>
 
-          <div v-else class="grilla">
-            <button v-for="p in visibles" :key="p.id" class="producto"
-              :class="{ agotado: p.disponible <= 0 }" :disabled="p.disponible <= 0"
-              @click="agregar(p)">
-              <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
-              <span class="nombre">{{ p.nombre }}</span>
-              <b class="precio dato">{{ clp(p.precio) }}</b>
-              <span class="stock mini" :class="{ poco: p.disponible <= 3 }">
-                {{ p.disponible > 0 ? `${p.disponible} disp.` : 'agotado' }}
-              </span>
-            </button>
-          </div>
-        </section>
-
-        <!-- ---------- Carrito ---------- -->
-        <aside class="carrito" :class="{ abierto: carritoAbierto }">
-          <header class="carrito-cab">
-            <h3>Venta</h3>
-            <button v-if="hayCarrito" class="enlace-boton" @click="vaciar">Vaciar</button>
-          </header>
-
-          <!-- Cliente -->
-          <div class="cliente">
-            <template v-if="cliente">
-              <div class="min0">
-                <b>{{ cliente.nombre }}</b>
-                <div class="mini suave">
-                  {{ cliente.rut }}
-                  <span v-if="clubActivo"> · ⭐ {{ cliente.puntos }} puntos</span>
-                </div>
+          <div v-for="l in carrito" :key="l.uid" class="linea" :class="{ sinStock: sinStock(l) }">
+            <div class="min0">
+              <b>{{ l.emoji }} {{ l.nombre }}</b>
+              <div class="mini suave">
+                {{ clp(l.precio) }} c/u
+                <span v-if="l.loteCodigo"> · lote {{ l.loteCodigo }}</span>
               </div>
-              <button class="btn-icono chico" @click="quitarCliente" aria-label="Quitar cliente">✕</button>
-            </template>
-
-            <template v-else>
-              <input class="campo chico dato" v-model="rutCliente" placeholder="RUT del cliente…"
-                aria-label="RUT del cliente" @keyup.enter="buscarCliente">
-              <button class="btn btn-linea btn-mini" :disabled="buscandoCliente" @click="buscarCliente">
-                Buscar
-              </button>
-            </template>
-          </div>
-
-          <!-- Líneas -->
-          <div class="lineas">
-            <p v-if="!hayCarrito" class="vacio-carrito">
-              Toca un producto para agregarlo.
-            </p>
-
-            <div v-for="l in carrito" :key="l.uid" class="linea"
-              :class="{ sinStock: sinStock(l) }">
-              <div class="min0">
-                <b>{{ l.emoji }} {{ l.nombre }}</b>
-                <div class="mini suave">
-                  {{ clp(l.precio) }} c/u
-                  <span v-if="l.loteCodigo"> · lote {{ l.loteCodigo }}</span>
-                </div>
-                <div v-if="sinStock(l)" class="mini rojo">
-                  Solo hay {{ l.disponible }}
-                </div>
+              <div v-if="sinStock(l)" class="mini rojo">
+                Solo hay {{ l.disponible }}
               </div>
-
-              <div class="cantidad">
-                <button class="paso" @click="cambiar(l, l.cantidad - 1)" aria-label="Menos">−</button>
-                <span class="dato">{{ l.cantidad }}</span>
-                <button class="paso" @click="cambiar(l, l.cantidad + 1)" aria-label="Más">+</button>
-              </div>
-
-              <b class="subtotal dato">{{ clp(l.precio * l.cantidad) }}</b>
             </div>
-          </div>
 
-          <!-- Promoción -->
-          <div v-if="promociones.length" class="promos">
-            <label>Promoción</label>
-            <!--
+            <div class="cantidad">
+              <button class="paso" @click="cambiar(l, l.cantidad - 1)" aria-label="Menos">−</button>
+              <span class="dato">{{ l.cantidad }}</span>
+              <button class="paso" @click="cambiar(l, l.cantidad + 1)" aria-label="Más">+</button>
+            </div>
+
+            <b class="subtotal dato">{{ clp(l.precio * l.cantidad) }}</b>
+          </div>
+        </div>
+
+        <!-- Promoción -->
+        <div v-if="promociones.length" class="promos">
+          <label>Promoción</label>
+          <!--
               El servidor devuelve el descuento calculado para ESTE carrito y
               las ordena por conveniencia; la primera viene elegida sola. Se
               puede cambiar, pero no hace falta pensarlo.
             -->
-            <select class="campo chico" :value="promocionId ?? ''"
-              @change="elegirPromocion($event.target.value ? Number($event.target.value) : null)">
-              <option value="">Sin promoción</option>
-              <option v-for="p in promociones" :key="p.id" :value="p.id">
-                {{ p.nombre }} — descuenta {{ clp(p.descuento) }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Totales -->
-          <div class="resumen">
-            <div class="fila"><span>{{ unidades }} unidad(es)</span><b class="dato">{{ clp(bruto) }}</b></div>
-            <div v-if="descuentoPromo" class="fila verde">
-              <span>{{ promocionElegida?.nombre }}</span>
-              <b class="dato">−{{ clp(descuentoPromo) }}</b>
-            </div>
-            <div class="fila total">
-              <span>Total</span>
-              <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
-            </div>
-          </div>
-
-          <button class="btn grande ancho" :disabled="!hayCarrito || haySinStock" @click="cobrando = true">
-            {{ haySinStock ? 'Revisa el stock' : `Cobrar ${clp(bruto - descuentoPromo)}` }}
-          </button>
-        </aside>
-      </div>
-
-      <!-- Barra flotante en móvil -->
-      <button v-if="hayCarrito && !carritoAbierto" class="flotante" @click="carritoAbierto = true">
-        <span>{{ unidades }} ítem(s)</span>
-        <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
-        <span aria-hidden="true">▲</span>
-      </button>
-    </template>
-
-    <!-- ================= MODALES ================= -->
-    <ModalCobro v-if="cobrando" @cerrar="cobrando = false" @cobrada="alCobrar" />
-
-    <!-- Ticket -->
-    <div v-if="ticket" class="fondo" @click.self="cerrarTicket">
-      <div class="modal">
-        <div class="modal-cab">
-          <h3>Boleta {{ ticket.folio }}</h3>
-          <p>Atención #{{ ticket.numeroAtencion }} · {{ hora(ticket.fecha) }}</p>
+          <select class="campo chico" :value="promocionId ?? ''"
+            @change="elegirPromocion($event.target.value ? Number($event.target.value) : null)">
+            <option value="">Sin promoción</option>
+            <option v-for="p in promociones" :key="p.id" :value="p.id">
+              {{ p.nombre }} — descuenta {{ clp(p.descuento) }}
+            </option>
+          </select>
         </div>
 
-        <div class="modal-cuerpo">
-          <div class="ticket">
-            <div class="cen">
-              <div class="logo" aria-hidden="true">🌸</div>
-              <h4>{{ ticket.localNombre }}</h4>
-              <div class="chico">{{ ticket.localDireccion }}</div>
-              <div v-if="ticket.localTelefono" class="chico">WhatsApp {{ ticket.localTelefono }}</div>
-              <div v-if="ticket.localRut" class="chico">RUT {{ ticket.localRut }}</div>
-              <div class="atencion">
-                <span class="chico">TICKET DE ATENCIÓN</span>
-                <b>#{{ ticket.numeroAtencion }}</b>
-              </div>
-            </div>
-            <div class="sep"></div>
-            <div>Boleta: {{ ticket.folio }}</div>
-            <div>Atendió: {{ ticket.vendedor }}</div>
-            <div v-if="ticket.cliente">Cliente: {{ ticket.cliente }}</div>
-            <div class="sep"></div>
-            <table>
-              <tbody>
-                <tr v-for="i in ticket.items" :key="i.id">
-                  <td>{{ i.cantidad }}x {{ i.nombre }}</td>
-                  <td class="der">{{ clp(i.subtotal) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="sep"></div>
-            <div v-if="ticket.descuentoTotal" class="tot">
-              <span>{{ ticket.promocion || 'Descuentos' }}</span>
-              <span>−{{ clp(ticket.descuentoTotal) }}</span>
-            </div>
-            <div class="tot"><span>Neto</span><span>{{ clp(ticket.neto) }}</span></div>
-            <div class="tot">
-              <span>IVA {{ ticket.ivaTasa }}%</span><span>{{ clp(ticket.ivaMonto) }}</span>
-            </div>
-            <div class="tot g"><span>TOTAL</span><span>{{ clp(ticket.total) }}</span></div>
-            <div class="tot"><span>{{ ticket.medioPago }}</span><span></span></div>
-            <template v-if="ticket.recibido">
-              <div class="tot"><span>Recibido</span><span>{{ clp(ticket.recibido) }}</span></div>
-              <div class="tot"><span>Vuelto</span><span>{{ clp(ticket.vuelto) }}</span></div>
-            </template>
-            <template v-if="ticket.mostrarPuntos && ticket.puntosGanados">
-              <div class="sep"></div>
-              <div class="tot chico">
-                <span>Puntos de esta compra</span><span>{{ ticket.puntosGanados }}</span>
-              </div>
-              <div v-if="ticket.saldoPuntos != null" class="tot chico">
-                <span>Saldo acumulado</span><span>{{ ticket.saldoPuntos }}</span>
-              </div>
-            </template>
-            <div class="sep"></div>
-            <div class="cen chico">
-              <b>{{ ticket.mensaje }}</b><br>{{ ticket.leyenda }}
-            </div>
+        <!-- Totales -->
+        <div class="resumen">
+          <div class="fila"><span>{{ unidades }} unidad(es)</span><b class="dato">{{ clp(bruto) }}</b></div>
+          <div v-if="descuentoPromo" class="fila verde">
+            <span>{{ promocionElegida?.nombre }}</span>
+            <b class="dato">−{{ clp(descuentoPromo) }}</b>
+          </div>
+          <div class="fila total">
+            <span>Total</span>
+            <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
           </div>
         </div>
 
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarTicket">Listo</button>
-          <button class="btn" @click="imprimir">🖨️ Imprimir</button>
-        </div>
-      </div>
+        <button class="btn grande ancho" :disabled="!hayCarrito || haySinStock" @click="cobrando = true">
+          {{ haySinStock ? 'Revisa el stock' : `Cobrar ${clp(bruto - descuentoPromo)}` }}
+        </button>
+      </aside>
     </div>
 
-    <!-- Cierre de caja -->
-    <div v-if="cierre" class="fondo" @click.self="cierre = null">
-      <div class="modal">
-        <div class="modal-cab">
-          <h3>{{ cierre.resumen ? 'Caja cerrada' : 'Cerrar caja' }}</h3>
-          <p v-if="!cierre.resumen">Cuenta el efectivo del cajón antes de informarlo.</p>
-        </div>
+    <!-- Barra flotante en móvil -->
+    <button v-if="hayCarrito && !carritoAbierto" class="flotante" @click="carritoAbierto = true">
+      <span>{{ unidades }} ítem(s)</span>
+      <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
+      <span aria-hidden="true">▲</span>
+    </button>
+  </template>
 
-        <div class="modal-cuerpo">
-          <div v-if="cierre.error" class="error">{{ cierre.error }}</div>
+  <!-- ================= MODALES ================= -->
+  <ModalCobro v-if="cobrando" @cerrar="cobrando = false" @cobrada="alCobrar" />
 
-          <!-- Antes de cerrar -->
-          <template v-if="!cierre.resumen">
-            <div class="desglose">
-              <div class="fila"><span>Fondo inicial</span><b class="dato">{{ clp(caja.fondoInicial) }}</b></div>
-              <div class="fila"><span>Efectivo recibido</span><b class="dato">{{ clp(caja.efectivo) }}</b></div>
-              <div class="fila total">
-                <span>Debería haber en el cajón</span>
-                <b class="dato">{{ clp(caja.enCajon) }}</b>
-              </div>
-              <div class="sep-linea"></div>
-              <div class="fila"><span>Débito</span><b class="dato">{{ clp(caja.debito) }}</b></div>
-              <div class="fila"><span>Crédito</span><b class="dato">{{ clp(caja.credito) }}</b></div>
-              <div class="fila"><span>Transferencia</span><b class="dato">{{ clp(caja.transferencia) }}</b></div>
-              <div class="fila">
-                <span>{{ caja.boletas }} boleta(s)</span>
-                <b class="dato">{{ clp(caja.totalVendido) }}</b>
-              </div>
-              <div v-if="caja.anuladas" class="fila rojo">
-                <span>Anuladas</span><b class="dato">{{ caja.anuladas }}</b>
-              </div>
+  <TicketBoleta v-if="ticket" :ticket="ticket" @cerrar="cerrarTicket" />
+
+  <!-- Cierre de caja -->
+  <div v-if="cierre" class="fondo" @click.self="cierre = null">
+    <div class="modal">
+      <div class="modal-cab">
+        <h3>{{ cierre.resumen ? 'Caja cerrada' : 'Cerrar caja' }}</h3>
+        <p v-if="!cierre.resumen">Cuenta el efectivo del cajón antes de informarlo.</p>
+      </div>
+
+      <div class="modal-cuerpo">
+        <div v-if="cierre.error" class="error">{{ cierre.error }}</div>
+
+        <!-- Antes de cerrar -->
+        <!-- Antes de cerrar -->
+        <template v-if="!cierre.resumen">
+          <!--
+              El desglose NO muestra el efectivo esperado ni el fondo, y eso
+              es a propósito: si el número está a la vista, escribir ese
+              mismo monto es más fácil que contar, y la diferencia deja de
+              significar algo.
+
+              Lo que sí se muestra son los otros medios de pago, que se
+              cuadran con la liquidación del banco y no con billetes.
+            -->
+          <div class="desglose">
+            <div class="fila">
+              <span>{{ cierre.snapshot.boletas }} boleta(s)</span>
+              <b class="dato">{{ clp(cierre.snapshot.totalVendido) }}</b>
             </div>
-
-            <div class="grupo">
-              <label for="contado">¿Cuánto contaste en el cajón?</label>
-              <input id="contado" class="campo grande dato" type="number" min="0" step="1000"
-                v-model.number="cierre.contado" @keyup.enter="cerrarCaja">
-              <!--
-                El esperado lo calcula el sistema desde las boletas y no se
-                muestra antes de contar a propósito: si estuviera a la vista,
-                la tentación de "cuadrar" el número contado haría que la
-                diferencia dejara de significar algo.
-              -->
-              <p class="ayuda">
-                Cuenta primero y después escribe. La diferencia la calcula el
-                sistema.
-              </p>
+            <div class="fila">
+              <span>Débito</span><b class="dato">{{ clp(cierre.snapshot.debito) }}</b>
             </div>
-
-            <div class="grupo">
-              <label for="nota">Nota del cierre</label>
-              <input id="nota" class="campo" v-model="cierre.nota" maxlength="600"
-                placeholder="Salió plata para el flete de las peonías">
+            <div class="fila">
+              <span>Crédito</span><b class="dato">{{ clp(cierre.snapshot.credito) }}</b>
             </div>
-          </template>
-
-          <!-- Después de cerrar -->
-          <template v-else>
-            <div class="resultado-cierre" :class="claseDiferencia">
-              <span class="rot">{{ textoDiferencia }}</span>
-              <b class="val">{{ clp(Math.abs(cierre.resumen.diferencia || 0)) }}</b>
+            <div class="fila">
+              <span>Transferencia</span>
+              <b class="dato">{{ clp(cierre.snapshot.transferencia) }}</b>
             </div>
-
-            <div class="desglose">
-              <div class="fila"><span>Esperado</span><b class="dato">{{ clp(cierre.resumen.efectivoEsperado) }}</b></div>
-              <div class="fila"><span>Contado</span><b class="dato">{{ clp(cierre.resumen.efectivoContado) }}</b></div>
+            <div v-if="cierre.snapshot.anuladas" class="fila rojo">
+              <span>Anuladas</span><b class="dato">{{ cierre.snapshot.anuladas }}</b>
             </div>
+          </div>
 
+          <div class="grupo">
+            <label for="contado">¿Cuánto contaste en el cajón?</label>
+            <input id="contado" ref="campoContado" class="campo grande dato" type="number" min="0" step="1000"
+              inputmode="numeric" v-model.number="cierre.contado" @keyup.enter="cerrarCaja">
             <p class="ayuda">
-              Un turno con diferencia es normal; un patrón de faltantes se ve
-              en el reporte de equipo.
+              Cuenta todo lo que hay, incluido el fondo con que abriste. La
+              diferencia la calcula el sistema.
             </p>
-          </template>
-        </div>
+          </div>
 
-        <div class="modal-pie">
-          <template v-if="!cierre.resumen">
-            <button class="btn btn-linea" @click="cierre = null">Cancelar</button>
-            <button class="btn" :disabled="guardandoCaja || cierre.contado == null" @click="cerrarCaja">
-              <span v-if="guardandoCaja" class="spinner" aria-hidden="true"></span>
-              Cerrar turno
-            </button>
-          </template>
-          <button v-else class="btn" @click="cierre = null">Listo</button>
-        </div>
+          <div class="grupo">
+            <label for="nota">Nota del cierre</label>
+            <input id="nota" class="campo" v-model="cierre.nota" maxlength="600"
+              placeholder="Salió plata para el flete de las peonías">
+          </div>
+        </template>
+
+        <!-- Después de cerrar -->
+        <template v-else>
+          <div class="resultado-cierre" :class="claseDiferencia">
+            <span class="rot">{{ textoDiferencia }}</span>
+            <b class="val">{{ clp(Math.abs(cierre.resumen.diferencia || 0)) }}</b>
+          </div>
+
+          <div class="desglose">
+            <div class="fila"><span>Esperado</span><b class="dato">{{ clp(cierre.resumen.efectivoEsperado) }}</b></div>
+            <div class="fila"><span>Contado</span><b class="dato">{{ clp(cierre.resumen.efectivoContado) }}</b></div>
+          </div>
+
+          <p class="ayuda">
+            Un turno con diferencia es normal; un patrón de faltantes se ve
+            en el reporte de equipo.
+          </p>
+        </template>
+      </div>
+
+      <div class="modal-pie">
+        <template v-if="!cierre.resumen">
+          <button class="btn btn-linea" @click="cierre = null">Cancelar</button>
+          <button class="btn" :disabled="guardandoCaja || cierre.contado == null" @click="cerrarCaja">
+            <span v-if="guardandoCaja" class="spinner" aria-hidden="true"></span>
+            Cerrar turno
+          </button>
+        </template>
+        <button v-else class="btn" @click="cierre = null">Listo</button>
       </div>
     </div>
+  </div>
 
-    <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+  <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import ModalCobro from '@/features/ventas/components/Modalcobro.vue'
+import TicketBoleta from '@/features/ventas/components/TicketBoleta.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 export default {
   name: 'PosView',
-  components: { ModalCobro },
+  components: { ModalCobro, TicketBoleta },
 
-  setup () {
+  setup() {
     const store = useStore()
     const { usarAviso } = useTemporizadores()
     const { aviso, avisar } = usarAviso()
@@ -399,7 +330,33 @@ export default {
     }
 
     const cierre = ref(null)
-    const abrirCierre = () => { cierre.value = { contado: null, nota: '', resumen: null, error: '' } }
+
+
+    /* Se congelan los datos al abrir: la persona va a contar plata mirando
+   esto, y no tiene por qué moverse mientras lo hace. Además evita que el
+   modal se rompa al cerrar, cuando el turno pasa a null.
+ 
+   Lo esperado NO entra al snapshot: no se muestra hasta después de
+   contar. */
+    const abrirCierre = async () => {
+      const c = caja.value
+      cierre.value = {
+        contado: null,
+        nota: '',
+        resumen: null,
+        error: '',
+        snapshot: {
+          debito: c.debito,
+          credito: c.credito,
+          transferencia: c.transferencia,
+          totalVendido: c.totalVendido,
+          boletas: c.boletas,
+          anuladas: c.anuladas
+        }
+      }
+      await nextTick()
+      campoContado.value?.focus()
+    }
 
     const cerrarCaja = async () => {
       const c = cierre.value
@@ -437,11 +394,15 @@ export default {
 
     const visibles = computed(() => {
       const q = busqueda.value.trim().toLowerCase()
-      return productos.value.filter(p => {
-        if (categoriaId.value && p.categoriaId !== categoriaId.value) return false
-        if (!q) return true
-        return p.nombre.toLowerCase().includes(q) || String(p.codigo).includes(q)
-      })
+      return productos.value
+        /* enVenta es lo que hay adelante. enBodega no sirve acá: el vendedor
+           no puede entregar algo que está en cámara. */
+        .filter(p => (p.enVenta ?? 0) > 0)
+        .filter(p => {
+          if (categoriaId.value && p.categoriaId !== categoriaId.value) return false
+          if (!q) return true
+          return p.nombre.toLowerCase().includes(q) || String(p.codigo).includes(q)
+        })
     })
 
     /* ---------------- Código ---------------- */
@@ -565,6 +526,7 @@ export default {
     const cobrando = ref(false)
     const ticket = ref(null)
     const carritoAbierto = ref(false)
+    const campoContado = ref(null)
 
     const alCobrar = async (venta) => {
       cobrando.value = false
@@ -572,8 +534,9 @@ export default {
       avisar(`Boleta ${venta.folio} · ${clp(venta.total)}`)
       try {
         ticket.value = await store.dispatch('ventas/ticket', { id: venta.id })
-      } catch {
-        /* Si el ticket falla, la venta igual quedó registrada. */
+        console.log('TICKET:', ticket.value)   // TEMPORAL
+      } catch (e) {
+        console.error('TICKET falló:', e)      // TEMPORAL
       }
     }
 
@@ -594,7 +557,11 @@ export default {
       store.dispatch('caja/cargarActual', señal)
       store.dispatch('configuracion/cargar', señal)
       store.dispatch('inventario/cargarCategorias', señal)
-      store.dispatch('productos/cargar', señal)
+
+      /* Solo lo que está en el mesón: el POS vende de la vitrina, no del
+         catálogo. Traer los 17 productos incluiría cosas que están en
+         bodega y que el vendedor no puede entregar. */
+      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true })
     })
 
     onUnmounted(() => {
@@ -638,55 +605,316 @@ export default {
 </script>
 
 <style scoped>
-.apertura *, .tablero *, .fondo * { box-sizing: border-box; }
+/* ============================================================
+   POS · Punto de venta
+   Todo con tokens: aguanta el cambio de tema sin una sola
+   condición extra.
+   ============================================================ */
 
-/* ================= Apertura ================= */
+/* ─── Base compartida ─── */
+
+.min0 {
+  min-width: 0;
+}
+
+.der {
+  text-align: right;
+}
+
+.cen {
+  text-align: center;
+}
+
+.suave {
+  color: var(--text-muted);
+}
+
+.mini {
+  font-size: .75rem;
+}
+
+.chico {
+  font-size: .7rem;
+}
+
+.rojo {
+  color: var(--danger);
+}
+
+.verde {
+  color: var(--success);
+}
+
+.dato {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ayuda {
+  font-size: .78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.rot {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.error {
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  font-size: .85rem;
+  margin-bottom: 14px;
+}
+
+/* ─── Campos ─── */
+
+.campo {
+  width: 100%;
+  min-height: 44px;
+  padding: .6rem .8rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  /* 16px mínimo: bajo eso, iOS hace zoom al enfocar y descuadra el POS
+     justo cuando hay un cliente esperando. */
+  font-size: max(.9rem, 16px);
+  transition: border-color var(--t-fast);
+}
+
+.campo:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.campo.chico {
+  min-height: 38px;
+  padding: .4rem .65rem;
+  font-size: max(.85rem, 16px);
+}
+
+.campo.grande {
+  min-height: 58px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Sin flechitas: al contar plata estorban, y un click accidental cambia
+   el monto sin que nadie lo note. */
+.campo[type=number]::-webkit-outer-spin-button,
+.campo[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.campo[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* ─── Botones ─── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: .65rem 1.15rem;
+  border: none;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--t-fast);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn.grande {
+  min-height: 54px;
+  font-size: 1.02rem;
+}
+
+.btn.ancho {
+  width: 100%;
+}
+
+.btn-linea {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.btn-linea:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn-mini {
+  min-height: 34px;
+  padding: .35rem .8rem;
+  font-size: .8rem;
+}
+
+.btn-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color var(--t-fast), color var(--t-fast);
+}
+
+.btn-icono:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-icono.chico {
+  width: 28px;
+  height: 28px;
+  font-size: .8rem;
+}
+
+.enlace-boton {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .8rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.enlace-boton:hover {
+  color: var(--danger);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: girar .6s linear infinite;
+  flex-shrink: 0;
+}
+
+.spinner.oscuro {
+  color: var(--text-muted);
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIN CAJA
+   ═══════════════════════════════════════════════════════════ */
+
 .apertura {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 60vh;
-  padding: 20px;
+  padding: 24px 16px;
 }
 
 .apertura-caja {
   width: 100%;
-  max-width: 400px;
-  padding: 28px 24px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
+  max-width: 380px;
   text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  padding: 32px 26px;
 }
 
-.apertura-icono { font-size: 2.4rem; }
-
-.apertura h2 {
-  margin: 10px 0 0;
-  font-size: 1.3rem;
-  color: #0f172a;
+.apertura-icono {
+  font-size: 2.2rem;
+  display: block;
+  margin-bottom: 12px;
 }
 
-.apertura .pista {
-  margin: 8px 0 20px;
-  font-size: 0.85rem;
-  color: #64748b;
+.apertura-caja h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pista {
+  font-size: .85rem;
+  color: var(--text-muted);
   line-height: 1.55;
+  margin: 8px 0 22px;
 }
 
-.apertura label { text-align: left; }
+.apertura-caja label {
+  text-align: left;
+}
 
-/* ================= Barra de caja ================= */
+.apertura-caja .campo {
+  margin-bottom: 18px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BARRA DE CAJA
+   ═══════════════════════════════════════════════════════════ */
+
 .barra-caja {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
-  padding: 11px 15px;
+  padding: 10px 16px;
   margin-bottom: 14px;
-  background: #f0fdf4;
-  border: 1px solid #86efac;
-  border-radius: 11px;
+  background: var(--success-soft);
+  border: 1px solid var(--success);
+  border-radius: var(--r-sm);
+  color: var(--success);
 }
 
 .caja-datos {
@@ -696,50 +924,96 @@ export default {
   min-width: 0;
 }
 
-.caja-datos b { color: #166534; font-size: 0.92rem; }
+.caja-datos b {
+  font-size: .88rem;
+}
 
+.caja-datos .suave {
+  color: inherit;
+  opacity: .8;
+}
+
+/* El punto late para que se note desde lejos que hay turno abierto: en el
+   mesón nadie va a leer la barra, pero el movimiento sí se ve. */
 .punto {
   width: 9px;
   height: 9px;
-  flex-shrink: 0;
   border-radius: 50%;
-  background: #059669;
+  background: currentColor;
+  flex-shrink: 0;
+  animation: latir 2.4s ease-in-out infinite;
 }
 
-/* ================= Tablero ================= */
+@keyframes latir {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: .35;
+  }
+}
+
+.barra-caja .btn-linea {
+  border-color: currentColor;
+  color: inherit;
+}
+
+.barra-caja .btn-linea:hover {
+  background: var(--surface);
+  color: var(--success);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TABLERO
+   ═══════════════════════════════════════════════════════════ */
+
 .tablero {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: 1fr 380px;
   gap: 16px;
   align-items: start;
 }
 
-/* ---------- Catálogo ---------- */
+/* ─── Catálogo ─── */
+
+.catalogo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
 .busqueda {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 12px;
 }
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
-  min-height: 48px;
-  padding: 0 13px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 0 12px;
+  min-height: 46px;
+  transition: border-color var(--t-fast);
 }
 
 .buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
 }
 
-.buscador.codigo { border-style: dashed; }
+/* El campo de código va marcado: es por donde entra el escáner, y en el
+   mesón conviene que se distinga del buscador de texto. */
+.buscador.codigo {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
 
 .buscador input {
   flex: 1;
@@ -747,31 +1021,48 @@ export default {
   border: 0;
   outline: 0;
   background: none;
-  font-family: inherit;
-  font-size: max(0.92rem, 16px);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+}
+
+.buscador.codigo input {
+  font-family: var(--font-mono);
+  font-size: max(.85rem, 16px);
+  letter-spacing: .02em;
 }
 
 .categorias {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 13px;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
 .pastilla {
-  padding: 7px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  background: #fff;
-  color: #475569;
-  font-family: inherit;
-  font-size: 0.82rem;
+  padding: .42rem .95rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .82rem;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition: background-color var(--t-fast), color var(--t-fast), border-color var(--t-fast);
 }
 
-.pastilla.on { background: #064e3b; border-color: #064e3b; color: #fff; }
+.pastilla:hover {
+  border-color: var(--border-strong);
+}
+
+.pastilla.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
 
 .grilla {
   display: grid;
@@ -779,566 +1070,627 @@ export default {
   gap: 10px;
 }
 
-/* Objetivo táctil grande: en el mesón se toca con una mano y flores en la
-   otra, muchas veces sin mirar del todo. */
 .producto {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-height: 108px;
-  padding: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  text-align: left;
+  align-items: center;
+  gap: 3px;
+  padding: 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
   cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s, transform 0.08s, box-shadow 0.15s;
+  transition: transform var(--t-fast), border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .producto:hover:not(:disabled) {
-  border-color: #059669;
-  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.12);
+  border-color: var(--accent);
+  /* El levantón confirma el toque antes de que el carrito reaccione: en
+     una grilla de treinta tarjetas iguales, esa señal importa. */
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
-.producto:active:not(:disabled) { transform: scale(0.97); }
+.producto:active:not(:disabled) {
+  transform: translateY(0);
+}
 
-.producto:disabled { opacity: 0.45; cursor: not-allowed; }
+.producto:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
-.producto .emoji { font-size: 1.5rem; }
+.producto.agotado {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.producto .emoji {
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
 
 .producto .nombre {
-  font-size: 0.85rem;
+  font-size: .82rem;
   font-weight: 600;
-  color: #0f172a;
   line-height: 1.25;
-  overflow: hidden;
+  /* Dos líneas y corta: un nombre largo no puede empujar el precio fuera
+     de la tarjeta. */
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.producto .precio { margin-top: auto; font-size: 1rem; color: #047857; }
-.producto .stock { color: #94a3b8; }
-.producto .stock.poco { color: #d97706; font-weight: 600; }
+.producto .precio {
+  font-size: .95rem;
+  color: var(--text);
+}
 
-/* ---------- Carrito ---------- */
+.producto .stock {
+  color: var(--text-faint);
+}
+
+.producto .stock.poco {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* ─── Carrito ─── */
+
 .carrito {
+  position: sticky;
+  top: 84px;
   display: flex;
   flex-direction: column;
-  position: sticky;
-  top: 14px;
-  max-height: calc(100vh - 120px);
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  padding: 15px;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+  max-height: calc(100vh - 104px);
 }
 
 .carrito-cab {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 11px;
 }
 
-.carrito h3 { margin: 0; font-size: 1rem; color: #0f172a; }
+.carrito-cab h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
 
 .cliente {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 11px;
-  margin-bottom: 11px;
-  background: #f8fafc;
-  border-radius: 9px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
 }
 
-.cliente b { color: #0f172a; font-size: 0.88rem; }
-.cliente .campo { flex: 1; }
+.cliente b {
+  font-size: .85rem;
+}
+
+.cliente .campo {
+  flex: 1;
+}
 
 .lineas {
   flex: 1;
   overflow-y: auto;
-  min-height: 90px;
+  min-height: 80px;
   margin: 0 -4px;
   padding: 0 4px;
 }
 
 .vacio-carrito {
-  padding: 28px 10px;
   text-align: center;
-  color: #94a3b8;
-  font-size: 0.85rem;
+  padding: 28px 12px;
+  color: var(--text-faint);
+  font-size: .85rem;
 }
 
 .linea {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
-  padding: 9px 0;
-  border-bottom: 1px dotted #e2e8f0;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.linea:last-child { border-bottom: 0; }
-.linea b { color: #0f172a; font-size: 0.86rem; }
-.linea.sinStock { background: #fef2f2; }
+.linea:last-child {
+  border-bottom: 0;
+}
+
+.linea b {
+  font-size: .86rem;
+}
+
+.linea.sinStock {
+  background: var(--danger-soft);
+  border-radius: var(--r-sm);
+  padding: 10px 8px;
+  margin: 0 -8px;
+}
 
 .cantidad {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+  padding: 2px;
 }
 
 .paso {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  background: #fff;
-  color: #475569;
-  font-family: inherit;
-  font-size: 1rem;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.1rem;
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
+  transition: background-color var(--t-fast);
 }
 
-.paso:hover { border-color: #059669; color: #047857; }
+.paso:hover {
+  background: var(--surface);
+}
 
-.cantidad span {
+.cantidad .dato {
   min-width: 26px;
   text-align: center;
-  font-size: 0.92rem;
+  font-size: .9rem;
 }
 
-.subtotal { grid-column: 2; text-align: right; font-size: 0.88rem; }
-
-.promos { margin-top: 11px; }
+.subtotal {
+  font-size: .88rem;
+}
 
 .promos label {
-  font-size: 0.63rem;
+  font-size: .72rem;
   margin-bottom: 4px;
 }
 
 .resumen {
-  margin-top: 12px;
-  padding: 11px 12px;
-  background: #f8fafc;
-  border-radius: 9px;
-}
-
-.resumen .fila {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.fila {
+  display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  padding: 3px 0;
-  font-size: 0.84rem;
-  color: #64748b;
+  gap: 12px;
+  font-size: .86rem;
+  color: var(--text-muted);
 }
 
-.resumen .fila.verde { color: #047857; }
+.fila.verde {
+  color: var(--success);
+}
 
-.resumen .fila.total {
-  margin-top: 6px;
+.fila.total {
   padding-top: 8px;
-  border-top: 1px solid #e2e8f0;
-  color: #0f172a;
-  font-weight: 700;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
+  font-size: 1rem;
+  color: var(--text);
 }
 
-.resumen .fila.total b { font-size: 1.2rem; }
+.fila.total b {
+  font-size: 1.3rem;
+}
 
-.carrito .btn { margin-top: 12px; }
+/* ─── Barra flotante en móvil ─── */
 
-/* Barra flotante en móvil */
 .flotante {
-  position: fixed;
-  left: 16px;
-  right: 16px;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  z-index: 50;
   display: none;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0));
+  z-index: 30;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-height: 56px;
-  padding: 0 18px;
+  padding: 0 20px;
   border: none;
-  border-radius: 12px;
-  background: #064e3b;
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.95rem;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: .95rem;
   font-weight: 700;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--sh-accent);
   cursor: pointer;
 }
 
-/* ================= Ticket ================= */
-.ticket {
-  width: 270px;
-  margin: 0 auto;
-  padding: 14px;
-  background: #fff;
-  color: #000;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.68rem;
-  line-height: 1.45;
-  border: 1px solid #e2e8f0;
-}
-
-.ticket .cen { text-align: center; }
-.ticket .logo { font-size: 1.5rem; }
-
-.ticket h4 {
-  margin: 4px 0 2px;
-  font-size: 0.8rem;
-  font-family: inherit;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.ticket .chico { font-size: 0.6rem; }
-.ticket .sep { border-top: 1px dashed #000; margin: 7px 0; }
-
-.ticket .atencion {
-  border: 1px solid #000;
-  padding: 4px;
-  margin: 6px 0;
-}
-
-.ticket .atencion b { display: block; font-size: 1.15rem; }
-.ticket table { width: 100%; border-collapse: collapse; }
-.ticket td { padding: 2px 0; font-size: 0.64rem; vertical-align: top; }
-.ticket .der { text-align: right; }
-.ticket .tot { display: flex; justify-content: space-between; }
-
-.ticket .tot.g {
-  font-size: 0.88rem;
-  font-weight: 700;
-  border-top: 1px solid #000;
-  margin-top: 4px;
-  padding-top: 4px;
-}
-
-/* ================= Cierre ================= */
-.desglose {
-  padding: 12px 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-  margin-bottom: 16px;
-}
-
-.desglose .fila {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 4px 0;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.desglose .fila.total {
-  margin-top: 5px;
-  padding-top: 8px;
-  border-top: 1px solid #e2e8f0;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.desglose .fila.rojo { color: #dc2626; }
-.sep-linea { height: 1px; background: #e2e8f0; margin: 9px 0; }
-
-.resultado-cierre {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
-
-.resultado-cierre .rot {
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.resultado-cierre .val { font-size: 2rem; font-variant-numeric: tabular-nums; }
-
-.resultado-cierre.cuadrada { background: #f0fdf4; color: #166534; }
-.resultado-cierre.sobrante { background: #fffbeb; color: #78350f; }
-.resultado-cierre.faltante { background: #fee2e2; color: #991b1b; }
-
-/* ================= Comunes ================= */
-.campo {
-  width: 100%;
-  min-height: 46px;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-family: inherit;
-  font-size: max(0.92rem, 16px);
-  color: #0f172a;
-  outline: none;
-}
-
-.campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
-
-.campo.chico { min-height: 40px; padding: 0.4rem 0.6rem; font-size: max(0.85rem, 16px); }
-
-.campo.grande {
-  min-height: 60px;
-  font-size: 1.6rem;
-  font-weight: 700;
-  text-align: right;
-  margin-bottom: 14px;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #475569;
-}
-
-.grupo { margin-bottom: 16px; }
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 46px;
-  padding: 0.65rem 1.15rem;
-  border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn:hover:not(:disabled) { background: #047857; }
-.btn:disabled { background: #a7c9bb; cursor: not-allowed; }
-.btn.grande { min-height: 54px; font-size: 1.05rem; }
-.btn.ancho { width: 100%; }
-
-.btn-linea {
-  background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-}
-
-.btn-linea:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
-
-.btn-mini { min-height: 38px; padding: 0.35rem 0.8rem; font-size: 0.82rem; }
-
-.btn-icono {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  background: #fff;
-  color: #64748b;
-  cursor: pointer;
-}
-
-.btn-icono:hover { border-color: #dc2626; color: #dc2626; }
-.btn-icono.chico { width: 28px; height: 28px; }
-
-.enlace-boton {
-  padding: 0;
-  border: none;
-  background: none;
-  color: #059669;
-  font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.spinner {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: girar 0.8s linear infinite;
-}
-
-.spinner.oscuro {
-  border-color: rgba(71, 85, 105, 0.25);
-  border-top-color: #475569;
-}
-
-@keyframes girar { to { transform: rotate(360deg); } }
+/* ═══════════════════════════════════════════════════════════
+   BANDAS Y AVISOS
+   ═══════════════════════════════════════════════════════════ */
 
 .banda {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 14px;
-  border-radius: 10px;
-  margin-bottom: 12px;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  font-size: .85rem;
 }
 
-.banda-ok { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
-.banda-error { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
-
-.error {
-  padding: 11px 13px;
-  margin-bottom: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.86rem;
-  text-align: left;
+.banda-ok {
+  background: var(--success-soft);
+  color: var(--success);
 }
 
-.ayuda {
-  margin: 7px 0 0;
-  font-size: 0.76rem;
-  color: #94a3b8;
-  line-height: 1.5;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
+.banda-error {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
 }
 
 .vacio {
-  padding: 40px 20px;
   text-align: center;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: .88rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
 }
 
-.dato { font-variant-numeric: tabular-nums; font-weight: 600; }
-.mini { font-size: 0.76rem; }
-.suave { color: #64748b; }
-.rojo { color: #dc2626; }
-.min0 { min-width: 0; }
+.aviso {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0));
+  transform: translateX(-50%);
+  z-index: 200;
+  padding: 12px 22px;
+  border-radius: var(--r-full);
+  background: var(--success);
+  color: #fff;
+  font-size: .88rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  animation: subir .22s ease;
+}
 
-/* Modales */
+.aviso.malo {
+  background: var(--danger);
+}
+
+@keyframes subir {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODALES
+   ═══════════════════════════════════════════════════════════ */
+
 .fondo {
   position: fixed;
   inset: 0;
-  z-index: 65;
-  display: grid;
-  place-items: center;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--overlay);
 }
 
 .modal {
   width: 100%;
   max-width: 440px;
-  max-height: 92vh;
-  max-height: 92dvh;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
 
-.modal-cab { padding: 18px 20px 14px; border-bottom: 1px solid #e2e8f0; }
-.modal-cab h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
-.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
-.modal-cuerpo { padding: 18px 20px; overflow-y: auto; }
+.modal-cab {
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-cab h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.modal-cab p {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.modal-cuerpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
 
 .modal-pie {
   display: flex;
-  gap: 9px;
-  justify-content: flex-end;
-  padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
-.aviso {
-  position: fixed;
-  bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 80;
-  max-width: 90vw;
-  padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
-  color: #fff;
-  font-size: 0.875rem;
+.modal-pie .btn {
+  flex: 1;
+}
+
+.grupo {
+  margin-bottom: 18px;
+}
+
+.grupo:last-child {
+  margin-bottom: 0;
+}
+
+/* ─── Ticket ─── */
+
+.ticket {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 18px;
+}
+
+.ticket h4 {
+  font-size: .95rem;
+  font-weight: 700;
+  margin: 4px 0 2px;
+}
+
+.ticket .logo {
+  font-size: 1.6rem;
+}
+
+.ticket .atencion {
+  margin-top: 10px;
+  padding: 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+}
+
+/* El número de atención es lo único que se lee a un metro de distancia:
+   es lo que se grita en el mesón. */
+.ticket .atencion b {
+  display: block;
+  font-size: 1.6rem;
+  line-height: 1.2;
+}
+
+.ticket .sep {
+  border-top: 1px dashed var(--border-strong);
+  margin: 10px 0;
+}
+
+.ticket table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ticket td {
+  padding: 1px 0;
+}
+
+.tot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tot.g {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 6px 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-strong);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+/* ─── Cierre de caja ─── */
+
+.desglose {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  margin-bottom: 18px;
+}
+
+.desglose .fila.total {
+  border-top: 1px solid var(--border-strong);
+  padding-top: 9px;
+  color: var(--text);
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
-  text-align: center;
 }
 
-.aviso.malo { background: #b91c1c; }
+.desglose .fila.rojo {
+  color: var(--danger);
+}
 
-/* ================= Móvil ================= */
-@media (max-width: 900px) {
-  .tablero { grid-template-columns: 1fr; }
-  .busqueda { grid-template-columns: 1fr; }
+.sep-linea {
+  border-top: 1px dashed var(--border-strong);
+  margin: 4px 0;
+}
 
-  /* El carrito pasa a ser una hoja que sube desde abajo: en el mesón la
-     pantalla se usa vertical y el catálogo necesita todo el alto. */
+.resultado-cierre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 22px;
+  border-radius: var(--r-md);
+  margin-bottom: 18px;
+  border: 1px solid;
+}
+
+.resultado-cierre .val {
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.resultado-cierre.cuadrada {
+  background: var(--success-soft);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.resultado-cierre.sobrante {
+  background: var(--info-soft);
+  border-color: var(--info-border);
+  color: var(--info);
+}
+
+.resultado-cierre.faltante {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.resultado-cierre .rot {
+  color: inherit;
+  opacity: .85;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   IMPRESIÓN · solo el ticket
+   ═══════════════════════════════════════════════════════════ */
+
+@media print {
+
+  .barra-caja,
+  .catalogo,
+  .carrito,
+  .flotante,
+  .aviso,
+  .modal-cab,
+  .modal-pie {
+    display: none !important;
+  }
+
+  .fondo {
+    position: static;
+    background: none;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: none;
+    max-height: none;
+    border: none;
+    box-shadow: none;
+  }
+
+  .modal-cuerpo {
+    padding: 0;
+    overflow: visible;
+  }
+
+  .ticket {
+    background: #fff;
+    color: #000;
+    padding: 0;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 1080px) {
+  .tablero {
+    grid-template-columns: 1fr 330px;
+  }
+}
+
+/* El carrito pasa a ser un panel que sube desde abajo: en el mesón el
+   teléfono se usa vertical, y una columna lateral de 330px no cabe. */
+@media (max-width: 860px) {
+  .tablero {
+    grid-template-columns: 1fr;
+  }
+
+  .busqueda {
+    grid-template-columns: 1fr;
+  }
+
   .carrito {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 55;
-    max-height: 80vh;
-    max-height: 80dvh;
-    border-radius: 16px 16px 0 0;
-    border-bottom: 0;
-    box-shadow: 0 -12px 34px rgba(0, 0, 0, 0.18);
+    z-index: 40;
+    max-height: 86vh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    box-shadow: var(--shadow-lg);
     transform: translateY(100%);
-    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-    padding-bottom: max(15px, env(safe-area-inset-bottom));
+    transition: transform var(--t-med);
   }
 
-  .carrito.abierto { transform: translateY(0); }
+  .carrito.abierto {
+    transform: translateY(0);
+  }
 
-  .flotante { display: flex; }
+  .flotante {
+    display: flex;
+  }
 
-  .grilla { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+  .grilla {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  }
+
+  .producto .emoji {
+    font-size: 1.5rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .producto, .pastilla, .buscador, .carrito { transition: none; }
-  .spinner { animation: none; }
-}
 
-/* Al imprimir el ticket, el resto de la pantalla estorba */
-@media print {
-  .modal-cab, .modal-pie { display: none; }
-  .ticket { border: 0; }
+  .producto,
+  .carrito,
+  .aviso,
+  .punto {
+    transition: none;
+    animation: none;
+  }
 }
 </style>

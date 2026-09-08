@@ -1,864 +1,494 @@
 <template>
-  
-    <div class="cabecera al-entrar">
-      <div class="titulo">
-        <h2>Clientes y club de puntos</h2>
-        <p class="pista">
-          1 punto por cada {{ clp(puntosPorPeso) }} de compra.
-          Cada punto vale {{ clp(valorPunto) }} al canjear, desde {{ canjeMinimo }} puntos.
+  <div class="clientes">
+    <header class="cabecera">
+      <div class="min0">
+        <h1>Clientes</h1>
+        <p class="ayuda">
+          Quién compra y qué se lleva. Los puntos son plata que el local debe:
+          cada uno vale {{ clp(valorPunto) }}.
         </p>
       </div>
-      <button v-if="puedeEditar" class="btn btn-crear" @click="abrirNuevo">
-        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Registrar cliente
+      <button class="btn" @click="abrirNuevo">
+        <span aria-hidden="true">＋</span> Nuevo cliente
       </button>
+    </header>
+
+    <div v-if="error" class="banda banda-error">
+      <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
+      <button class="btn btn-mini" @click="recargar">Reintentar</button>
     </div>
 
-    <!-- ================= ESQUELETO ================= -->
-    <div v-if="esqueleto.visible" aria-hidden="true">
-      <div class="kpis">
-        <div v-for="n in 4" :key="'k' + n" class="kpi">
-          <EsqueletoBloque alto="10px" ancho="58%" />
-          <EsqueletoBloque alto="26px" ancho="70%" class="sep-9" />
-          <EsqueletoBloque alto="10px" ancho="64%" class="sep-8" />
-        </div>
+    <!-- El pasivo de puntos a la vista: es lo que el local debe si todos
+         canjearan mañana, y casi nunca se mira hasta que alguien canjea. -->
+    <div v-if="pasivoPuntos > 0" class="tira-pasivo">
+      <div>
+        <span class="rot">Puntos en circulación</span>
+        <b class="dato">{{ puntosEnCirculacion }}</b>
+      </div>
+      <div>
+        <span class="rot">Lo que valen</span>
+        <b class="dato">{{ clp(pasivoPuntos) }}</b>
+      </div>
+      <span v-if="parcial" class="nota-parcial">
+        de los {{ clientes.length }} cargados
+      </span>
+    </div>
+
+    <div class="buscador">
+      <span aria-hidden="true">🔎</span>
+      <input v-model="busqueda" placeholder="Nombre, RUT, teléfono o correo…"
+        aria-label="Buscar cliente">
+      <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
+    </div>
+
+    <!-- Los filtros como pastillas y no como selects: son tres estados
+         excluyentes que se alternan de un toque, y en el teléfono un select
+         abre una hoja entera para elegir entre tres cosas. -->
+    <div class="filtros">
+      <div class="pastillas">
+        <button :class="{ on: !filtro.conPuntos && !filtro.sinComprarDias }"
+          @click="filtrar({ conPuntos: false, sinComprarDias: null })">Todos</button>
+        <button :class="{ on: filtro.conPuntos }"
+          @click="filtrar({ conPuntos: true, sinComprarDias: null })">Con puntos</button>
+        <button :class="{ on: !!filtro.sinComprarDias }"
+          @click="filtrar({ conPuntos: false, sinComprarDias: 90 })">Se alejaron</button>
       </div>
 
-      <div class="barra-filtros">
-        <EsqueletoBloque alto="46px" ancho="100%" radio="10px" />
-      </div>
+      <select class="campo corto" :value="filtro.cumpleMes ?? ''"
+        @change="filtrar({ cumpleMes: $event.target.value ? Number($event.target.value) : null })"
+        aria-label="Cumpleaños">
+        <option value="">Cualquier mes</option>
+        <option v-for="(m, i) in MESES" :key="i" :value="i + 1">Cumple en {{ m }}</option>
+      </select>
 
-      <div class="esq-tabla">
-        <div v-for="n in 5" :key="'r' + n" class="esq-fila">
-          <EsqueletoBloque alto="44px" ancho="44px" radio="999px" />
-          <div class="esq-col">
-            <EsqueletoBloque alto="14px" ancho="160px" />
-            <EsqueletoBloque alto="10px" ancho="86px" class="sep-6" />
+      <label class="check">
+        <input type="checkbox" :checked="filtro.activo === null"
+          @change="filtrar({ activo: $event.target.checked ? null : true })">
+        <span>Ver desactivados</span>
+      </label>
+    </div>
+
+    <div v-if="cargando && !clientes.length" class="vacio">Cargando…</div>
+
+    <div v-else-if="!clientes.length" class="vacio">
+      <strong>{{ hayFiltro ? 'Ninguno coincide' : 'Sin clientes' }}</strong>
+      {{ hayFiltro
+        ? 'Prueba con otro texto o quita los filtros.'
+        : 'Registra el primero para empezar a acumular puntos.' }}
+    </div>
+
+    <div v-else class="tarjetas" :class="{ atenuada: cargando }">
+      <article v-for="c in clientes" :key="c.id" class="tarjeta"
+        :class="{ inactivo: !c.activo, abierta: detalleId === c.id }">
+
+        <!-- La cabecera entera abre el detalle: buscar un botón chico con el
+             pulgar es fricción sin motivo. -->
+        <button class="cab" @click="alternarDetalle(c.id)">
+          <div class="avatar" :class="claseAvatar(c)" aria-hidden="true">
+            {{ iniciales(c.nombre) }}
           </div>
-          <EsqueletoBloque alto="22px" ancho="70px" radio="999px" />
+
+          <div class="min0">
+            <div class="nombre-fila">
+              <b class="nombre">{{ c.nombre }}</b>
+              <span v-if="!c.activo" class="etiqueta">off</span>
+            </div>
+            <div class="sub">
+              <span class="mono">{{ c.rut }}</span>
+              <template v-if="c.telefono"> · {{ c.telefono }}</template>
+            </div>
+          </div>
+
+          <div class="derecha">
+            <!-- Los puntos con su valor en pesos debajo: "340 puntos" no
+                 dice nada, "$3.400" sí. -->
+            <template v-if="c.puntos > 0">
+              <b class="puntos">{{ c.puntos }}</b>
+              <span class="puntos-valor">{{ clp(c.valorPuntos) }}</span>
+            </template>
+            <span v-else class="tenue mini">sin puntos</span>
+          </div>
+
+          <span class="flecha" :class="{ girada: detalleId === c.id }" aria-hidden="true">›</span>
+        </button>
+
+        <div class="resumen-fila">
+          <div>
+            <span class="rot">Compras</span>
+            <b class="dato">{{ c.compras }}</b>
+          </div>
+          <div>
+            <span class="rot">Gastado</span>
+            <b class="dato">{{ clp(c.totalGastado) }}</b>
+          </div>
+          <div v-if="c.ticketPromedio">
+            <span class="rot">Promedio</span>
+            <b class="dato">{{ clp(c.ticketPromedio) }}</b>
+          </div>
+          <div>
+            <span class="rot">Última</span>
+            <b class="dato" :class="{ frio: c.diasSinComprar > 90 }">
+              {{ c.ultimaCompra ? fecha(c.ultimaCompra) : 'nunca' }}
+            </b>
+          </div>
+        </div>
+
+        <!-- El cumpleaños cerca es la razón por la que existe esa columna en
+             la base: sirve para llamar, no para adornar la ficha. -->
+        <p v-if="cumpleCerca(c)" class="cumple">
+          🎂 Cumple {{ c.diasParaCumple === 0 ? 'hoy' : `en ${c.diasParaCumple} día(s)` }}
+        </p>
+
+        <p v-else-if="c.diasSinComprar > 90" class="frio-aviso">
+          Sin comprar hace {{ c.diasSinComprar }} días.
+        </p>
+
+        <!-- ═══ Detalle ═══ -->
+        <div v-if="detalleId === c.id" class="detalle">
+          <div v-if="cargandoDetalle === c.id" class="cargando">Cargando…</div>
+
+          <template v-else-if="detalle">
+            <div v-if="detalle.frecuentes?.length" class="bloque">
+              <h4>Lo que siempre se lleva</h4>
+              <div class="frecuentes">
+                <span v-for="p in detalle.frecuentes" :key="p.productoId" class="frecuente">
+                  {{ p.emoji }} {{ p.producto }}
+                  <b>{{ p.veces }}×</b>
+                </span>
+              </div>
+            </div>
+
+            <div v-if="detalle.compras7?.length" class="bloque">
+              <h4>Últimas compras</h4>
+              <div v-for="v in detalle.compras7" :key="v.id" class="item"
+                :class="{ anulada: v.anulada }">
+                <div class="min0">
+                  <span class="mono">{{ v.folio }}</span>
+                  <span class="desglose">
+                    {{ fecha(v.creadoEn) }} · {{ v.lineas }} línea(s)
+                    <template v-if="v.puntosGanados"> · +{{ v.puntosGanados }} pts</template>
+                    <span v-if="v.anulada" class="rojo"> · anulada</span>
+                  </span>
+                </div>
+                <b class="dato">{{ clp(v.total) }}</b>
+              </div>
+            </div>
+
+            <!-- Los puntos son dinero: cada movimiento con su saldo permite
+                 rastrear un saldo que no cuadra hasta donde se desvió. -->
+            <div v-if="detalle.puntos7?.length" class="bloque">
+              <h4>Movimientos de puntos</h4>
+              <div v-for="p in detalle.puntos7" :key="p.id" class="item">
+                <div class="min0">
+                  <b :class="p.cantidad > 0 ? 'verde' : 'rojo'">
+                    {{ p.cantidad > 0 ? '+' : '' }}{{ p.cantidad }}
+                  </b>
+                  <span class="desglose">
+                    {{ p.motivo }} · {{ fecha(p.creadoEn) }}
+                    <template v-if="p.usuario"> · {{ p.usuario }}</template>
+                  </span>
+                </div>
+                <span class="dato suave">saldo {{ p.saldoResultante }}</span>
+              </div>
+            </div>
+
+            <div v-if="detalle.notas" class="notas">{{ detalle.notas }}</div>
+
+            <div class="acciones">
+              <button class="btn btn-linea btn-mini" @click="abrirEdicion(detalle)">
+                Editar ficha
+              </button>
+              <button v-if="esAdmin" class="btn btn-linea btn-mini" @click="abrirPuntos(detalle)">
+                Ajustar puntos
+              </button>
+              <button v-if="esAdmin && detalle.activo" class="btn btn-linea btn-mini"
+                @click="cambiarEstado(detalle, false)">Desactivar</button>
+              <button v-else-if="esAdmin" class="btn btn-mini"
+                @click="cambiarEstado(detalle, true)">Reactivar</button>
+            </div>
+          </template>
+        </div>
+      </article>
+    </div>
+
+    <p v-if="parcial" class="paginador mini suave">
+      Mostrando {{ clientes.length }} de {{ total }}. Busca para acotar.
+    </p>
+
+    <!-- ═══════════════ MODAL: ficha ═══════════════ -->
+    <div v-if="modal" class="fondo" @click.self="modal = null">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-cab">
+          <h3>{{ modal.f.id ? 'Editar cliente' : 'Nuevo cliente' }}</h3>
+          <p>El RUT es la llave con que se busca la ficha en el mesón.</p>
+        </div>
+
+        <div class="modal-cuerpo">
+          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+
+          <div class="grupo">
+            <label for="c-rut">RUT</label>
+            <input id="c-rut" class="campo mono" v-model="modal.f.rut" maxlength="20"
+              :class="{ malo: rutMalo }" placeholder="12.345.678-9"
+              inputmode="text" @blur="normalizarRut">
+            <!-- El dígito sugerido convierte un "está malo" en un "quisiste
+                 decir esto": casi siempre es un dedo, no un RUT inventado. -->
+            <p v-if="rutMalo" class="ayuda-campo mala">
+              El dígito verificador no calza{{ dvSugerido ? `: debería ser ${dvSugerido}` : '' }}.
+            </p>
+          </div>
+
+          <div class="grupo">
+            <label for="c-nombre">Nombre</label>
+            <input id="c-nombre" class="campo" v-model="modal.f.nombre" maxlength="160"
+              placeholder="María Fernanda Soto">
+          </div>
+
+          <div class="rejilla">
+            <div class="grupo">
+              <label for="c-tel">Teléfono</label>
+              <input id="c-tel" class="campo mono" type="tel" v-model="modal.f.telefono"
+                maxlength="40" inputmode="tel" placeholder="+56 9 1234 5678">
+            </div>
+
+            <div class="grupo">
+              <label for="c-correo">Correo</label>
+              <input id="c-correo" class="campo" type="email" v-model="modal.f.correo"
+                maxlength="160" inputmode="email" placeholder="maria@correo.cl">
+            </div>
+          </div>
+
+          <div class="grupo">
+            <label for="c-dir">Dirección</label>
+            <input id="c-dir" class="campo" v-model="modal.f.direccion" maxlength="240"
+              placeholder="Para los despachos">
+          </div>
+
+          <div class="grupo">
+            <label>Cumpleaños</label>
+            <div class="cumple-campos">
+              <input class="campo dato" type="number" min="1" max="31" inputmode="numeric"
+                v-model.number="modal.f.cumpleDia" placeholder="Día" aria-label="Día">
+              <select class="campo" v-model.number="modal.f.cumpleMes" aria-label="Mes">
+                <option :value="null">Mes</option>
+                <option v-for="(m, i) in MESES" :key="i" :value="i + 1">{{ m }}</option>
+              </select>
+            </div>
+            <p class="ayuda-campo">
+              Con esto aparece en la lista del mes para poder saludarla. Va
+              completo o ninguno.
+            </p>
+          </div>
+
+          <div class="grupo">
+            <label for="c-notas">Notas</label>
+            <textarea id="c-notas" class="campo" v-model="modal.f.notas" maxlength="600"
+              rows="3" placeholder="Prefiere tonos claros. Compra para la oficina los viernes."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-pie">
+          <button class="btn btn-linea" :disabled="guardando" @click="modal = null">Cancelar</button>
+          <button class="btn" :disabled="guardando" @click="guardar">
+            {{ guardando ? 'Guardando…' : 'Guardar' }}
+          </button>
         </div>
       </div>
     </div>
 
-    <template v-else>
+    <!-- ═══════════════ MODAL: puntos ═══════════════ -->
+    <div v-if="ajuste" class="fondo" @click.self="ajuste = null">
+      <div class="modal angosto" role="dialog" aria-modal="true">
+        <div class="modal-cab">
+          <h3>Ajustar puntos</h3>
+          <p>{{ ajuste.nombre }} · tiene {{ ajuste.puntos }} ({{ clp(ajuste.valor) }})</p>
+        </div>
 
-      <!-- ---------- Indicadores ---------- -->
-      <div class="kpis">
-        <div class="kpi destacado al-entrar" style="--i: 1">
-          <div class="rot">Clientes en el club</div>
-          <div class="val" :class="{ destella: dTotal.activo }">{{ total }}</div>
-          <div class="pie">{{ conCompras }} han comprado alguna vez</div>
-        </div>
-        <div class="kpi al-entrar" style="--i: 2">
-          <div class="rot">Puntos en circulación</div>
-          <div class="val" :class="{ destella: dPuntos.activo }">
-            <span v-if="parcial" class="aprox">≥</span>{{ puntosEnCirculacion.toLocaleString('es-CL') }}
-          </div>
-          <div class="pie">Equivalen a {{ clp(pasivoPuntos) }}</div>
-        </div>
-        <div class="kpi al-entrar" style="--i: 3" :class="{ resaltado: alejados.length }">
-          <div class="rot">Sin comprar 60+ días</div>
-          <div class="val">{{ alejados.length }}</div>
-          <div class="pie">{{ alejados.length ? 'A estos vale la pena llamar' : 'Nadie se ha alejado' }}</div>
-        </div>
-        <div class="kpi al-entrar" style="--i: 4" :class="{ resaltado: cumpleanos.length }">
-          <div class="rot">Cumpleaños del mes</div>
-          <div class="val">{{ cumpleanos.length }}</div>
-          <div class="pie">{{ cumpleanos.length ? 'Oportunidad de campaña' : 'Ninguno este mes' }}</div>
-        </div>
-      </div>
+        <div class="modal-cuerpo">
+          <div v-if="ajuste.error" class="error">{{ ajuste.error }}</div>
 
-      <Transition name="desliza">
-        <div v-if="proximosCumples.length" class="banda banda-ok">
-          <span class="torta" aria-hidden="true">🎂</span>
-          <span>
-            Cumplen pronto:
-            <b>{{ proximosCumples.map(c => `${c.nombre} (${c.dia}/${c.mes})`).join(', ') }}</b>
-          </span>
-        </div>
-      </Transition>
-
-      <!-- ---------- Filtros ---------- -->
-      <div class="barra-filtros al-entrar" style="--i: 5">
-        <div class="buscador">
-          <svg class="ico lupa" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="M20 20l-3.5-3.5" />
-          </svg>
-          <input v-model="busqueda" placeholder="Nombre, RUT, teléfono o correo…" aria-label="Buscar cliente">
-          <Transition name="brote">
-            <button v-if="busqueda" class="btn-limpiar" @click="busqueda = ''" aria-label="Limpiar búsqueda">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
+          <div class="opciones">
+            <button class="opcion" :class="{ on: ajuste.signo === 1 }" @click="ajuste.signo = 1">
+              <b>Regalar</b><span>Cortesía, compensación, campaña</span>
             </button>
-          </Transition>
+            <button class="opcion" :class="{ on: ajuste.signo === -1 }" @click="ajuste.signo = -1">
+              <b>Descontar</b><span>Corregir un error de carga</span>
+            </button>
+          </div>
+
+          <div class="grupo">
+            <label for="a-cant">¿Cuántos puntos?</label>
+            <input id="a-cant" ref="campoPuntos" class="campo dato" type="number" min="1"
+              inputmode="numeric" v-model.number="ajuste.cantidad">
+            <p class="ayuda-campo">
+              Equivalen a <b>{{ clp((ajuste.cantidad || 0) * valorPunto) }}</b>.
+              <template v-if="ajuste.signo === -1 && ajuste.cantidad > ajuste.puntos">
+                <span class="mala">Solo tiene {{ ajuste.puntos }}.</span>
+              </template>
+            </p>
+          </div>
+
+          <div class="grupo">
+            <label for="a-motivo">¿Por qué?</label>
+            <input id="a-motivo" class="campo" v-model="ajuste.motivo" maxlength="200"
+              placeholder="Compensación por el pedido que llegó tarde"
+              @keyup.enter="ajustarPuntos">
+            <!-- Los puntos son dinero: un saldo que no cuadra tiene que
+                 poder explicarse seis meses después. -->
+            <p class="ayuda-campo">
+              Mínimo 5 caracteres. Queda en el libro de puntos con tu nombre.
+            </p>
+          </div>
         </div>
 
-        <select v-model="orden" class="campo campo-corto" aria-label="Ordenar">
-          <option value="nombre">Por nombre</option>
-          <option value="puntos">Por puntos</option>
-          <option value="gasto">Por total gastado</option>
-          <option value="alejados">Por tiempo sin comprar</option>
-        </select>
-
-        <div class="checks">
-          <label class="check">
-            <input type="checkbox" :checked="filtro.activo === null" @change="alternarInactivos">
-            <span>Ver desactivados</span>
-          </label>
-
-          <label class="check">
-            <input type="checkbox" :checked="filtro.conPuntos"
-              @change="filtrar({ conPuntos: $event.target.checked })">
-            <span>Solo con puntos</span>
-          </label>
+        <div class="modal-pie">
+          <button class="btn btn-linea" :disabled="guardando" @click="ajuste = null">Cancelar</button>
+          <button class="btn" :disabled="guardando" @click="ajustarPuntos">
+            {{ guardando ? 'Guardando…' : (ajuste.signo === 1 ? 'Regalar' : 'Descontar') }}
+          </button>
         </div>
       </div>
+    </div>
 
-      <!-- ---------- Tabla ---------- -->
-      <Transition name="cambio" mode="out-in">
-        <div v-if="errorCarga" key="error" class="error suelto">
-          {{ errorCarga }}
-          <button class="btn btn-linea btn-mini" @click="recargar">Reintentar</button>
-        </div>
-
-        <div v-else-if="!lista.length" key="vacio" class="vacio">
-          <strong>{{ hayFiltro ? 'Ningún cliente coincide' : 'Sin clientes en el club' }}</strong>
-          {{ hayFiltro
-            ? 'Prueba con otro texto o quita los filtros.'
-            : 'Registra a quien compra seguido para que acumule puntos.' }}
-        </div>
-
-        <div v-else key="tabla" class="panel" :class="{ atenuada: cargando }">
-          <div class="tabla-envoltura">
-            <table>
-              <!-- El reparto se declara: con `auto` toda la holgura cae en la
-                   primera columna y abre un hueco entre el nombre y el resto. -->
-              <colgroup>
-                <col class="c-cliente">
-                <col class="c-contacto">
-                <col class="c-compras">
-                <col class="c-gastado">
-                <col class="c-puntos">
-                <col class="c-situacion">
-                <col class="c-ficha">
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th>Contacto</th>
-                  <th>Compras</th>
-                  <th>Gastado</th>
-                  <th>Puntos</th>
-                  <th>Situación</th>
-                  <th>Ficha</th>
-                </tr>
-              </thead>
-
-              <!--
-                El :key ligado al orden remonta el cuerpo y vuelve a correr la
-                entrada escalonada. Es la forma honesta de mostrar un reordenamiento
-                en una tabla: el FLIP de TransitionGroup necesita position:absolute,
-                y eso rompe el reparto de columnas.
-              -->
-              <tbody :key="orden" :class="{ escalonada: escalonar }">
-                <template v-for="(c, idx) in lista" :key="c.id">
-                  <tr class="clic fila" :style="{ '--i': Math.min(idx, 12), ...tono(c) }"
-                    :class="{ inactiva: !c.activo, abierta: detalle === c.id, resaltada: c.id === resalte.id }"
-                    @click="alternarDetalle(c.id)">
-
-                    <td data-label="Cliente" class="celda-cliente">
-                      <div class="persona">
-                        <span class="avatar" aria-hidden="true">{{ iniciales(c.nombre) }}</span>
-                        <span class="identidad">
-                          <b>{{ c.nombre }}</b>
-                          <span class="rut">{{ c.rut }}</span>
-                        </span>
-                      </div>
-                    </td>
-
-                    <td data-label="Teléfono">
-                      <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 3h3l2 5-2.4 1.4a12 12 0 0 0 6 6L16 13l5 2v3a2 2 0 0 1-2.2 2A17 17 0 0 1 4 5.2 2 2 0 0 1 6 3z" />
-                      </svg>
-                      <span class="valor">{{ c.telefono || '' }}</span>
-                    </td>
-
-                    <td data-label="Compras">
-                      <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
-                        <path d="M9.5 8.5h5M9.5 12.5h5" />
-                      </svg>
-                      <span class="valor dato">{{ c.compras }}</span>
-                    </td>
-
-                    <td data-label="Gastado">
-                      <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                        <rect x="3" y="6" width="18" height="12" rx="2" />
-                        <circle cx="12" cy="12" r="2.6" />
-                      </svg>
-                      <span class="valor dato">{{ clp(c.totalComprado) }}</span>
-                    </td>
-
-                    <td data-label="Puntos">
-                      <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 4l2.3 4.9 5.2.7-3.8 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3L4.5 9.6l5.2-.7z" />
-                      </svg>
-                      <span class="puntos">
-                        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M12 4l2.3 4.9 5.2.7-3.8 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3L4.5 9.6l5.2-.7z" />
-                        </svg>{{ c.puntos }}
-                      </span>
-                    </td>
-
-                    <td data-label="Situación">
-                      <span class="situacion" :title="detalleSituacion(c)">
-                        <svg v-if="situacion(c) === 'cumple'" class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                          <rect x="4" y="10" width="16" height="10" rx="2" />
-                          <path d="M12 10V7M9.5 7a2.5 2.5 0 1 1 5 0" />
-                        </svg>
-                        <svg v-else-if="situacion(c) === 'alejado'" class="ico" viewBox="0 0 24 24"
-                          aria-hidden="true">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M12 7.2v5l3 1.8" />
-                        </svg>
-                        <svg v-else-if="situacion(c) === 'desactivado'" class="ico" viewBox="0 0 24 24"
-                          aria-hidden="true">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M6 6l12 12" />
-                        </svg>
-                        <svg v-else class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                          <circle cx="12" cy="12" r="9" />
-                          <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-                        </svg>
-                        {{ textoSituacion(c) }}
-                      </span>
-                    </td>
-
-                    <td class="celda-ficha">
-                      <span class="btn-ficha" :aria-expanded="detalle === c.id ? 'true' : 'false'">
-                        <span class="texto-accion">{{ detalle === c.id ? 'Ocultar ficha' : 'Ver ficha' }}</span>
-                        <svg class="ico flecha" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M6 9.5l6 6 6-6" />
-                        </svg>
-                      </span>
-                    </td>
-                  </tr>
-
-                  <!-- Ficha: acordeón con grid 0fr → 1fr -->
-                  <Transition name="acordeon">
-                    <tr v-if="detalle === c.id" class="fila-detalle" :style="tono(c)">
-                      <td colspan="7">
-                        <div class="acordeon-caja">
-                          <div class="acordeon-interior">
-                            <div class="detalle">
-
-                              <div v-if="cargandoDetalle === c.id" class="suave cargando-ficha">
-                                Cargando ficha…
-                              </div>
-
-                              <template v-else>
-                                <div class="detalle-cols">
-                                  <div class="escalon" style="--i: 0">
-                                    <h4>Ficha</h4>
-                                    <dl class="ficha">
-                                      <div>
-                                        <dt>Teléfono</dt>
-                                        <dd>{{ c.telefono || '—' }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Correo</dt>
-                                        <dd>{{ c.correo || '—' }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Dirección</dt>
-                                        <dd>{{ c.direccion || '—' }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Cumpleaños</dt>
-                                        <dd>{{ c.cumpleanos || '—' }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Cliente desde</dt>
-                                        <dd>{{ fechaCorta(c.creadoEn) }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Última compra</dt>
-                                        <dd>{{ detalleSituacion(c) }}</dd>
-                                      </div>
-                                      <div>
-                                        <dt>Puntos</dt>
-                                        <dd>{{ c.puntos }} · vale {{ clp(c.valorPuntos) }}</dd>
-                                      </div>
-                                      <div v-if="ficha(c.id)">
-                                        <dt>Ticket típico</dt>
-                                        <dd>{{ clp(ficha(c.id).ticketPromedio) }}</dd>
-                                      </div>
-                                    </dl>
-                                    <p v-if="c.notas" class="notas">“{{ c.notas }}”</p>
-                                  </div>
-
-                                  <div class="escalon" style="--i: 1">
-                                    <h4>Últimas compras</h4>
-                                    <div v-if="!compras(c.id).length" class="suave">
-                                      Todavía no tiene compras registradas.
-                                    </div>
-                                    <ul v-else class="lineas">
-                                      <li v-for="v in compras(c.id).slice(0, 8)" :key="v.ventaId"
-                                        :class="{ anulada: v.anulada }">
-                                        <span>{{ v.folio }} · {{ fechaCorta(v.fecha) }}</span>
-                                        <b class="dato">{{ clp(v.total) }}</b>
-                                      </li>
-                                    </ul>
-                                  </div>
-
-                                  <div v-if="frecuentes(c.id).length" class="escalon" style="--i: 2">
-                                    <h4>Lo que más compra</h4>
-                                    <ul class="lineas">
-                                      <li v-for="p in frecuentes(c.id)" :key="p.productoId">
-                                        <span>{{ p.emoji }} {{ p.producto }}</span>
-                                        <b class="dato">{{ p.veces }}×</b>
-                                      </li>
-                                    </ul>
-                                  </div>
-
-                                  <div v-if="movimientos(c.id).length" class="escalon" style="--i: 3">
-                                    <h4>Libro de puntos</h4>
-                                    <ul class="lineas">
-                                      <li v-for="m in movimientos(c.id).slice(0, 8)" :key="m.id">
-                                        <span class="corta">{{ m.motivo }}</span>
-                                        <b class="dato" :class="m.cantidad >= 0 ? 'suma' : 'resta'">
-                                          {{ m.cantidad > 0 ? '+' : '' }}{{ m.cantidad }}
-                                        </b>
-                                      </li>
-                                    </ul>
-                                  </div>
-                                </div>
-
-                                <div class="acciones-detalle escalon" style="--i: 4">
-                                  <button v-if="puedeEditar" class="btn btn-linea" @click.stop="abrirEdicion(c)">
-                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z" />
-                                    </svg>
-                                    Editar ficha
-                                  </button>
-                                  <button v-if="esAdmin" class="btn btn-linea" @click.stop="abrirPuntos(c)">
-                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                      <path
-                                        d="M12 4l2.3 4.9 5.2.7-3.8 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3L4.5 9.6l5.2-.7z" />
-                                    </svg>
-                                    Ajustar puntos
-                                  </button>
-                                  <button v-if="esAdmin && c.activo" class="btn btn-linea btn-baja"
-                                    @click.stop="cambiarEstado(c, false)">
-                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                      <circle cx="12" cy="12" r="9" />
-                                      <path d="M6 6l12 12" />
-                                    </svg>
-                                    Desactivar
-                                  </button>
-                                  <button v-if="esAdmin && !c.activo" class="btn btn-linea btn-alta"
-                                    @click.stop="cambiarEstado(c, true)">
-                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                      <circle cx="12" cy="12" r="9" />
-                                      <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-                                    </svg>
-                                    Reactivar
-                                  </button>
-                                </div>
-                              </template>
-
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  </Transition>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </Transition>
-
-      <p v-if="parcial" class="suave pie-tabla">
-        Mostrando {{ lista.length }} de {{ total }}. Afiná la búsqueda para ver el resto.
-      </p>
-    </template>
-
-    <!-- ================= MODALES ================= -->
-    <Transition name="modal">
-      <div v-if="modal" class="fondo" @click.self="cerrarModal">
-        <Transition name="cambio" mode="out-in">
-
-          <!-- Ficha de cliente -->
-          <div v-if="modal.tipo === 'cliente'" key="cliente" class="modal">
-            <div class="modal-cab">
-              <span class="agarre" aria-hidden="true"></span>
-              <h3>{{ modal.f.id ? 'Editar cliente' : 'Registrar cliente' }}</h3>
-              <p>Los puntos se acumulan solos con cada compra.</p>
-            </div>
-
-            <div class="modal-cuerpo">
-              <Transition name="desliza">
-                <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-              </Transition>
-
-              <div class="rejilla grupo">
-                <div>
-                  <label for="m-nombre">Nombre completo</label>
-                  <input id="m-nombre" class="campo" v-model="modal.f.nombre" placeholder="Camila Rojas"
-                    maxlength="160" autocomplete="name">
-                </div>
-                <div>
-                  <label for="m-rut">RUT</label>
-                  <input id="m-rut" class="campo dato" v-model="modal.f.rut" placeholder="12.345.678-9"
-                    maxlength="20" inputmode="text" :class="{ 'campo-malo': mostrarErrorRut }" @blur="alSalirRut">
-                  <Transition name="desliza">
-                    <p v-if="mostrarErrorRut" class="ayuda mala">
-                      Dígito verificador incorrecto{{ dvSugerido ? `: debería ser ${dvSugerido}` : '' }}.
-                    </p>
-                  </Transition>
-                </div>
-              </div>
-
-              <div class="rejilla grupo">
-                <div>
-                  <label for="m-tel">Teléfono</label>
-                  <input id="m-tel" class="campo dato" v-model="modal.f.telefono" placeholder="+56 9 1234 5678"
-                    maxlength="40" inputmode="tel" autocomplete="tel">
-                </div>
-                <div>
-                  <label for="m-correo">Correo</label>
-                  <input id="m-correo" class="campo" type="email" v-model="modal.f.correo" maxlength="160"
-                    inputmode="email" autocapitalize="off" autocorrect="off" autocomplete="email">
-                </div>
-              </div>
-
-              <div class="grupo">
-                <label for="m-dir">Dirección de despacho</label>
-                <input id="m-dir" class="campo" v-model="modal.f.direccion" placeholder="Calle 123, comuna"
-                  maxlength="240">
-              </div>
-
-              <div class="grupo">
-                <label>Cumpleaños</label>
-                <div class="rejilla-2">
-                  <select class="campo" v-model.number="modal.f.cumpleMes" aria-label="Mes">
-                    <option :value="null">Mes</option>
-                    <option v-for="(m, i) in MESES" :key="m" :value="i + 1">{{ m }}</option>
-                  </select>
-                  <select class="campo" v-model.number="modal.f.cumpleDia" :disabled="!modal.f.cumpleMes"
-                    aria-label="Día">
-                    <option :value="null">Día</option>
-                    <option v-for="d in diasDelMes" :key="d" :value="d">{{ d }}</option>
-                  </select>
-                </div>
-                <p class="ayuda">En una florería es el dato que más ventas genera.</p>
-              </div>
-
-              <div class="grupo">
-                <label for="m-notas">Notas</label>
-                <textarea id="m-notas" class="campo" v-model="modal.f.notas" maxlength="1000"
-                  placeholder="Prefiere tonos pastel, compra para su madre cada mes…"></textarea>
-              </div>
-            </div>
-
-            <div class="modal-pie">
-              <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-              <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
-                @click="guardarCliente">
-                <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-                {{ guardando ? 'Guardando…' : 'Guardar' }}
-              </button>
-            </div>
-          </div>
-
-          <!-- Ajuste de puntos -->
-          <div v-else-if="modal.tipo === 'puntos'" key="puntos" class="modal">
-            <div class="modal-cab">
-              <span class="agarre" aria-hidden="true"></span>
-              <h3>Ajustar puntos</h3>
-              <p>{{ modal.f.cliente.nombre }} tiene {{ modal.f.cliente.puntos }} puntos.</p>
-            </div>
-            <div class="modal-cuerpo">
-              <Transition name="desliza">
-                <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-              </Transition>
-
-              <label>Movimiento</label>
-              <div class="segmentado">
-                <button :class="{ on: modal.f.signo === 1 }" @click="modal.f.signo = 1">Sumar (+)</button>
-                <button :class="{ on: modal.f.signo === -1 }" @click="modal.f.signo = -1">Restar (−)</button>
-              </div>
-
-              <div class="rejilla grupo separado">
-                <div>
-                  <label for="m-cant">Cantidad</label>
-                  <input id="m-cant" class="campo dato" type="number" min="1" inputmode="numeric"
-                    v-model.number="modal.f.cantidad">
-                </div>
-                <div>
-                  <label for="m-motivo">Motivo</label>
-                  <input id="m-motivo" class="campo" v-model="modal.f.motivo" maxlength="200"
-                    placeholder="Compensación, error de carga…">
-                </div>
-              </div>
-
-              <div class="nota" :class="{ alerta: puntosResultantes < 0 }">
-                Quedará con
-                <b class="dato" :class="{ destella: dResultado.activo }">{{ puntosResultantes }}</b> puntos
-                ({{ clp(puntosResultantes * valorPunto) }}).
-                <span v-if="puntosResultantes < 0"><br>No puede quedar con puntos negativos.</span>
-              </div>
-              <div class="nota alerta">
-                Los puntos se mueven solos con las ventas. Esto es para corregir, y
-                queda registrado con su motivo: un saldo que no cuadra tiene que
-                poder explicarse seis meses después.
-              </div>
-            </div>
-            <div class="modal-pie">
-              <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-              <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
-                @click="confirmarAjustePuntos">
-                <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-                {{ guardando ? 'Aplicando…' : 'Aplicar ajuste' }}
-              </button>
-            </div>
-          </div>
-
-        </Transition>
-      </div>
-    </Transition>
-
-    <Transition name="aviso">
-      <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-    </Transition>
+    <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+  </div>
 </template>
 
 <script>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import EsqueletoBloque from '@/shared/components/EsqueletoBloque.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { rutValido, formatearRut, limpiarRut, digitoVerificador } from '@/core/utils/rut'
 
-const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-const DIAS_ALEJADO = 60
-
-/*
- * Paleta por situación del cliente. Es el equivalente al color por rol de
- * Equipo y accesos: da color a la pantalla y además significa algo.
- * Si otra vista muestra la situación de un cliente, tiene que pintarla
- * igual — el lugar natural de esto es un módulo compartido.
- */
-const TONOS = {
-  activo: { linea: '#1D9E75', fondo: '#E1F5EE', texto: '#0F6E56', oscuro: '#04342C' },
-  cumple: { linea: '#D4537E', fondo: '#FBEAF0', texto: '#993556', oscuro: '#4B1528' },
-  alejado: { linea: '#BA7517', fondo: '#FAEEDA', texto: '#854F0B', oscuro: '#412402' },
-  desactivado: { linea: '#888780', fondo: '#F1EFE8', texto: '#5F5E5A', oscuro: '#2C2C2A' }
-}
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+]
 
 export default {
   name: 'ClientesView',
-  components: { EsqueletoBloque },
 
-  setup() {
+  setup () {
     const store = useStore()
-    const { espera, usarDestello, usarResalte, usarAviso, usarEsqueleto } = useTemporizadores()
+    const { usarAviso } = useTemporizadores()
+    const { aviso, avisar } = usarAviso()
 
-    /* ---------------- Permisos ----------------
-     * Ver y editar fichas: política Caja (admin y vendedor), porque quien
-     * atiende necesita registrar al cliente en el mesón.
-     * Ajustar puntos y desactivar: solo admin. */
     const esAdmin = computed(() => store.getters['auth/esAdmin'])
-    const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'vendedor'))
-
-    /* ---------------- Reglas del club ----------------
-     * Vienen de la configuración del servidor, no de constantes locales:
-     * si no, cambiar el valor del punto en Configuración no se reflejaba acá. */
-    const cfgClub = computed(() => store.getters['configuracion/club'] || {})
-    const valorPunto = computed(() => cfgClub.value.valorPunto || 0)
-    const puntosPorPeso = computed(() => cfgClub.value.puntosPorPeso || 0)
-    const canjeMinimo = computed(() => cfgClub.value.canjeMinimo || 0)
 
     /* ---------------- Datos ---------------- */
-    const lista = computed(() => store.getters['clientes/clientes'])
+    const clientes = computed(() => store.getters['clientes/clientes'])
     const total = computed(() => store.getters['clientes/total'])
     const filtro = computed(() => store.getters['clientes/filtro'])
     const cargando = computed(() => store.getters['clientes/cargando'])
-    const errorCarga = computed(() => store.getters['clientes/error'])
-    const cumpleanos = computed(() => store.getters['clientes/cumpleanos'])
+    const error = computed(() => store.getters['clientes/error'])
     const parcial = computed(() => store.getters['clientes/parcial'])
     const puntosEnCirculacion = computed(() => store.getters['clientes/puntosEnCirculacion'])
     const pasivoPuntos = computed(() => store.getters['clientes/pasivoPuntos'])
-    const cargandoDetalle = computed(() => store.getters['clientes/cargandoDetalle'])
 
-    const ficha = (id) => store.getters['clientes/detalleDe'](id)
-    const compras = (id) => ficha(id)?.ultimasCompras || []
-    const movimientos = (id) => ficha(id)?.movimientosPuntos || []
-    const frecuentes = (id) => ficha(id)?.productosFrecuentes || []
-
-    const conCompras = computed(() => lista.value.filter(c => c.compras > 0).length)
-    const alejados = computed(() => lista.value.filter(c => c.diasSinComprar > DIAS_ALEJADO))
-
-    /* diasFaltantes viene negativo si la fecha ya pasó: así se distingue a
-       quién ya se saludó de a quién falta. */
-    const proximosCumples = computed(() => cumpleanos.value.filter(c => c.diasFaltantes >= 0))
-
-    /* ---------------- Carga ---------------- */
-    const esqueleto = usarEsqueleto()
-    const escalonar = ref(true)
-    let control = null
-
-    onMounted(async () => {
-      control = new AbortController()
-      const señal = { signal: control.signal }
-
-      /* La configuración puede venir cacheada de otra pantalla; el módulo
-         no repite la petición si ya está. */
-      store.dispatch('configuracion/cargar', señal)
-      store.dispatch('clientes/cargarCumpleanos', señal)
-
-      await esqueleto.envolver(
-        () => store.dispatch('clientes/cargar', señal),
-        !lista.value.length
-      )
-      await espera(900)
-      escalonar.value = false
-    })
-
-    onUnmounted(() => control?.abort())
-
-    const recargar = () => store.dispatch('clientes/cargar')
-    const filtrar = (cambios) => store.dispatch('clientes/filtrar', cambios)
-
-    /* ---------------- Filtros ---------------- */
-    /*
-     * La búsqueda viaja al servidor: recorre nombre, RUT, teléfono y correo,
-     * y normaliza el RUT (da lo mismo con puntos o sin ellos), cosa que un
-     * filtro local no haría. Por eso lleva retraso: una petición por tecla
-     * sería una petición de más por cada letra del apellido.
-     */
-    const busqueda = ref(filtro.value.buscar || '')
-    let tmrBusqueda = null
-    watch(busqueda, (v) => {
-      clearTimeout(tmrBusqueda)
-      tmrBusqueda = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
-    })
-    onUnmounted(() => clearTimeout(tmrBusqueda))
-
-    const alternarInactivos = (e) => filtrar({ activo: e.target.checked ? null : true })
-
-    const hayFiltro = computed(() =>
-      !!filtro.value.buscar || filtro.value.conPuntos || filtro.value.activo === null
-    )
-
-    /* El orden es local: ClienteFiltro no tiene parámetro de orden, y con
-       porPagina en 100 la lista completa está en memoria. */
-    const orden = ref('nombre')
-    const detalle = ref(null)
-
-    const ordenada = computed(() => {
-      const copia = [...lista.value]
-      if (orden.value === 'puntos') return copia.sort((a, b) => b.puntos - a.puntos)
-      if (orden.value === 'gasto') return copia.sort((a, b) => b.totalComprado - a.totalComprado)
-      if (orden.value === 'alejados') {
-        return copia.sort((a, b) => (b.diasSinComprar ?? -1) - (a.diasSinComprar ?? -1))
-      }
-      return copia.sort((a, b) => a.nombre.localeCompare(b.nombre))
-    })
-
-    /* Cambiar el orden remonta el <tbody> (por el :key) y reproduce la
-     * entrada escalonada. La ficha abierta se cierra: si no, quedaría
-     * pegada a un cliente que ya se movió de lugar. */
-    watch(orden, async () => {
-      detalle.value = null
-      escalonar.value = true
-      await espera(900)
-      escalonar.value = false
-    })
-
-    /* Si el cliente abierto sale del filtro, el acordeón queda huérfano */
-    watch(ordenada, (nueva) => {
-      if (detalle.value && !nueva.some(c => c.id === detalle.value)) detalle.value = null
-    })
-
-    const alternarDetalle = (id) => {
-      if (detalle.value === id) {
-        detalle.value = null
-        return
-      }
-      detalle.value = id
-      /* Cacheado por id: abrir y cerrar tres veces no pide lo mismo tres veces */
-      store.dispatch('clientes/cargarDetalle', { id })
-    }
-
-    /* ---------------- Fechas ---------------- */
-    const fmtFecha = new Intl.DateTimeFormat('es-CL', {
-      weekday: 'short', day: 'numeric', month: 'short'
-    })
-    /* Se limpian puntos y comas: el formato de una sola pasada varía entre
-       navegadores ("sáb., 1 de ago." vs "sáb, 1 ago"). */
-    const fechaCorta = (valor) => (
-      valor ? fmtFecha.format(new Date(valor)).replace(/\./g, '').replace(/,/g, '') : '—'
-    )
-
-    const cumpleHoy = (c) => {
-      if (!c.cumpleMes || !c.cumpleDia) return false
-      const hoy = new Date()
-      return c.cumpleMes === hoy.getMonth() + 1 && c.cumpleDia === hoy.getDate()
-    }
-
-    /* ---------------- Situación y color ----------------
-     * Un cliente está en una sola situación a la vez, y ese orden importa:
-     * una cuenta desactivada no "cumple años" para efectos del mesón. */
-    const situacion = (c) => {
-      if (!c.activo) return 'desactivado'
-      if (cumpleHoy(c)) return 'cumple'
-      if (c.diasSinComprar > DIAS_ALEJADO) return 'alejado'
-      return 'activo'
-    }
-
-    const textoSituacion = (c) => ({
-      desactivado: 'Desactivado',
-      cumple: 'Cumple hoy',
-      alejado: 'Alejado',
-      activo: 'Al día'
-    })[situacion(c)]
-
-    /* Frase larga para el title y para la ficha: en la tabla no cabe */
-    const detalleSituacion = (c) => {
-      if (c.diasSinComprar === null || c.diasSinComprar === undefined) return 'Sin compras todavía'
-      if (c.diasSinComprar === 0) return 'Compró hoy'
-      return `Hace ${c.diasSinComprar} días`
-    }
-
-    const tono = (c) => {
-      const t = TONOS[situacion(c)]
-      return {
-        '--tono-linea': t.linea, '--tono-fondo': t.fondo,
-        '--tono-texto': t.texto, '--tono-oscuro': t.oscuro
-      }
-    }
-
-    const iniciales = (nombre) => String(nombre || '?')
-      .trim().split(/\s+/).slice(0, 2)
-      .map(p => p[0]).join('').toUpperCase()
-
-    /* ---------------- Feedback ---------------- */
-    const dTotal = usarDestello()
-    const dPuntos = usarDestello()
-    const dResultado = usarDestello()
-    const resalte = usarResalte()
-    const { aviso, avisar } = usarAviso()
-
-    watch(total, dTotal.alCambiar)
-    watch(puntosEnCirculacion, dPuntos.alCambiar)
-
-    /* ---------------- Modales ---------------- */
-    const modal = ref(null)
+    const valorPunto = computed(() => store.getters['configuracion/valorPunto'] || 0)
     const guardando = ref(false)
 
-    /* Con el modal abierto, el fondo no debe scrollear detrás: en iOS el
-       gesto se escapa al body y la hoja parece trabada. */
-    watch(modal, (abierto) => {
-      document.body.style.overflow = abierto ? 'hidden' : ''
+    const hayFiltro = computed(() => {
+      const f = filtro.value
+      return !!(f.buscar || f.conPuntos || f.cumpleMes || f.sinComprarDias || f.activo === null)
     })
-    onUnmounted(() => { document.body.style.overflow = '' })
+
+    const busqueda = ref(filtro.value.buscar || '')
+    let tmr = null
+    watch(busqueda, (v) => {
+      clearTimeout(tmr)
+      tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
+    })
+
+    const filtrar = (cambios) => store.dispatch('clientes/filtrar', cambios)
+    const recargar = () => store.dispatch('clientes/cargar')
+
+    /* ---------------- Detalle ---------------- */
+    const detalleId = ref(null)
+    const cargandoDetalle = computed(() => store.getters['clientes/cargandoDetalle'])
+    const detalle = computed(() =>
+      detalleId.value ? store.getters['clientes/detalleDe'](detalleId.value) : null
+    )
+
+    /* Se pide al abrir, no al cargar la lista: son tres consultas más por
+       cliente, y traerlas para cien fichas que nadie va a expandir sería
+       trabajo perdido. */
+    const alternarDetalle = async (id) => {
+      if (detalleId.value === id) {
+        detalleId.value = null
+        return
+      }
+
+      detalleId.value = id
+      try {
+        await store.dispatch('clientes/cargarDetalle', { id })
+      } catch (e) {
+        avisar(e.message, true)
+        detalleId.value = null
+      }
+    }
+
+    /* ---------------- Ficha ---------------- */
+    const modal = ref(null)
 
     const fichaVacia = () => ({
-      id: null, nombre: '', rut: '', telefono: '', correo: '', direccion: '',
-      cumpleMes: null, cumpleDia: null, notas: '', rutTocado: false, error: ''
+      id: null, rut: '', nombre: '', telefono: '', correo: '',
+      direccion: '', cumpleMes: null, cumpleDia: null, notas: '', error: ''
     })
 
-    const abrirNuevo = () => { modal.value = { tipo: 'cliente', f: reactive(fichaVacia()) } }
+    const abrirNuevo = () => { modal.value = { f: fichaVacia() } }
 
     const abrirEdicion = (c) => {
       modal.value = {
-        tipo: 'cliente',
-        f: reactive({
+        f: {
           ...fichaVacia(),
           id: c.id,
-          nombre: c.nombre || '',
           rut: c.rut || '',
+          nombre: c.nombre || '',
           telefono: c.telefono || '',
           correo: c.correo || '',
           direccion: c.direccion || '',
           cumpleMes: c.cumpleMes ?? null,
           cumpleDia: c.cumpleDia ?? null,
-          notas: c.notas || '',
-          rutTocado: true
-        })
+          notas: c.notas || ''
+        }
       }
     }
 
-    const abrirPuntos = (c) => {
-      modal.value = {
-        tipo: 'puntos',
-        f: reactive({ cliente: c, signo: 1, cantidad: 10, motivo: '', error: '' })
-      }
-    }
-
-    const cerrarModal = () => { modal.value = null }
-
-    const rutOk = computed(() =>
-      modal.value?.f?.rut ? rutValido(modal.value.f.rut) : true
+    /* ---------------- RUT ----------------
+     * Obligatorio acá, a diferencia del proveedor: es la llave con que el
+     * vendedor busca la ficha en el mesón, y dos fichas del mismo cliente
+     * parten sus puntos en dos —ninguno alcanza para canjear. */
+    const rutMalo = computed(() =>
+      !!modal.value?.f?.rut && !rutValido(modal.value.f.rut)
     )
 
-    /* El error del RUT aparece recién al salir del campo. Validando en cada
-     * tecla, un RUT a medio escribir siempre está "malo" y el aviso
-     * parpadea mientras el usuario todavía escribe. */
-    const mostrarErrorRut = computed(() =>
-      !!modal.value?.f?.rut && modal.value.f.rutTocado && !rutOk.value
-    )
-
-    /* Casi siempre el error es el dígito, no el número: decir cuál debería
-       ser ahorra que la persona revise ocho dígitos que están bien. */
     const dvSugerido = computed(() => {
       const limpio = limpiarRut(modal.value?.f?.rut || '')
       const cuerpo = limpio.slice(0, -1)
       return cuerpo.length >= 7 && /^\d+$/.test(cuerpo) ? digitoVerificador(cuerpo) : ''
     })
 
-    const alSalirRut = () => {
+    const normalizarRut = () => {
       const f = modal.value.f
-      f.rutTocado = true
       if (f.rut && rutValido(f.rut)) f.rut = formatearRut(f.rut)
     }
 
-    const diasDelMes = computed(() => {
-      const mes = Number(modal.value?.f?.cumpleMes || 0)
-      if (!mes) return []
-      // Año bisiesto para no perder el 29 de febrero
-      const dias = new Date(2024, mes, 0).getDate()
-      return Array.from({ length: dias }, (_, i) => i + 1)
-    })
-
-    /* Extraída del template para poder observarla y destellarla */
-    const puntosResultantes = computed(() => {
-      if (modal.value?.tipo !== 'puntos') return 0
-      const f = modal.value.f
-      return f.cliente.puntos + f.signo * (f.cantidad || 0)
-    })
-
-    watch(puntosResultantes, dResultado.alCambiar)
-
-    /* ---------------- Acciones ---------------- */
-    const guardarCliente = async () => {
+    const guardar = async () => {
       const f = modal.value.f
       f.error = ''
-      f.rutTocado = true
 
-      if (!f.nombre.trim()) return (f.error = 'El nombre es obligatorio.')
-      if (!f.rut.trim()) return (f.error = 'El RUT es obligatorio.')
-      if (!rutOk.value) return (f.error = 'El RUT no es válido.')
-      if (f.cumpleMes && !f.cumpleDia) return (f.error = 'Falta el día del cumpleaños.')
+      if (!f.rut?.trim()) return (f.error = 'El RUT es obligatorio.')
+      if (rutMalo.value) return (f.error = 'El RUT no es válido.')
+      if ((f.nombre || '').trim().length < 2) {
+        return (f.error = 'El nombre debe tener al menos 2 caracteres.')
+      }
+
+      /* Día y mes van juntos: uno sin el otro no sirve para la campaña de
+         cumpleaños, que es para lo que existe ese dato. */
+      if (!!f.cumpleMes !== !!f.cumpleDia) {
+        return (f.error = 'Indica el día y el mes del cumpleaños, o ninguno.')
+      }
 
       const datos = {
         rut: f.rut.trim(),
@@ -873,42 +503,16 @@ export default {
 
       guardando.value = true
       try {
-        if (f.id) {
-          await store.dispatch('clientes/actualizarCliente', { id: f.id, ...datos })
-          resalte.marcar(f.id)
-        } else {
-          await store.dispatch('clientes/crearCliente', datos)
-        }
-        cerrarModal()
-        avisar(`${datos.nombre} guardado`)
+        const c = f.id
+          ? await store.dispatch('clientes/actualizarCliente', { id: f.id, ...datos })
+          : await store.dispatch('clientes/crearCliente', datos)
+
+        modal.value = null
+        avisar(`${c.nombre} guardado`)
       } catch (e) {
-        f.error = e.message
-      } finally {
-        guardando.value = false
-      }
-    }
-
-    const confirmarAjustePuntos = async () => {
-      const f = modal.value.f
-      f.error = ''
-
-      if (!f.cantidad || f.cantidad < 1) return (f.error = 'La cantidad debe ser al menos 1.')
-      if (puntosResultantes.value < 0) {
-        return (f.error = 'El cliente no puede quedar con puntos negativos.')
-      }
-
-      guardando.value = true
-      try {
-        const id = f.cliente.id
-        await store.dispatch('clientes/ajustarPuntos', {
-          id,
-          cantidad: f.signo * Math.round(f.cantidad),
-          motivo: f.motivo
-        })
-        cerrarModal()
-        avisar('Puntos ajustados')
-        resalte.marcar(id)
-      } catch (e) {
+        /* El mensaje viene del RAISE: "Ese RUT ya está registrado a nombre de
+           María Soto". Nombra a quién pertenece, que es lo que permite
+           entender el conflicto. */
         f.error = e.message
       } finally {
         guardando.value = false
@@ -918,447 +522,229 @@ export default {
     const cambiarEstado = async (c, activo) => {
       try {
         await store.dispatch('clientes/cambiarEstado', { id: c.id, activo })
-        avisar(activo ? `${c.nombre} reactivado` : `${c.nombre} desactivado`)
-        if (activo || filtro.value.activo === null) resalte.marcar(c.id)
+        avisar(`${c.nombre} ${activo ? 'reactivado' : 'desactivado'}`)
       } catch (e) {
         avisar(e.message, true)
       }
     }
 
-    /* ---------------- Varios ---------------- */
+    /* ---------------- Puntos ---------------- */
+    const ajuste = ref(null)
+    const campoPuntos = ref(null)
+
+    const abrirPuntos = async (c) => {
+      ajuste.value = {
+        id: c.id,
+        nombre: c.nombre,
+        puntos: c.puntos,
+        valor: c.valorPuntos,
+        signo: 1,
+        cantidad: null,
+        motivo: '',
+        error: ''
+      }
+      await nextTick()
+      campoPuntos.value?.focus()
+    }
+
+    const ajustarPuntos = async () => {
+      const a = ajuste.value
+      a.error = ''
+
+      if (!a.cantidad || a.cantidad < 1) return (a.error = 'Indica cuántos puntos.')
+
+      if (a.signo === -1 && a.cantidad > a.puntos) {
+        return (a.error = `${a.nombre} tiene ${a.puntos} puntos.`)
+      }
+
+      if ((a.motivo || '').trim().length < 5) {
+        return (a.error = 'Explica el motivo, con al menos 5 caracteres.')
+      }
+
+      guardando.value = true
+      try {
+        const c = await store.dispatch('clientes/ajustarPuntos', {
+          id: a.id,
+          cantidad: a.cantidad * a.signo,
+          motivo: a.motivo
+        })
+
+        ajuste.value = null
+        avisar(`${c.nombre} queda con ${c.puntos} puntos`)
+
+        /* El detalle abierto quedó viejo: el libro de puntos tiene una línea
+           nueva. */
+        if (detalleId.value === c.id) {
+          await store.dispatch('clientes/cargarDetalle', { id: c.id, forzar: true })
+        }
+      } catch (e) {
+        a.error = e.message
+      } finally {
+        guardando.value = false
+      }
+    }
+
+    /* ---------------- Carga ---------------- */
+    let control = null
+
+    onMounted(() => {
+      control = new AbortController()
+      const señal = { signal: control.signal }
+
+      store.dispatch('clientes/cargar', señal)
+      store.dispatch('configuracion/cargar', señal)
+    })
+
+    onUnmounted(() => {
+      control?.abort()
+      clearTimeout(tmr)
+    })
+
+    /* ---------------- Utilidades ---------------- */
+
+    /* Primera letra de las dos primeras palabras: "María Soto" → MS */
+    const iniciales = (nombre) => {
+      if (!nombre) return '?'
+      const partes = nombre.trim().split(/\s+/).filter(Boolean)
+      if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase()
+      return (partes[0][0] + partes[1][0]).toUpperCase()
+    }
+
+    /* El color del avatar cuenta la relación de un vistazo: rosa si viene
+       el cumpleaños, ámbar si se alejó, verde si tiene puntos por canjear. */
+    const claseAvatar = (c) => {
+      if (cumpleCerca(c)) return 'cumple'
+      if (c.diasSinComprar > 90) return 'frio'
+      if (c.puntos > 0) return 'puntos'
+      return ''
+    }
+
+    const cumpleCerca = (c) =>
+      c.diasParaCumple != null && c.diasParaCumple >= 0 && c.diasParaCumple <= 7
+
     const fmt = new Intl.NumberFormat('es-CL', {
       style: 'currency', currency: 'CLP', maximumFractionDigits: 0
     })
     const clp = (n) => fmt.format(Math.round(n || 0))
 
+    const fecha = (iso) => (iso
+      ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+      : '—')
+
     return {
-      MESES, Math,
-      esAdmin, puedeEditar,
-      valorPunto, puntosPorPeso, canjeMinimo,
-      lista: ordenada, total, filtro, cargando, errorCarga, recargar, filtrar,
-      cumpleanos, proximosCumples, parcial, puntosEnCirculacion, pasivoPuntos,
-      conCompras, alejados,
-      ficha, compras, movimientos, frecuentes, cargandoDetalle,
-      busqueda, orden, detalle, alternarDetalle, alternarInactivos, hayFiltro,
-      esqueleto, escalonar,
-      dTotal, dPuntos, dResultado, resalte, aviso,
-      fechaCorta, cumpleHoy,
-      situacion, textoSituacion, detalleSituacion, tono, iniciales,
-      modal, guardando, abrirNuevo, abrirEdicion, abrirPuntos, cerrarModal,
-      mostrarErrorRut, dvSugerido, alSalirRut, diasDelMes, puntosResultantes,
-      guardarCliente, confirmarAjustePuntos, cambiarEstado,
-      clp
+      MESES,
+      esAdmin, clientes, total, filtro, cargando, error, hayFiltro,
+      parcial, puntosEnCirculacion, pasivoPuntos, valorPunto, guardando,
+      busqueda, filtrar, recargar,
+      detalleId, detalle, cargandoDetalle, alternarDetalle,
+      modal, abrirNuevo, abrirEdicion, guardar, cambiarEstado,
+      rutMalo, dvSugerido, normalizarRut,
+      ajuste, campoPuntos, abrirPuntos, ajustarPuntos,
+      iniciales, claseAvatar, cumpleCerca, aviso, clp, fecha
     }
   }
 }
 </script>
 
 <style scoped>
-/* ==========================================================================
-   MOBILE FIRST
-   La base es el teléfono. El único max-width es el que desarma la tabla en
-   tarjetas: pasar de `table` a `block` y volver rompe las cajas anónimas de
-   tabla y desalinea el thead. Puntos de quiebre: 600 · 960.
-   ========================================================================== */
-
-/* Altura única para todo control tocable: buscador, selects, casillas y
-   botones. Con tres números sueltos, una fila de filtros queda escalonada. */
-.barra-filtros,
-.panel,
-.modal {
-  --alto-control: 48px;
+.clientes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-/* Universal y no una lista de contenedores: la lista se olvida de alguno
-   —la barra de filtros, por ejemplo— y ahí `min-height` deja de medir la
-   caja completa y el padding se suma encima. Al estar el estilo scoped,
-   el `*` alcanza solo a los elementos de este componente. */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+.min0 { min-width: 0; }
+.mono { font-family: var(--font-mono); font-size: .95em; }
+.mini { font-size: .78rem; }
+.suave { color: var(--text-muted); }
+.tenue { color: var(--text-faint); }
+.verde { color: var(--success); }
+.rojo  { color: var(--danger); }
+.mala  { color: var(--danger); }
+
+.dato {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
-.btn,
-.btn-limpiar,
-.check,
-.segmentado button {
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+.rot {
+  display: block;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
-.ico {
-  width: 1.1em;
-  height: 1.1em;
-  flex-shrink: 0;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.desglose {
+  display: block;
+  font-size: .73rem;
+  color: var(--text-faint);
+  margin-top: 1px;
 }
 
-/* ================================================================
- * ANIMACIONES
- * ================================================================ */
-
-@keyframes entra {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
+.ayuda {
+  font-size: .82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 4px;
+  max-width: 58ch;
 }
 
-.al-entrar {
-  animation: entra 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 55ms);
-}
+/* ─── Cabecera ─── */
 
-@keyframes aparece {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-
-.fila {
-  animation: aparece 200ms ease-out backwards;
-}
-
-tbody.escalonada .fila {
-  animation-duration: 300ms;
-  animation-delay: calc(var(--i, 0) * 35ms);
-}
-
-/* Resalte tras un cambio: acá los cambios son altas y correcciones, va verde */
-@keyframes resalta {
-  0% { background: #d1fae5; }
-  70% { background: #ecfdf5; }
-  100% { background: transparent; }
-}
-
-.fila.resaltada,
-.fila.resaltada td {
-  animation: resalta 1400ms ease-out;
-}
-
-@keyframes destello {
-  0% { transform: scale(1.07); color: #059669; }
-  60% { color: #059669; }
-  100% { transform: scale(1); }
-}
-
-.destella {
-  display: inline-block;
-  animation: destello 460ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@keyframes destello-claro {
-  0% { transform: scale(1.07); color: #6ee7b7; }
-  60% { color: #6ee7b7; }
-  100% { transform: scale(1); }
-}
-
-.kpi.destacado .val.destella {
-  animation-name: destello-claro;
-}
-
-/* Acordeón: la altura de un <tr> no es animable, así que la transición
- * corre sobre un grid interno de 0fr a 1fr. El nivel de overflow:hidden
- * intermedio evita que el padding se asome al colapsar. */
-.acordeon-caja {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition: grid-template-rows 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.acordeon-interior {
-  overflow: hidden;
-  min-height: 0;
-}
-
-.acordeon-enter-from .acordeon-caja,
-.acordeon-leave-to .acordeon-caja {
-  grid-template-rows: 0fr;
-}
-
-.acordeon-enter-active .detalle,
-.acordeon-leave-active .detalle {
-  transition: opacity 0.24s ease;
-}
-
-.acordeon-enter-from .detalle,
-.acordeon-leave-to .detalle {
-  opacity: 0;
-}
-
-.acordeon-enter-active .escalon {
-  animation: entra 260ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(130ms + var(--i, 0) * 40ms);
-}
-
-.flecha {
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.fila.abierta .flecha {
-  transform: rotate(180deg);
-}
-
-/* Único gesto ambiental de la vista: el cumpleaños del día respira */
-@keyframes late {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.07); }
-}
-
-.banda-ok .torta {
-  display: inline-block;
-  animation: late 2.4s ease-in-out infinite;
-}
-
-.desliza-enter-active {
-  transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.desliza-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.desliza-enter-from,
-.desliza-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-.cambio-enter-active {
-  transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cambio-leave-active {
-  transition: opacity 0.1s ease;
-}
-
-.cambio-enter-from {
-  opacity: 0;
-  transform: scale(0.98);
-}
-
-.cambio-leave-to {
-  opacity: 0;
-}
-
-.brote-enter-active {
-  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.brote-leave-active {
-  transition: opacity 0.14s ease, transform 0.14s ease;
-}
-
-.brote-enter-from,
-.brote-leave-to {
-  opacity: 0;
-  transform: scale(0.7);
-}
-
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.18s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .modal {
-  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.modal-leave-active .modal {
-  transition: transform 0.16s ease;
-}
-
-.modal-enter-from .modal {
-  transform: translateY(18px) scale(0.97);
-}
-
-.modal-leave-to .modal {
-  transform: translateY(8px) scale(0.98);
-}
-
-.aviso-enter-active {
-  transition: opacity 0.2s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.aviso-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.aviso-enter-from,
-.aviso-leave-to {
-  opacity: 0;
-  transform: translateY(16px);
-}
-
-@keyframes girar {
-  to { transform: rotate(360deg); }
-}
-
-.spinner {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: girar 0.8s linear infinite;
-}
-
-.btn-ocupado:disabled {
-  background: #0f6e56;
-  opacity: 0.78;
-  cursor: wait;
-}
-
-.atenuada {
-  opacity: 0.45;
-}
-
-/* ---------- Encabezado ---------- */
 .cabecera {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 14px;
-  margin-bottom: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.cabecera h2 {
-  margin: 0;
-  font-size: 1.3rem;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
-  color: #0f172a;
-}
-
-.pista {
-  margin: 5px 0 0;
-  font-size: 0.9rem;
-  color: #64748b;
-  max-width: 62ch;
-  line-height: 1.5;
-}
-
-/* ---------- KPIs ---------- */
-.kpis {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.kpi {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 14px;
-  transition: border-color 0.18s, box-shadow 0.18s;
-}
-
-.kpi .rot {
-  font-size: 0.8rem;
-  color: #64748b;
-  line-height: 1.3;
-}
-
-.kpi .val {
-  font-size: 1.6rem;
+h1 {
+  font-size: clamp(1.2rem, 5vw, 1.5rem);
   font-weight: 700;
-  margin-top: 5px;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
 }
 
-.kpi .pie {
-  font-size: 0.78rem;
-  color: #64748b;
-  margin-top: 3px;
-  line-height: 1.35;
-}
-
-.kpi.destacado {
-  background: #04342C;
-  border-color: #04342C;
-  color: #fff;
-}
-
-.kpi.destacado .rot {
-  color: #9FE1CB;
-}
-
-.kpi.destacado .pie {
-  color: #9FE1CB;
-}
-
-.kpi.resaltado {
-  border-color: #EF9F27;
-  background: #FAEEDA;
-}
-
-/* Marca de "al menos": el número es un piso, no el total del sistema */
-.aprox {
-  font-size: 0.7em;
-  opacity: 0.7;
-  margin-right: 2px;
-}
-
-/* ---------- Bandas ---------- */
-.banda {
+/* Lo que el local debe si todos canjearan mañana. Casi nunca se mira hasta
+   que alguien canja. */
+.tira-pasivo {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 24px;
   flex-wrap: wrap;
-  padding: 13px 16px;
-  border-radius: 10px;
-  margin-bottom: 16px;
-  font-size: 0.95rem;
-  line-height: 1.45;
+  padding: 12px 16px;
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
 }
 
-.banda-ok {
-  background: #FAEEDA;
-  border: 1px solid #EF9F27;
-  color: #633806;
+.tira-pasivo .dato {
+  font-size: 1.05rem;
+  color: var(--accent-text);
 }
 
-/* ---------- Filtros ---------- */
-.barra-filtros {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  margin-bottom: 16px;
+.nota-parcial {
+  font-size: .72rem;
+  color: var(--text-muted);
+  margin-left: auto;
 }
+
+/* ─── Filtros ─── */
 
 .buscador {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
-  min-height: var(--alto-control, 48px);
-  padding: 0 12px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  gap: 9px;
+  min-height: 48px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  transition: border-color var(--t-fast);
 }
 
-.buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
-
-.lupa {
-  width: 19px;
-  height: 19px;
-  color: #94a3b8;
-}
+.buscador:focus-within { border-color: var(--accent); }
 
 .buscador input {
   flex: 1;
@@ -1366,1080 +752,642 @@ tbody.escalonada .fila {
   border: 0;
   outline: 0;
   background: none;
-  font-family: inherit;
-  /* 16px mínimos: por debajo iOS hace zoom al enfocar */
-  font-size: max(0.95rem, 16px);
+  color: var(--text);
+  font: inherit;
+  /* 16px mínimo: bajo eso iOS hace zoom al enfocar. */
+  font-size: max(.9rem, 16px);
 }
 
-.btn-limpiar {
-  display: inline-flex;
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
+  gap: 10px;
+}
+
+/* Pastillas y no select: son tres estados excluyentes que se alternan de un
+   toque, y en el teléfono un select abre una hoja entera para elegir entre
+   tres cosas. */
+.pastillas {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
+}
+
+.pastillas button {
+  min-height: 38px;
+  padding: 0 15px;
+  border: none;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .84rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color var(--t-fast), color var(--t-fast);
+}
+
+.pastillas button.on {
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: var(--shadow-sm);
 }
 
 .campo {
   width: 100%;
-  min-height: var(--alto-control, 48px);
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  font-family: inherit;
-  font-size: max(0.95rem, 16px);
-  color: #0f172a;
-  outline: none;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  min-height: 44px;
+  padding: .6rem .75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+  transition: border-color var(--t-fast);
 }
 
-.campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
-
-.campo-malo {
-  border-color: #dc2626;
-}
-
-.campo-malo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #dc2626;
-}
+.campo:focus { outline: 0; border-color: var(--accent); }
+.campo.malo { border-color: var(--danger); }
+.campo.corto { width: auto; flex: 0 1 190px; }
 
 textarea.campo {
-  min-height: 80px;
+  min-height: 74px;
   resize: vertical;
+  line-height: 1.5;
 }
 
-.checks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Las casillas son objetivos táctiles, no adornos: caja completa tocable */
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  flex: 1 1 auto;
-  min-height: var(--alto-control, 48px);
-  padding: 0 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
-  font-size: 0.95rem;
-  color: #475569;
+  gap: 8px;
+  font-size: .85rem;
+  color: var(--text-muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .check input {
-  width: 21px;
-  height: 21px;
-  accent-color: #0f6e56;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
-/* ---------- Lista de clientes ---------- */
-table {
-  width: 100%;
-  border-collapse: collapse;
+/* ─── Tarjetas ─── */
+
+.tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+  align-items: start;
+  transition: opacity .14s ease;
 }
 
-/* Todo lo que desarma la tabla vive acá dentro. La tabla nativa no se toca. */
-@media (max-width: 959.98px) {
-  colgroup {
-    display: none;
-  }
+.tarjetas.atenuada { opacity: .45; }
 
-  table,
-  thead,
-  tbody,
-  tr,
-  td {
-    display: block;
-    width: 100%;
-  }
-
-  thead {
-    display: none;
-  }
-
-  /* Cada cliente es una tarjeta */
-  tbody tr.fila {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    overflow: hidden;
-    margin-bottom: 14px;
-    padding: 0;
-  }
-
-  /* Con la ficha abierta, tarjeta y ficha son un solo bloque */
-  tbody tr.fila.abierta {
-    border-radius: 14px 14px 0 0;
-    margin-bottom: 0;
-  }
-
-  tbody tr.fila-detalle {
-    border: 1px solid #e2e8f0;
-    border-top: 0;
-    border-radius: 0 0 14px 14px;
-    overflow: hidden;
-    margin-bottom: 14px;
-    background: #f8fafc;
-  }
-
-  /* Los rótulos se leen: minúscula, tamaño normal, sin espaciado de letras */
-  td {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px 16px;
-    border: none;
-    text-align: left;
-    min-width: 0;
-  }
-
-  td::before {
-    content: attr(data-label);
-    order: 2;
-    flex: 1;
-    font-size: 0.95rem;
-    color: #64748b;
-  }
-
-  .ico-dato {
-    order: 1;
-    width: 21px;
-    height: 21px;
-    color: #94a3b8;
-  }
-
-  .valor,
-  .puntos {
-    order: 3;
-    font-size: 1rem;
-    color: #0f172a;
-  }
-
-  /* Cabecera con el color de la situación */
-  .celda-cliente {
-    grid-column: 1 / -1;
-    gap: 13px;
-    padding: 15px 16px;
-    background: var(--tono-fondo);
-  }
-
-  .celda-cliente .avatar {
-    width: 52px;
-    height: 52px;
-    background: #fff;
-    color: var(--tono-texto);
-    font-size: 1.05rem;
-  }
-
-  .celda-cliente .identidad b {
-    font-size: 1.18rem;
-    color: var(--tono-oscuro);
-  }
-
-  .celda-cliente .rut {
-    color: var(--tono-texto);
-  }
-
-  .celda-cliente::before,
-  .celda-ficha::before,
-  td[data-label="Situación"]::before,
-  td[data-label="Puntos"]::before {
-    content: none;
-  }
-
-  /* Franja situación + puntos */
-  td[data-label="Situación"],
-  td[data-label="Puntos"] {
-    padding: 13px 16px;
-    border-bottom: 1px solid #f1f5f9;
-  }
-
-  td[data-label="Puntos"] {
-    justify-content: flex-end;
-  }
-
-  td[data-label="Puntos"] .ico-dato {
-    display: none;
-  }
-
-  /* Filas de datos, una por línea */
-  td[data-label="Teléfono"],
-  td[data-label="Compras"] {
-    grid-column: 1 / -1;
-    border-bottom: 1px solid #f8fafc;
-  }
-
-  td[data-label="Gastado"] {
-    grid-column: 1 / -1;
-  }
-
-  .celda-ficha {
-    grid-column: 1 / -1;
-    padding: 14px 16px 16px;
-  }
-
-  .fila-detalle td {
-    display: block;
-    padding: 0;
-    border: none;
-  }
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
-/* Persona */
-.persona {
+.tarjeta:hover { box-shadow: var(--shadow-sm); }
+
+/* Un cliente desactivado se atenúa pero sigue visible: las boletas
+   históricas lo referencian y su ficha tiene que poder consultarse. */
+.tarjeta.inactivo { opacity: .55; }
+
+.tarjeta.abierta {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+/* La cabecera entera abre el detalle: buscar un botón chico con el pulgar
+   es fricción sin motivo. */
+.cab {
   display: flex;
   align-items: center;
   gap: 11px;
   width: 100%;
-  min-width: 0;
+  padding: 14px 15px 12px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
+.cab:hover { background: var(--surface-2); }
+
+/* El color cuenta la relación de un vistazo: rosa si viene el cumpleaños,
+   ámbar si se alejó, verde si tiene puntos por canjear. */
 .avatar {
-  width: 38px;
-  height: 38px;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--tono-fondo);
-  color: var(--tono-texto);
-  font-size: 0.8rem;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .92rem;
   font-weight: 700;
 }
 
-.identidad {
+.avatar.cumple { background: var(--accent-soft); color: var(--accent-text); }
+.avatar.frio   { background: var(--warn-soft);   color: var(--warn); }
+.avatar.puntos { background: var(--success-soft); color: var(--success); }
+
+.nombre-fila {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.nombre {
+  font-size: .95rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub {
+  font-size: .75rem;
+  color: var(--text-faint);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.derecha {
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  align-items: flex-end;
+  flex-shrink: 0;
+  text-align: right;
 }
 
-.identidad b {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: #0f172a;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.rut {
-  font-size: 0.78rem;
-  color: #94a3b8;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-tr.inactiva .persona,
-tr.inactiva .valor {
-  opacity: 0.65;
-}
-
-.suave {
-  color: #64748b;
-}
-
-.dato {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.corta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Puntos y situación: ancho declarado para que no bailen entre filas */
+/* Los puntos con su valor en pesos debajo: "340 puntos" no dice nada,
+   "$3.400" sí. */
 .puntos {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 999px;
-  background: #FAEEDA;
-  color: #854F0B;
-  font-size: 0.85rem;
+  font-size: 1.05rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--success);
+  line-height: 1.1;
+}
+
+.puntos-valor {
+  font-size: .68rem;
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-.puntos .ico {
-  width: 15px;
-  height: 15px;
+.flecha {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  font-size: 1.2rem;
+  transition: transform var(--t-fast);
 }
 
-.situacion {
+.flecha.girada { transform: rotate(90deg); }
+
+.resumen-fila {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 0 15px 13px;
+}
+
+.resumen-fila .dato { font-size: .88rem; }
+.resumen-fila .dato.frio { color: var(--warn); }
+
+.cumple,
+.frio-aviso {
+  padding: 8px 15px;
+  font-size: .78rem;
+  font-weight: 600;
+}
+
+.cumple {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.frio-aviso {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* ─── Detalle ─── */
+
+.detalle {
+  padding: 14px 15px;
+  background: var(--surface-2);
+  border-top: 1px solid var(--border);
+}
+
+.bloque { margin-bottom: 16px; }
+.bloque:last-of-type { margin-bottom: 0; }
+
+.detalle h4 {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 7px;
+}
+
+/* Lo que siempre se lleva: es lo que permite ofrecérselo antes de que
+   pregunte, y lo que separa una ficha de una agenda de teléfonos. */
+.frecuentes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.frecuente {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 13px;
-  border-radius: 999px;
-  background: var(--tono-fondo);
-  color: var(--tono-texto);
-  font-size: 0.85rem;
-  font-weight: 600;
-  white-space: nowrap;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: .78rem;
 }
 
-.situacion .ico {
-  width: 16px;
-  height: 16px;
+.frecuente b {
+  color: var(--accent-text);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Botón de ficha */
-.btn-ficha {
+.item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  min-height: var(--alto-control, 48px);
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  color: #334155;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.btn-ficha .ico {
-  width: 19px;
-  height: 19px;
-}
-
-/* ---------- Detalle ---------- */
-.detalle {
-  padding: 16px;
-}
-
-.cargando-ficha {
-  padding: 6px 0;
-}
-
-.detalle-cols {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-}
-
-.detalle-cols h4 {
-  margin: 0 0 9px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #334155;
-}
-
-.ficha {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.ficha > div {
-  display: flex;
-  gap: 10px;
-  padding: 5px 0;
-}
-
-.ficha dt {
-  min-width: 104px;
-  color: #94a3b8;
-}
-
-.ficha dd {
-  margin: 0;
-  color: #334155;
-  min-width: 0;
-  overflow-wrap: break-word;
-}
-
-.notas {
-  margin: 10px 0 0;
-  padding: 10px 12px;
-  background: #fff;
-  border-left: 3px solid var(--tono-linea);
-  border-radius: 0;
-  font-size: 0.9rem;
-  color: #475569;
-  font-style: italic;
-  line-height: 1.5;
-}
-
-.lineas {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: 0.9rem;
-}
-
-.lineas li {
-  display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .82rem;
 }
 
-/* Una compra anulada sigue en el historial, pero no cuenta */
-.lineas li.anulada {
-  opacity: 0.5;
-  text-decoration: line-through;
+.item:last-child { border-bottom: 0; }
+.item.anulada { opacity: .5; }
+
+.notas {
+  padding: 10px 12px;
+  margin-top: 14px;
+  background: var(--surface);
+  border-left: 3px solid var(--secondary);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: .8rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
-.suma {
-  color: #0F6E56;
-}
-
-.resta {
-  color: #A32D2D;
-}
-
-.pie-tabla {
-  margin: 10px 2px 0;
-  font-size: 0.85rem;
-}
-
-.acciones-detalle {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 9px;
-  margin-top: 16px;
-}
-
-/* ---------- Botones ---------- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.acciones {
+  display: flex;
   gap: 8px;
-  min-height: var(--alto-control, 48px);
-  padding: 0.65rem 1.15rem;
-  border: none;
-  border-radius: 10px;
-  background: #0f6e56;
-  color: #fff;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
-.btn:hover:not(:disabled) {
-  background: #085041;
+.cargando {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: .85rem;
 }
 
-.btn:active:not(:disabled) {
-  transform: scale(0.985);
-}
+/* ─── Modales ─── */
 
-.btn:disabled {
-  background: #a7c9bb;
-  cursor: not-allowed;
-}
-
-.btn-linea {
-  background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-}
-
-.btn-linea:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-
-/* Dar de baja y reactivar no son la misma acción: cada una con su color */
-.btn-baja {
-  border-color: #F7C1C1;
-  color: #A32D2D;
-}
-
-.btn-baja:hover:not(:disabled) {
-  background: #FCEBEB;
-  border-color: #E24B4A;
-}
-
-.btn-alta {
-  border-color: #9FE1CB;
-  background: #E1F5EE;
-  color: #0F6E56;
-}
-
-.btn-alta:hover:not(:disabled) {
-  background: #d3efe5;
-  border-color: #1D9E75;
-}
-
-.btn-mini {
-  min-height: 44px;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.9rem;
-}
-
-/* ---------- Modales: hoja inferior en móvil ---------- */
 .fondo {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 100;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.55);
+  padding: 16px;
+  background: var(--overlay);
 }
 
 .modal {
   width: 100%;
-  /* dvh evita el salto cuando la barra del navegador se esconde */
+  max-width: 480px;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
 
-.agarre {
-  display: block;
-  width: 38px;
-  height: 4px;
-  margin: 0 auto 12px;
-  border-radius: 999px;
-  background: #e2e8f0;
-}
+.modal.angosto { max-width: 400px; }
 
 .modal-cab {
-  padding: 10px 18px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.modal-cab h3 {
-  margin: 0;
-  font-size: 1.15rem;
-  color: #0f172a;
-}
+.modal-cab h3 { font-size: 1.1rem; font-weight: 700; }
 
 .modal-cab p {
-  margin: 5px 0 0;
-  font-size: 0.9rem;
-  line-height: 1.45;
-  color: #64748b;
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .modal-cuerpo {
-  padding: 18px;
+  flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  padding: 20px 22px;
 }
 
 .modal-pie {
   display: flex;
-  gap: 9px;
-  padding: 14px 18px;
-  /* Deja libre la barra de gestos del iPhone */
-  padding-bottom: calc(14px + env(safe-area-inset-bottom));
-  border-top: 1px solid #e2e8f0;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
-.modal-pie .btn {
-  flex: 1 1 0;
-}
-
-label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #475569;
-}
-
-.grupo {
-  margin-bottom: 16px;
-}
-
-.grupo.separado {
-  margin-top: 14px;
-}
+.modal-pie .btn { flex: 1; }
 
 .rejilla {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 14px;
+  margin-bottom: 16px;
 }
 
-.rejilla-2 {
+.grupo { margin-bottom: 16px; }
+.rejilla .grupo { margin-bottom: 0; }
+
+label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.ayuda-campo {
+  font-size: .75rem;
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+/* El día angosto y el mes ancho: un día son dos dígitos, un mes es una
+   palabra. */
+.cumple-campos {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 90px 1fr;
   gap: 10px;
 }
 
-.ayuda {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: #94a3b8;
-  line-height: 1.45;
+.opciones {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
 }
 
-.ayuda.mala {
-  color: #dc2626;
-}
-
-.error {
-  padding: 11px 14px;
-  margin-bottom: 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.9rem;
-  line-height: 1.45;
-}
-
-/* El error de carga vive fuera de un modal, así que necesita su propio aire */
-.error.suelto {
+.opcion {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t-fast), background-color var(--t-fast);
+}
+
+.opcion:hover { border-color: var(--border-strong); }
+.opcion b { font-size: .88rem; }
+
+.opcion span {
+  font-size: .76rem;
+  color: var(--text-muted);
+}
+
+.opcion.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.opcion.on span { color: var(--accent-text); }
+
+/* ─── Botones y bandas ─── */
+
+.btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 0;
-  padding: 14px 16px;
-}
-
-.nota {
-  padding: 11px 14px;
-  margin-top: 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
-  font-size: 0.9rem;
-  color: #475569;
-  line-height: 1.55;
-  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
-}
-
-.nota.alerta {
-  border-color: #EF9F27;
-  background: #FAEEDA;
-  color: #633806;
-}
-
-.segmentado {
-  display: flex;
-  background: #f1f5f9;
-  border-radius: 10px;
-  padding: 3px;
-  gap: 3px;
-}
-
-.segmentado button {
-  flex: 1;
+  justify-content: center;
+  gap: 7px;
   min-height: 44px;
+  padding: .65rem 1.15rem;
   border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: #475569;
-  font-family: inherit;
-  font-size: 0.95rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: .92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.18s, color 0.18s, box-shadow 0.18s;
+  white-space: nowrap;
+  transition: background-color var(--t-fast);
 }
 
-.segmentado button.on {
-  background: #fff;
-  color: #0F6E56;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.btn-linea {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
-/* ---------- Esqueleto ---------- */
-.esq-fila {
+.btn-linea:hover:not(:disabled) { background: var(--surface); color: var(--text); }
+
+.btn-mini {
+  min-height: 38px;
+  padding: .35rem .85rem;
+  font-size: .82rem;
+}
+
+.btn-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-icono.chico { width: 26px; height: 26px; font-size: .78rem; }
+
+.etiqueta {
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  flex-shrink: 0;
+}
+
+.banda {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  margin-bottom: 14px;
+  gap: 11px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: var(--r-sm);
+  font-size: .85rem;
 }
 
-.esq-col {
-  flex: 1;
-  min-width: 0;
+.banda-error {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
 }
 
-.sep-6 { margin-top: 6px; }
-.sep-8 { margin-top: 8px; }
-.sep-9 { margin-top: 9px; }
+.banda .btn { margin-left: auto; }
 
-/* ---------- Varios ---------- */
+.error {
+  padding: 11px 13px;
+  margin-bottom: 16px;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
-  line-height: 1.5;
+  color: var(--text-muted);
+  font-size: .88rem;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
-  font-size: 1.1rem;
-  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 1.02rem;
+  margin-bottom: 5px;
+}
+
+.paginador {
+  text-align: center;
+  margin: 0;
 }
 
 .aviso {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  z-index: 80;
-  padding: 13px 18px;
-  border-radius: 10px;
-  background: #04342c;
+  left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0));
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: calc(100vw - 32px);
+  padding: 12px 22px;
+  border-radius: var(--r-full);
+  background: var(--success);
   color: #fff;
-  font-size: 0.95rem;
+  font-size: .88rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
   text-align: center;
+  box-shadow: var(--shadow-lg);
 }
 
-.aviso.malo {
-  background: #b91c1c;
-}
+.aviso.malo { background: var(--danger); }
 
-/* ==========================================================================
-   ≥ 600px — teléfono grande y tablet
-   ========================================================================== */
-@media (min-width: 600px) {
-  .cabecera {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 16px;
+/* ═══════════════════════════════════════════════════════════
+   MÓVIL
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 720px) {
+  .cabecera .btn { width: 100%; }
+
+  .tarjetas { grid-template-columns: 1fr; }
+
+  /* Las pastillas ocupan la línea entera y se reparten: con el pulgar,
+     tres botones apretados se aciertan mal. */
+  .pastillas { width: 100%; }
+  .pastillas button { flex: 1; padding: 0 8px; }
+
+  .campo.corto { flex: 1 1 100%; width: 100%; }
+
+  .check { min-height: 44px; }
+
+  .tira-pasivo { gap: 18px; }
+  .nota-parcial { margin-left: 0; width: 100%; }
+
+  /* El resumen se reparte en dos columnas en vez de estirarse: cuatro
+     datos en una fila de 360px quedan ilegibles. */
+  .resumen-fila {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 18px;
   }
 
-  .cabecera h2 {
-    font-size: 1.5rem;
-  }
+  .acciones .btn { flex: 1 1 calc(50% - 4px); min-height: 42px; }
 
-  .btn-crear {
-    flex-shrink: 0;
-  }
-
-  .kpis {
-    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-    gap: 12px;
-  }
-
-  .barra-filtros {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .buscador {
-    flex: 1 1 240px;
-  }
-
-  .campo-corto {
-    width: auto;
-    flex: 0 1 200px;
-  }
-
-  .checks {
-    flex: 1 1 100%;
-  }
-
-  .check {
-    flex: 0 1 auto;
-  }
-
-  .detalle-cols {
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 22px;
-  }
-
-  .acciones-detalle {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .fondo {
-    align-items: center;
-    padding: 20px;
-  }
+  /* El modal sube desde abajo a pantalla completa: con siete campos, un
+     diálogo flotante desperdicia el alto que el formulario necesita. */
+  .fondo { padding: 0; align-items: flex-end; }
 
   .modal {
-    max-width: 520px;
-    max-height: 88dvh;
-    border-radius: 14px;
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
+    border: none;
+    border-radius: 0;
   }
 
-  .agarre {
-    display: none;
-  }
-
-  .modal-cab {
-    padding-top: 18px;
-  }
+  .modal-cab { padding: 16px 18px 12px; }
+  .modal-cuerpo { padding: 18px; }
 
   .modal-pie {
-    justify-content: flex-end;
-    padding-bottom: 14px;
-  }
-
-  .modal-pie .btn {
-    flex: 0 0 auto;
-  }
-
-  .rejilla {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  }
-
-  .aviso {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    max-width: 90vw;
-  }
-
-  .aviso-enter-from,
-  .aviso-leave-to {
-    transform: translate(-50%, 16px);
-  }
-}
-
-/* ==========================================================================
-   ≥ 960px — recién acá la tabla vuelve a ser tabla
-   ========================================================================== */
-@media (min-width: 960px) {
-  .panel {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    overflow: hidden;
-    transition: opacity 0.14s ease;
-  }
-
-  /* Todo el filtrado en una sola línea: buscador elástico, orden y
-     casillas a su ancho natural contra el borde derecho. */
-  .barra-filtros {
-    flex-wrap: nowrap;
-  }
-
-  .checks {
-    flex: 0 0 auto;
-    margin-left: auto;
-    flex-wrap: nowrap;
-  }
-
-  .check {
-    white-space: nowrap;
-  }
-
-  .tabla-envoltura {
-    overflow-x: auto;
-  }
-
-  /* `fixed` respeta los anchos del colgroup y reparte el 100% del ancho */
-  table {
-    table-layout: fixed;
-    min-width: 1000px;
-  }
-
-  .c-cliente { width: 24%; }
-  .c-contacto { width: 15%; }
-  .c-compras { width: 9%; }
-  .c-gastado { width: 13%; }
-  .c-puntos { width: 11%; }
-  .c-situacion { width: 14%; }
-  .c-ficha { width: 14%; }
-
-  tbody tr.fila {
-    /* Altura fija: todas las filas comparten eje tengan o no datos */
-    height: 66px;
-    border-bottom: 1px solid #f1f5f9;
-  }
-
-  tbody tr.fila:last-child {
-    border-bottom: 0;
-  }
-
-  th,
-  td {
-    text-align: center;
-    width: auto;
-  }
-
-  th {
-    padding: 11px 12px;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: #94a3b8;
-  }
-
-  td {
-    padding: 8px 12px;
-    vertical-align: middle;
-    /* Con `fixed` nada estira una columna: lo que no entra se corta */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.875rem;
-  }
-
-  .fila td {
-    transition: background-color 0.16s ease;
-  }
-
-  tr.clic {
-    cursor: pointer;
-  }
-
-  tr.clic:hover td,
-  tr.clic.abierta td {
-    background: #fcfcfd;
-  }
-
-  /* El bloque tiene ancho propio y se centra como bloque; adentro el
-     contenido va a la izquierda. Si se centrara por su contenido, un
-     nombre corto correría el avatar y los círculos no harían línea. */
-  .persona {
-    width: 100%;
-    max-width: 240px;
-    margin: 0 auto;
-  }
-
-  .avatar {
-    width: 36px;
-    height: 36px;
-  }
-
-  /* En la tabla el rótulo lo pone el encabezado de la columna */
-  .ico-dato,
-  .texto-accion {
-    display: none;
-  }
-
-  .puntos,
-  .situacion {
-    height: 34px;
-    margin: 0 auto;
-  }
-
-  .situacion {
-    width: 100%;
-    max-width: 132px;
-  }
-
-  .btn-ficha {
-    width: 36px;
-    min-height: 36px;
-    margin: 0 auto;
-    border-radius: 8px;
-  }
-
-  .fila.abierta .btn-ficha {
-    border-color: var(--tono-linea);
-    color: var(--tono-texto);
-  }
-
-  /* La ficha desplegada se alinea con la fila que la abrió */
-  .fila-detalle td {
-    padding: 0;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    white-space: normal;
-  }
-
-  .detalle {
-    padding: 18px;
-    border-left: 3px solid var(--tono-linea);
-  }
-
-  .acciones-detalle .btn {
-    min-height: 40px;
-    font-size: 0.9rem;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn,
-  .btn-limpiar,
-  .campo,
-  .buscador,
-  .kpi,
-  .nota,
-  .flecha,
-  .segmentado button,
-  .panel,
-  .fila td {
-    transition: none;
-  }
-
-  .al-entrar,
-  .fila,
-  .fila.resaltada,
-  .fila.resaltada td,
-  .destella,
-  .spinner,
-  .banda-ok .torta,
-  .acordeon-enter-active .escalon {
-    animation: none;
-  }
-
-  .acordeon-caja,
-  .acordeon-enter-active .detalle,
-  .acordeon-leave-active .detalle,
-  .desliza-enter-active,
-  .desliza-leave-active,
-  .cambio-enter-active,
-  .cambio-leave-active,
-  .brote-enter-active,
-  .brote-leave-active,
-  .modal-enter-active,
-  .modal-leave-active,
-  .modal-enter-active .modal,
-  .modal-leave-active .modal,
-  .aviso-enter-active,
-  .aviso-leave-active {
-    transition: none;
-  }
-
-  .atenuada {
-    opacity: 1;
+    padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0));
   }
 }
 </style>

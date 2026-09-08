@@ -36,33 +36,27 @@ export const authService = {
    * `saludo` es el mensaje del sobre ("Hola, Rosa"), útil para el toast de
    * bienvenida.
    */
-  async login ({ email, password }) {
+  async login({ email, password }) {
     try {
       const respuesta = await httpPublico.post(`${RUTA}/login`, { email, password })
+      // La API envuelve todo en { statusCode, message, data, success }.
+      const sobre = respuesta.data
       const { token, expiraEn, usuario } = respuesta.data
 
       return {
         token,
         expiraEn,
         usuario: aUsuario(usuario),
-        saludo: respuesta.mensaje ?? null
+        saludo: sobre.message ?? null
       }
     } catch (e) {
       throw normalizarError(e)
     }
   },
 
-  /**
-   * La verdad sobre quién soy ahora. El token dice lo que era cierto cuando
-   * se emitió; esto detecta que la cuenta fue bloqueada después.
-   */
-  async yo ({ signal } = {}) {
-    try {
-      const { data } = await http.get(`${RUTA}/me`, { signal })
-      return aUsuario(data)
-    } catch (e) {
-      throw normalizarError(e)
-    }
+  async yo({ signal } = {}) {
+    const { data } = await http.get(`${RUTA}/me`, { signal })
+    return aUsuario(data)
   },
 
   /**
@@ -73,7 +67,7 @@ export const authService = {
    * El backend exige mínimo 8 caracteres (MinLength en
    * CambiarPasswordRequest). Ojo: el login todavía valida 6.
    */
-  async cambiarPassword ({ passwordActual, passwordNueva }) {
+  async cambiarPassword({ passwordActual, passwordNueva }) {
     try {
       await http.post(`${RUTA}/cambiar-password`, { passwordActual, passwordNueva })
     } catch (e) {

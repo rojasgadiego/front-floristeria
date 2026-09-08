@@ -11,7 +11,14 @@ const MainLayout = () => import('@/layouts/MainLayout.vue') // ⚠️ AJUSTA LA 
 const Dashboard = () => import('@/features/reportes/views/DashboardView.vue')
 const Pos = () => import('@/features/ventas/views/PosView.vue')
 const Ventas = () => import('@/features/ventas/views/VentasView.vue')
+
+// Inventario: la vista es solo el layout (menú ↔ sección vía <router-view/>)
 const Inventario = () => import('@/features/inventario/views/InventarioView.vue')
+const InventarioMenu = () => import('@/features/inventario/components/MenuInventario.vue')
+const InventarioBodega = () => import('@/features/inventario/components/InventarioBodega.vue')
+const InventarioVenta = () => import('@/features/inventario/components/InventarioVenta.vue')
+const InventarioMovimientos = () => import('@/features/inventario/components/Movimientos.vue')
+
 const Lotes = () => import('@/features/lotes/views/LotesView.vue')
 const LoteDetalle = () => import('@/features/lotes/views/LotedetalleView.vue')
 const Mermas = () => import('@/features/mermas/views/MermasView.vue')
@@ -21,7 +28,7 @@ const Proveedores = () => import('@/features/compras/views/ProveedoresView.vue')
 const Clientes = () => import('@/features/clientes/views/ClientesView.vue')
 const Usuarios = () => import('@/features/usuarios/views/UsuariosView.vue')
 const Configuracion = () => import('@/features/configuracion/views/ConfiguracionView.vue')
-const Estado = () => import('@/features/caja/views/EstadoView.vue')
+// const Estado = () => import('@/features/caja/views/EstadoView.vue')
 const Reportes = () => import('@/features/reportes/views/ReportesView.vue')
 const Promociones = () => import('@/features/promociones/views/PromocionesView.vue')
 const Cotizaciones = () => import('@/features/cotizaciones/views/CotizacionesView.vue')
@@ -36,18 +43,18 @@ const routes = [
     component: Login,
     meta: { publica: true, title: 'Iniciar sesión' }
   },
-  {
-    path: '/sin-permiso',
-    name: 'SinPermiso',
-    component: Estado,
-    meta: { title: 'Sin permiso', estado: 'sin-permiso' }
-  },
-  {
-    path: '/:pathMatch(.*)*',
-    name: 'NoEncontrado',
-    component: Estado,
-    meta: { publica: true, title: 'Página no encontrada', estado: 'no-encontrado' }
-  },
+  // {
+  //   path: '/sin-permiso',
+  //   name: 'SinPermiso',
+  //   component: Estado,
+  //   meta: { title: 'Sin permiso', estado: 'sin-permiso' }
+  // },
+  // {
+  //   path: '/:pathMatch(.*)*',
+  //   name: 'NoEncontrado',
+  //   component: Estado,
+  //   meta: { publica: true, title: 'Página no encontrada', estado: 'no-encontrado' }
+  // },
 
   /* ---------------- Dentro del shell (MainLayout) ---------------- */
   {
@@ -91,9 +98,38 @@ const routes = [
       /* ---------------- Catálogo ---------------- */
       {
         path: 'inventario',
-        name: 'Inventario',
         component: Inventario,
-        meta: { permiso: 'inventario', title: 'Inventario' }
+        // El permiso base vive en el padre; lo repito en cada hija por si tu
+        // guard de rutas revisa route.meta directo en vez de recorrer
+        // route.matched. Si tu guard ya recorre matched, esto es redundante
+        // pero inofensivo.
+        meta: { permiso: 'inventario', title: 'Inventario' },
+        children: [
+          {
+            path: '',
+            name: 'Inventario',
+            component: InventarioMenu,
+            meta: { permiso: 'inventario', title: 'Inventario' }
+          },
+          {
+            path: 'bodega',
+            name: 'InventarioBodega',
+            component: InventarioBodega,
+            meta: { permiso: 'inventario', title: 'Inventario Bodega' }
+          },
+          {
+            path: 'venta',
+            name: 'InventarioVenta',
+            component: InventarioVenta,
+            meta: { permiso: 'inventario', title: 'Inventario Venta' }
+          },
+          {
+            path: 'movimientos',
+            name: 'InventarioMovimientos',
+            component: InventarioMovimientos,
+            meta: { permiso: 'inventario', title: 'Movimientos' }
+          }
+        ]
       },
       {
         path: 'lotes',

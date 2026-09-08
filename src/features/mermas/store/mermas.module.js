@@ -29,33 +29,42 @@ export const DESTINOS = [
     }
 ]
 
-/* En qué estado vuelve la flor recuperada. */
+/* En qué estado vuelve la flor recuperada. Las tres crean un lote NUEVO
+   con precio rebajado y vencimiento recortado: esa flor ya gastó vida
+   útil, y devolverla a su lote original le regalaría días que no tiene. */
 export const CALIDADES = [
-    {
-        valor: 'optima',
-        texto: 'Óptima',
-        descripcion: 'Vuelve a su lote original, con su costo y su vencimiento.'
-    },
-    {
-        valor: 'buena',
-        texto: 'Buena',
-        descripcion: 'Va a un lote de recuperación con precio propio.'
-    },
-    {
-        valor: 'limitada',
-        texto: 'Limitada',
-        descripcion: 'Lote de recuperación, fuera del reparto automático.'
-    }
+  {
+    valor: 'optima',
+    texto: 'Óptima',
+    descripcion: '20% menos · le quedan 3 días'
+  },
+  {
+    valor: 'buena',
+    texto: 'Buena',
+    descripcion: '40% menos · le quedan 2 días'
+  },
+  {
+    valor: 'limitada',
+    texto: 'Limitada',
+    descripcion: '60% menos · le queda 1 día'
+  }
 ]
 
 export const textoDestino = (v) => DESTINOS.find(d => d.valor === v)?.texto ?? v
 export const textoCalidad = (v) => CALIDADES.find(c => c.valor === v)?.texto ?? v
 
 /* Respaldo por si /mermas/motivos falla: el formulario tiene que servir
-   igual, y un campo libre ensucia el reporte para siempre. */
+   igual, y un campo libre ensucia el reporte para siempre.
+   Misma forma que la API: { motivo, usos }. */
 const MOTIVOS_RESPALDO = [
-    'Marchita', 'Quebrada', 'Deshidratada', 'Golpeada',
-    'Sobrante de armado', 'Regalo o cortesía', 'Error de digitación'
+    { motivo: 'Marchita', usos: 0 },
+    { motivo: 'Quebrada', usos: 0 },
+    { motivo: 'Deshidratada', usos: 0 },
+    { motivo: 'Golpeada', usos: 0 },
+    { motivo: 'Sobrante de armado', usos: 0 },
+    { motivo: 'Regalo o cortesía', usos: 0 },
+    { motivo: 'Error de digitación', usos: 0 },
+    { motivo: 'Llegó en mal estado', usos: 0 }
 ]
 
 const filtroInicial = () => ({
@@ -70,7 +79,7 @@ const filtroInicial = () => ({
     desde: null,
     hasta: null,
     pagina: 1,
-    porPagina: 50
+    tamano: 50
 })
 
 export default {
@@ -247,6 +256,9 @@ export default {
         guardando: state => state.guardando,
         error: state => state.error,
 
+        /* Solo los nombres, para el select. El conteo de usos sirve para
+        ordenarlos, no para mostrarlos. */
+        nombresMotivo: state => state.motivos.map(m => m.motivo),
         /* Atajos al resumen, con cero por defecto para que la vista no tenga
            que preguntar si ya llegó. */
         costoPerdido: state => state.resumen?.costoPerdido ?? 0,

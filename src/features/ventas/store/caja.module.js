@@ -38,7 +38,9 @@ export default {
   },
 
   actions: {
-    async cargarActual ({ commit }, { signal } = {}) {
+    async cargarActual ({ commit }, payload) {
+      const signal = payload?.signal
+
       commit('SET_CARGANDO', true)
       try {
         /* Devuelve null cuando no hay turno abierto: no es un error, es el

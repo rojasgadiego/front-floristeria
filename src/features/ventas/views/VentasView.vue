@@ -1,106 +1,256 @@
 <template>
-  
-    <div class="cabecera al-entrar">
-      <div>
-        <h2>Ventas y caja</h2>
-        <p class="pista">
-          Qué se vendió y cómo cerró cada turno. Anular una boleta devuelve al
-          inventario exactamente lo que sacó, lote por lote.
-        </p>
-      </div>
-    </div>
+  <div class="ventas">
+    <header class="cabecera">
+      <h1>Ventas y caja</h1>
+      <!-- <p class="ayuda">
+        Qué se vendió y cómo cerró cada turno. Anular una boleta devuelve al
+        inventario exactamente lo que sacó, lote por lote.
+      </p> -->
+    </header>
 
-    <div class="pestanas al-entrar" style="--i: 1">
-      <button class="pestana" :class="{ on: pestana === 'boletas' }" @click="pestana = 'boletas'">
-        Boletas
-      </button>
-      <button class="pestana" :class="{ on: pestana === 'turnos' }" @click="irATurnos">
-        Turnos de caja
-      </button>
-    </div>
+    <nav class="pestanas">
+      <button :class="{ on: pestana === 'boletas' }" @click="pestana = 'boletas'">Boletas</button>
+      <button :class="{ on: pestana === 'turnos' }" @click="irATurnos">Turnos de caja</button>
+    </nav>
 
     <div v-if="error" class="banda banda-error">
       <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
       <button class="btn btn-mini" @click="recargar">Reintentar</button>
     </div>
 
-    <!-- ================= BOLETAS ================= -->
+    <!-- ═══════════════ BOLETAS ═══════════════ -->
     <template v-if="pestana === 'boletas'">
-
-      <div class="barra-filtros al-entrar" style="--i: 2">
+      <!-- CAMBIO 1: buscador separado de filtros secundarios, alturas homogéneas -->
+      <div class="filtros">
         <div class="buscador">
-          <span aria-hidden="true">🔎</span>
-          <input v-model="busqueda" placeholder="Folio, cliente o vendedor…" aria-label="Buscar boleta">
+          <input v-model="busqueda" placeholder="Folio, cliente o RUT…" aria-label="Buscar boleta">
           <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
         </div>
 
-        <select class="campo campo-corto" :value="filtro.medioPago ?? ''"
+        <select class="campo corto" :value="filtro.medioPago ?? ''"
           @change="filtrar({ medioPago: $event.target.value || null })" aria-label="Medio de pago">
           <option value="">Todos los medios</option>
           <option v-for="m in MEDIOS_PAGO" :key="m.valor" :value="m.valor">{{ m.texto }}</option>
         </select>
 
-        <label class="rango">
-          <span class="mini suave">Desde</span>
-          <input class="campo campo-fecha" type="date" :value="filtro.desde"
-            @change="filtrar({ desde: $event.target.value || null })">
+        <label class="campo-fecha">
+          <span>Desde</span>
+          <input type="date" :value="filtro.desde ?? ''" @change="filtrar({ desde: $event.target.value || null })">
         </label>
-        <label class="rango">
-          <span class="mini suave">Hasta</span>
-          <input class="campo campo-fecha" type="date" :value="filtro.hasta"
-            @change="filtrar({ hasta: $event.target.value || null })">
+
+        <label class="campo-fecha">
+          <span>Hasta</span>
+          <input type="date" :value="filtro.hasta ?? ''" @change="filtrar({ hasta: $event.target.value || null })">
         </label>
 
         <label class="check">
-          <input type="checkbox" :checked="filtro.anulada === null"
-            @change="filtrar({ anulada: $event.target.checked ? null : false })">
+          <input type="checkbox" :checked="filtro.incluirAnuladas"
+            @change="filtrar({ incluirAnuladas: $event.target.checked })">
           <span>Ver anuladas</span>
         </label>
+      </div>
+
+
+      <!-- Un vendedor solo ve sus boletas: el servidor lo decide desde el
+           token y este filtro ni siquiera se le muestra. -->
+      <div v-if="esAdmin && resumen" class="tiras">
+        <div class="tira">
+          <span class="rot">{{ resumen.boletas }} boleta(s)</span>
+          <b class="dato">{{ clp(resumen.total) }}</b>
+        </div>
+        <div v-if="resumen.descuentos" class="tira">
+          <span class="rot">Descuentos</span>
+          <b class="dato">−{{ clp(resumen.descuentos) }}</b>
+        </div>
+        <div v-if="resumen.anuladas" class="tira alerta">
+          <span class="rot">Anuladas</span>
+          <b class="dato">{{ resumen.anuladas }}</b>
+        </div>
       </div>
 
       <div v-if="cargando && !ventas.length" class="vacio">Cargando boletas…</div>
 
       <div v-else-if="!ventas.length" class="vacio">
-        <strong>Sin boletas en el período</strong>
-        Ajusta las fechas o quita los filtros.
+        <strong>{{ hayFiltro ? 'Ninguna boleta coincide' : 'Sin ventas todavía' }}</strong>
+        {{ hayFiltro ? 'Prueba con otro texto o quita los filtros.' : 'Las boletas aparecen acá al cobrar.' }}
       </div>
 
       <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
         <table>
+          <caption class="sr-only">Listado de boletas de venta</caption>
           <thead>
             <tr>
-              <th>Folio</th>
-              <th>Fecha</th>
-              <th>Vendedor</th>
-              <th>Cliente</th>
-              <th>Pago</th>
-              <th class="der">Descuentos</th>
-              <th class="der">Total</th>
+              <th class="izq">Folio</th>
+              <th class="izq">Fecha</th>
+              <th class="izq">Vendedor</th>
+              <th class="izq">Cliente</th>
+              <th class="izq">Pago</th>
+              <th>Descuentos</th>
+              <th>Total</th>
               <th class="acciones-col"></th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(v, ix) in ventas" :key="v.id" class="fila clic" :style="{ '--i': Math.min(ix, 12) }"
-              :class="{ anulada: v.anulada, resaltada: v.id === resalte.id }" @click="abrirDetalle(v)">
-              <td data-label="Folio">
-                <b class="dato">{{ v.folio }}</b>
-                <div class="mini suave">#{{ v.numeroAtencion }} · {{ v.lineas }} línea(s)</div>
-              </td>
-              <td data-label="Fecha" class="dato mini">{{ fechaHora(v.fecha) }}</td>
-              <td data-label="Vendedor" class="corta">{{ v.vendedor }}</td>
-              <td data-label="Cliente" class="corta suave">{{ v.cliente || '—' }}</td>
-              <td data-label="Pago">
-                <span class="chip">{{ textoMedioPago(v.medioPago) }}</span>
-              </td>
-              <td data-label="Descuentos" class="der dato" :class="{ verde: v.descuentoTotal > 0 }">
-                {{ v.descuentoTotal ? '−' + clp(v.descuentoTotal) : '—' }}
-              </td>
-              <td data-label="Total" class="der dato">{{ clp(v.total) }}</td>
-              <td class="der acciones-col">
-                <span v-if="v.anulada" class="etiqueta et-rojo">anulada</span>
-                <span v-else class="flecha" aria-hidden="true">›</span>
-              </td>
-            </tr>
+            <template v-for="v in ventas" :key="v.id">
+              <!-- CAMBIO 3: fila accesible por teclado -->
+              <tr class="fila" :class="{ anulada: v.anulada, abierta: detalleId === v.id }" tabindex="0" role="button"
+                :aria-expanded="detalleId === v.id" @click="alternarDetalle(v.id)"
+                @keydown.enter.prevent="alternarDetalle(v.id)" @keydown.space.prevent="alternarDetalle(v.id)">
+
+                <td data-label="Folio" class="izq">
+                  <div class="folio">{{ v.folio }}</div>
+                  <div class="desglose">
+                    #{{ v.numeroAtencion }} · {{ v.lineas }} línea(s)
+                    <span v-if="v.anulada" class="etiqueta et-roja">anulada</span>
+                  </div>
+                </td>
+
+                <!-- La API devuelve creadoEn, no fecha: es el momento exacto
+                     del cobro, con hora. -->
+                <td data-label="Fecha" class="izq suave">
+                  <div>{{ fecha(v.creadoEn) }}</div>
+                  <div class="desglose">{{ hora(v.creadoEn) }}</div>
+                </td>
+
+                <td data-label="Vendedor" class="izq suave">{{ v.usuario || '—' }}</td>
+
+                <td data-label="Cliente" class="izq suave">
+                  <span v-if="v.cliente">{{ v.cliente }}</span>
+                  <span v-else class="tenue">sin ficha</span>
+                </td>
+
+                <td data-label="Pago" class="izq">
+                  <span class="chip" :class="'pago-' + v.medioPago">
+                    {{ textoMedioPago(v.medioPago) }}
+                  </span>
+                </td>
+
+                <td data-label="Descuentos" class="der">
+                  <span v-if="v.descuentoTotal" class="dato verde">−{{ clp(v.descuentoTotal) }}</span>
+                  <span v-else class="tenue">—</span>
+                </td>
+
+                <td data-label="Total" class="der dato grande">{{ clp(v.total) }}</td>
+
+                <td class="acciones-col der">
+                  <span class="flecha" :class="{ girada: detalleId === v.id }" aria-hidden="true">›</span>
+                </td>
+              </tr>
+
+              <!-- ═══ Detalle ═══ -->
+              <tr v-if="detalleId === v.id" class="fila-detalle">
+                <td :colspan="8">
+                  <div v-if="cargandoDetalle" class="cargando">Cargando detalle…</div>
+
+                  <div v-else-if="detalle" class="detalle">
+                    <div class="detalle-cols">
+
+                      <!-- Lo que se vendió -->
+                      <section>
+                        <h4>Qué se vendió</h4>
+                        <div v-for="i in detalle.items" :key="i.id" class="item">
+                          <span class="emoji" aria-hidden="true">{{ i.emoji }}</span>
+                          <div class="min0">
+                            <div class="item-nombre">{{ i.nombre }}</div>
+                            <div class="desglose">{{ i.cantidad }} × {{ clp(i.precioUnitario) }}</div>
+                          </div>
+                          <b class="dato">{{ clp(i.subtotal) }}</b>
+                        </div>
+                      </section>
+
+                      <!-- De dónde salió -->
+                      <!-- Es lo que hace posible anular devolviendo las varas
+                           al balde exacto, y lo que dice cuánto se ganó de
+                           verdad: el costo real, no el de ficha. -->
+                      <section v-if="detalle.consumos?.length">
+                        <h4>De qué lote salió</h4>
+                        <div v-for="c in detalle.consumos" :key="c.id" class="item">
+                          <div class="min0">
+                            <div class="item-nombre">{{ c.producto }}</div>
+                            <div class="desglose">
+                              <span v-if="c.loteCodigo" class="mono">{{ c.loteCodigo }}</span>
+                              <span v-else class="tenue">armado en local</span>
+                              · {{ c.cantidad }} × {{ clp(c.costoUnitario) }}
+                            </div>
+                          </div>
+                          <b class="dato suave">{{ clp(c.costoTotal) }}</b>
+                        </div>
+                      </section>
+
+                      <!-- Los números -->
+                      <section class="numeros">
+                        <h4>Totales</h4>
+                        <div class="fila-num"><span>Bruto</span><b class="dato">{{ clp(detalle.bruto) }}</b></div>
+
+                        <div v-if="detalle.descuentoPromo" class="fila-num verde">
+                          <span>{{ detalle.promocion || 'Promoción' }}</span>
+                          <b class="dato">−{{ clp(detalle.descuentoPromo) }}</b>
+                        </div>
+
+                        <div v-if="detalle.descuentoManual" class="fila-num verde">
+                          <span>
+                            A mano
+                            <span v-if="detalle.autorizadoPor" class="desglose">
+                              · autorizó {{ detalle.autorizadoPor }}
+                            </span>
+                          </span>
+                          <b class="dato">−{{ clp(detalle.descuentoManual) }}</b>
+                        </div>
+
+                        <div v-if="detalle.descuentoCanje" class="fila-num verde">
+                          <span>{{ detalle.puntosCanjeados }} puntos</span>
+                          <b class="dato">−{{ clp(detalle.descuentoCanje) }}</b>
+                        </div>
+
+                        <div class="fila-num"><span>Neto</span><b class="dato">{{ clp(detalle.neto) }}</b></div>
+                        <div class="fila-num">
+                          <span>IVA {{ detalle.ivaTasa }}%</span>
+                          <b class="dato">{{ clp(detalle.ivaMonto) }}</b>
+                        </div>
+
+                        <div class="fila-num total">
+                          <span>Total</span><b class="dato">{{ clp(detalle.total) }}</b>
+                        </div>
+
+                        <template v-if="detalle.recibido">
+                          <div class="fila-num"><span>Recibido</span><b class="dato">{{ clp(detalle.recibido) }}</b>
+                          </div>
+                          <div class="fila-num"><span>Vuelto</span><b class="dato">{{ clp(detalle.vuelto) }}</b></div>
+                        </template>
+
+                        <!-- El margen sale de los consumos: lo que realmente
+                             valían las varas que salieron de la cámara, no el
+                             costo que dice la ficha del producto. -->
+                        <div v-if="esAdmin && detalle.margen != null" class="fila-num margen">
+                          <span>Margen real</span>
+                          <b class="dato" :class="detalle.margen < 25 ? 'rojo' : 'verde'">
+                            {{ Number(detalle.margen).toFixed(0) }}%
+                          </b>
+                        </div>
+                      </section>
+                    </div>
+
+                    <div v-if="detalle.anulada" class="banda banda-error">
+                      <span aria-hidden="true">🚫</span>
+                      <span>
+                        Anulada por <b>{{ detalle.anulador }}</b> el {{ fecha(detalle.anuladaEn) }}
+                        · {{ detalle.motivoAnulacion }}
+                      </span>
+                    </div>
+
+                    <div class="detalle-pie">
+                      <button class="btn btn-linea btn-mini" @click.stop="verTicket(v.id)">
+                        🧾 Ver ticket
+                      </button>
+                      <button v-if="esAdmin && !detalle.anulada" class="btn btn-linea btn-mini peligro"
+                        @click.stop="abrirAnulacion(detalle)">
+                        Anular boleta
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -108,75 +258,58 @@
       <p v-if="totalPaginas > 1" class="paginador">
         <button class="btn btn-linea btn-mini" :disabled="filtro.pagina <= 1"
           @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
-        <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }} · {{ total }}</span>
+        <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }} · {{ total }} boletas</span>
         <button class="btn btn-linea btn-mini" :disabled="filtro.pagina >= totalPaginas"
           @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
       </p>
     </template>
 
-    <!-- ================= TURNOS ================= -->
+    <!-- ═══════════════ TURNOS ═══════════════ -->
     <template v-else>
-
       <div v-if="cargandoCaja && !turnos.length" class="vacio">Cargando turnos…</div>
 
       <div v-else-if="!turnos.length" class="vacio">
         <strong>Sin turnos registrados</strong>
-        Los turnos aparecen acá cuando se cierra la caja.
+        Los turnos aparecen acá al cerrarse.
       </div>
 
       <div v-else class="tabla-envoltura">
         <table>
+          <caption class="sr-only">Historial de turnos de caja</caption>
           <thead>
             <tr>
-              <th>Turno</th>
-              <th>Responsable</th>
-              <th class="der">Fondo</th>
-              <th class="der">Esperado</th>
-              <th class="der">Contado</th>
-              <th class="der">Diferencia</th>
-              <th class="acciones-col"></th>
+              <th class="izq">Turno</th>
+              <th class="izq">Responsable</th>
+              <th>Boletas</th>
+              <th>Vendido</th>
+              <th>Efectivo</th>
+              <th>Otros medios</th>
+              <th>Diferencia</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(t, ix) in turnos" :key="t.id" class="fila clic" :style="{ '--i': Math.min(ix, 12) }"
-              :class="claseTurno(t)" @click="abrirTurno(t)">
-              <td data-label="Turno">
-                <b class="dato">{{ fecha(t.abiertaEn) }}</b>
-                <div class="mini suave">
-                  {{ hora(t.abiertaEn) }}
-                  <span v-if="t.cerradaEn"> → {{ hora(t.cerradaEn) }}</span>
-                  <span v-else class="verde"> · abierta</span>
+            <tr v-for="c in turnos" :key="c.id" class="fila-turno">
+              <td data-label="Turno" class="izq">
+                <div class="folio">{{ fecha(c.abiertaEn) }}</div>
+                <div class="desglose">
+                  {{ hora(c.abiertaEn) }} — {{ c.cerradaEn ? hora(c.cerradaEn) : 'abierta' }}
                 </div>
               </td>
-              <td data-label="Responsable">
-                {{ t.abiertaPor }}
-                <div v-if="t.cerradaPor && t.cerradaPor !== t.abiertaPor" class="mini suave">
-                  cerró {{ t.cerradaPor }}
-                </div>
+              <td data-label="Responsable" class="izq suave">{{ c.abiertaPor || '—' }}</td>
+              <td data-label="Boletas" class="der dato">
+                {{ c.boletas }}
+                <span v-if="c.anuladas" class="desglose rojo">{{ c.anuladas }} anulada(s)</span>
               </td>
-              <td data-label="Fondo" class="der dato">{{ clp(t.fondoInicial) }}</td>
-              <td data-label="Esperado" class="der dato">
-                {{ t.efectivoEsperado != null ? clp(t.efectivoEsperado) : '—' }}
+              <td data-label="Vendido" class="der dato">{{ clp(c.totalVendido) }}</td>
+              <td data-label="Efectivo" class="der dato">{{ clp(c.efectivo) }}</td>
+              <td data-label="Otros medios" class="der dato suave">
+                {{ clp(c.debito + c.credito + c.transferencia) }}
               </td>
-              <td data-label="Contado" class="der dato">
-                {{ t.efectivoContado != null ? clp(t.efectivoContado) : '—' }}
-              </td>
-
-              <!--
-                Negativo es faltante y positivo sobrante. Los dos se marcan:
-                un sobrante también significa que algo no se registró como
-                correspondía.
-              -->
-              <td data-label="Diferencia" class="der dato"
-                :class="t.diferencia < 0 ? 'rojo' : (t.diferencia > 0 ? 'ambar' : '')">
-                <template v-if="t.diferencia == null">—</template>
-                <template v-else-if="t.diferencia === 0">cuadrada</template>
-                <template v-else>
-                  {{ t.diferencia > 0 ? '+' : '' }}{{ clp(t.diferencia) }}
-                </template>
-              </td>
-              <td class="der acciones-col">
-                <span class="flecha" aria-hidden="true">›</span>
+              <td data-label="Diferencia" class="der">
+                <span v-if="c.diferencia === null" class="tenue">abierta</span>
+                <span v-else class="chip" :class="claseDiferencia(c.diferencia)">
+                  {{ c.diferencia === 0 ? 'exacto' : clp(c.diferencia) }}
+                </span>
               </td>
             </tr>
           </tbody>
@@ -184,307 +317,76 @@
       </div>
     </template>
 
-    <!-- ================= MODALES ================= -->
-    <div v-if="modal" class="fondo" @click.self="cerrarModal">
-
-      <!-- Detalle de boleta -->
-      <div v-if="modal.tipo === 'boleta'" class="modal ancho">
+    <!-- ═══ Modal de anulación ═══ -->
+    <!-- CAMBIO 5: cierre con Escape -->
+    <div v-if="anulando" class="fondo" @click.self="anulando = null" @keydown.esc="anulando = null">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-anulacion">
         <div class="modal-cab">
-          <div class="min0">
-            <h3>{{ modal.f.venta.folio }}</h3>
-            <p>
-              {{ fechaHora(modal.f.venta.fecha) }} · {{ modal.f.venta.vendedor }}
-              <span v-if="modal.f.venta.cliente"> · {{ modal.f.venta.cliente }}</span>
-            </p>
+          <h3 id="titulo-anulacion">Anular boleta {{ anulando.folio }}</h3>
+          <p>{{ clp(anulando.total) }} · {{ fecha(anulando.creadoEn) }}</p>
+        </div>
+
+        <div class="modal-cuerpo">
+          <div v-if="anulando.error" class="error">{{ anulando.error }}</div>
+
+          <!-- Lo que va a volver al inventario. Verlo antes de confirmar
+               evita anular la boleta equivocada, que después no se deshace. -->
+          <div class="devolucion">
+            <div class="rot">Vuelve al inventario</div>
+            <div v-for="c in anulando.consumos" :key="c.id" class="item">
+              <div class="min0">
+                <div class="item-nombre">{{ c.cantidad }} × {{ c.producto }}</div>
+                <div class="desglose">
+                  <span v-if="c.loteCodigo" class="mono">al lote {{ c.loteCodigo }}</span>
+                  <span v-else class="tenue">a unidades armadas</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <span v-if="modal.f.venta.anulada" class="etiqueta et-rojo">anulada</span>
-        </div>
 
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-          <div v-if="!detalle" class="suave mini">Cargando detalle…</div>
-
-          <template v-else>
-            <div v-if="detalle.anulada" class="nota alerta">
-              <b>Anulada por {{ detalle.anuladaPor }}</b> el {{ fechaHora(detalle.anuladaEn) }}.
-              <br>{{ detalle.motivoAnulacion }}
-            </div>
-
-            <h4>Lo que se vendió</h4>
-            <table class="interna">
-              <tbody>
-                <tr v-for="i in detalle.items" :key="i.id">
-                  <td>
-                    {{ i.emoji || '•' }} {{ i.nombre }}
-                    <span v-if="i.esServicio" class="chip">servicio</span>
-                  </td>
-                  <td class="der dato">{{ i.cantidad }} × {{ clp(i.precioUnitario) }}</td>
-                  <td class="der dato">{{ clp(i.subtotal) }}</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div class="totales">
-              <div class="fila"><span>Bruto</span><b class="dato">{{ clp(detalle.bruto) }}</b></div>
-              <div v-if="detalle.descuentoPromo" class="fila verde">
-                <span>{{ detalle.promocion || 'Promoción' }}</span>
-                <b class="dato">−{{ clp(detalle.descuentoPromo) }}</b>
-              </div>
-              <div v-if="detalle.descuentoCanje" class="fila verde">
-                <span>{{ detalle.puntosCanjeados }} puntos canjeados</span>
-                <b class="dato">−{{ clp(detalle.descuentoCanje) }}</b>
-              </div>
-              <div v-if="detalle.descuentoManual" class="fila verde">
-                <span>
-                  Descuento a mano
-                  <em v-if="detalle.autorizadoPor" class="mini">
-                    · autorizó {{ detalle.autorizadoPor }}
-                  </em>
-                </span>
-                <b class="dato">−{{ clp(detalle.descuentoManual) }}</b>
-              </div>
-              <div class="fila"><span>Neto</span><b class="dato">{{ clp(detalle.neto) }}</b></div>
-              <div class="fila">
-                <span>IVA {{ detalle.ivaTasa }}%</span>
-                <b class="dato">{{ clp(detalle.ivaMonto) }}</b>
-              </div>
-              <div class="fila total">
-                <span>Total · {{ textoMedioPago(detalle.medioPago) }}</span>
-                <b class="dato grande">{{ clp(detalle.total) }}</b>
-              </div>
-              <div v-if="detalle.recibido" class="fila">
-                <span>Recibido {{ clp(detalle.recibido) }}</span>
-                <b class="dato">vuelto {{ clp(detalle.vuelto) }}</b>
-              </div>
-            </div>
-
-            <!--
-              El plan de consumo es lo que hace posible anular: la venta
-              guardó de qué lote salió cada vara y a qué costo. Sin eso, la
-              reversa tendría que inventar stock.
-            -->
-            <div v-if="detalle.consumos.length" class="seccion">
-              <h4>Qué salió del inventario</h4>
-              <ul class="lista">
-                <li v-for="(c, i) in detalle.consumos" :key="i">
-                  <div class="min0">
-                    <b>{{ c.producto }}</b>
-                    <div class="mini suave">
-                      {{ c.tipo === 'listo' ? 'unidad armada' : 'tallo' }}
-                      <span v-if="c.loteCodigo"> · lote {{ c.loteCodigo }}</span>
-                    </div>
-                  </div>
-                  <span class="dato">
-                    {{ c.cantidad }}
-                    <em v-if="c.costoUnitario" class="mini suave">
-                      × {{ clp(c.costoUnitario) }}
-                    </em>
-                  </span>
-                </li>
-              </ul>
-
-              <div class="cifras">
-                <div>
-                  <span>Costo real</span>
-                  <b class="dato">{{ clp(detalle.costoVendido) }}</b>
-                </div>
-                <div>
-                  <span>Utilidad bruta</span>
-                  <b class="dato" :class="{ rojo: detalle.utilidadBruta < 0 }">
-                    {{ clp(detalle.utilidadBruta) }}
-                  </b>
-                </div>
-                <div v-if="detalle.puntosGanados">
-                  <span>Puntos otorgados</span>
-                  <b class="dato">{{ detalle.puntosGanados }}</b>
-                </div>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <div class="modal-pie" v-if="detalle">
-          <button class="btn btn-linea" @click="cerrarModal">Cerrar</button>
-          <button class="btn btn-linea" @click="verTicket">🖨️ Ticket</button>
-          <button v-if="esAdmin && !detalle.anulada" class="btn btn-rojo" @click="abrirAnular">
-            Anular boleta
-          </button>
-        </div>
-      </div>
-
-      <!-- Desglose del turno -->
-      <div v-else-if="modal.tipo === 'turno'" class="modal">
-        <div class="modal-cab">
-          <h3>Turno del {{ fecha(modal.f.turno.abiertaEn) }}</h3>
-          <p>{{ modal.f.turno.abiertaPor }} · {{ hora(modal.f.turno.abiertaEn) }}</p>
-        </div>
-
-        <div class="modal-cuerpo">
-          <div v-if="!resumen" class="suave mini">Cargando resumen…</div>
-
-          <template v-else>
-            <div v-if="resumen.diferencia != null" class="resultado-cierre"
-              :class="claseDiferencia(resumen.diferencia)">
-              <span class="rot">{{ textoDiferencia(resumen.diferencia) }}</span>
-              <b class="val">{{ clp(Math.abs(resumen.diferencia)) }}</b>
-            </div>
-
-            <div class="totales">
-              <div class="fila"><span>Fondo inicial</span><b class="dato">{{ clp(resumen.fondoInicial) }}</b></div>
-              <div class="fila"><span>Efectivo recibido</span><b class="dato">{{ clp(resumen.efectivo) }}</b></div>
-              <div class="fila total">
-                <span>Debería haber en el cajón</span>
-                <b class="dato">{{ clp(resumen.enCajon) }}</b>
-              </div>
-              <div v-if="resumen.efectivoContado != null" class="fila">
-                <span>Contado</span><b class="dato">{{ clp(resumen.efectivoContado) }}</b>
-              </div>
-            </div>
-
-            <h4>Por medio de pago</h4>
-            <div class="totales">
-              <div class="fila"><span>Efectivo</span><b class="dato">{{ clp(resumen.efectivo) }}</b></div>
-              <div class="fila"><span>Débito</span><b class="dato">{{ clp(resumen.debito) }}</b></div>
-              <div class="fila"><span>Crédito</span><b class="dato">{{ clp(resumen.credito) }}</b></div>
-              <div class="fila"><span>Transferencia</span><b class="dato">{{ clp(resumen.transferencia) }}</b></div>
-              <div class="fila total">
-                <span>{{ resumen.boletas }} boleta(s)</span>
-                <b class="dato">{{ clp(resumen.totalVendido) }}</b>
-              </div>
-            </div>
-
-            <div class="cifras">
-              <div v-if="resumen.totalDescuentos">
-                <span>Descuentos</span>
-                <b class="dato">{{ clp(resumen.totalDescuentos) }}</b>
-              </div>
-              <div v-if="resumen.anuladas">
-                <span>Anuladas</span>
-                <b class="dato rojo">{{ resumen.anuladas }}</b>
-              </div>
-              <div v-if="resumen.puntosOtorgados">
-                <span>Puntos otorgados</span>
-                <b class="dato">{{ resumen.puntosOtorgados }}</b>
-              </div>
-              <div v-if="resumen.puntosCanjeados">
-                <span>Puntos canjeados</span>
-                <b class="dato">{{ resumen.puntosCanjeados }}</b>
-              </div>
-            </div>
-
-            <p v-if="resumen.notaCierre" class="notas">“{{ resumen.notaCierre }}”</p>
-
-            <button class="enlace-boton" @click="verBoletasDelTurno">
-              Ver las boletas de este turno
-            </button>
-          </template>
-        </div>
-
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cerrar</button>
-        </div>
-      </div>
-
-      <!-- Anular -->
-      <div v-else-if="modal.tipo === 'anular'" class="modal">
-        <div class="modal-cab">
-          <h3>Anular {{ detalle.folio }}</h3>
-          <p>{{ clp(detalle.total) }} · {{ fechaHora(detalle.fecha) }}</p>
-        </div>
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+          <p class="ayuda">
+            Las varas vuelven a <b>bodega</b>, no al mostrador: la partida pudo
+            haberse agotado. Si hay que volver a venderlas, se bajan de nuevo.
+          </p>
 
           <div class="grupo">
-            <label for="an-motivo">¿Por qué se anula?</label>
-            <input id="an-motivo" class="campo" v-model="modal.f.motivo" maxlength="300"
-              placeholder="Se cobró el ramo equivocado" @keyup.enter="confirmarAnular">
-            <p class="ayuda">Mínimo 5 caracteres. Queda registrado con tu nombre.</p>
-          </div>
-
-          <div class="nota alerta">
-            Las varas vuelven al lote del que salieron, con su costo y su
-            vencimiento. El arqueo de ese turno cambia.
+            <label for="a-motivo">¿Por qué se anula?</label>
+            <input id="a-motivo" ref="campoMotivo" class="campo" v-model="anulando.motivo" maxlength="200"
+              placeholder="El cliente se arrepintió, se cobró de más…" @keyup.enter="confirmarAnulacion">
           </div>
         </div>
+
         <div class="modal-pie">
-          <button class="btn btn-linea" @click="volverABoleta">Cancelar</button>
-          <button class="btn btn-rojo" :disabled="anulando" @click="confirmarAnular">
-            <span v-if="anulando" class="spinner" aria-hidden="true"></span>
-            Anular
+          <button class="btn btn-linea" @click="anulando = null">Cancelar</button>
+          <button class="btn peligro" :disabled="anulandoAhora" @click="confirmarAnulacion">
+            {{ anulandoAhora ? 'Anulando…' : 'Anular boleta' }}
           </button>
-        </div>
-      </div>
-
-      <!-- Ticket -->
-      <div v-else-if="modal.tipo === 'ticket'" class="modal">
-        <div class="modal-cab">
-          <h3>Boleta {{ ticket.folio }}</h3>
-        </div>
-        <div class="modal-cuerpo">
-          <div class="ticket">
-            <div class="cen">
-              <div class="logo" aria-hidden="true">🌸</div>
-              <h4>{{ ticket.localNombre }}</h4>
-              <div class="chico">{{ ticket.localDireccion }}</div>
-              <div v-if="ticket.localRut" class="chico">RUT {{ ticket.localRut }}</div>
-              <div class="atencion">
-                <span class="chico">TICKET DE ATENCIÓN</span>
-                <b>#{{ ticket.numeroAtencion }}</b>
-              </div>
-            </div>
-            <div class="sep"></div>
-            <div>Boleta: {{ ticket.folio }}</div>
-            <div>Atendió: {{ ticket.vendedor }}</div>
-            <div v-if="ticket.cliente">Cliente: {{ ticket.cliente }}</div>
-            <div class="sep"></div>
-            <table>
-              <tbody>
-                <tr v-for="i in ticket.items" :key="i.id">
-                  <td>{{ i.cantidad }}x {{ i.nombre }}</td>
-                  <td class="der">{{ clp(i.subtotal) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="sep"></div>
-            <div v-if="ticket.descuentoTotal" class="tot">
-              <span>{{ ticket.promocion || 'Descuentos' }}</span>
-              <span>−{{ clp(ticket.descuentoTotal) }}</span>
-            </div>
-            <div class="tot"><span>Neto</span><span>{{ clp(ticket.neto) }}</span></div>
-            <div class="tot"><span>IVA {{ ticket.ivaTasa }}%</span><span>{{ clp(ticket.ivaMonto) }}</span></div>
-            <div class="tot g"><span>TOTAL</span><span>{{ clp(ticket.total) }}</span></div>
-            <div v-if="ticket.anulada" class="cen anulado">— ANULADA —</div>
-            <div class="sep"></div>
-            <div class="cen chico">
-              <b>{{ ticket.mensaje }}</b><br>{{ ticket.leyenda }}
-            </div>
-          </div>
-        </div>
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="volverABoleta">Volver</button>
-          <button class="btn" @click="imprimir">🖨️ Imprimir</button>
         </div>
       </div>
     </div>
 
+    <!-- ═══ Ticket ═══ -->
+    <TicketBoleta v-if="ticket" :ticket="ticket" @cerrar="ticket = null" />
+
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+  </div>
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { MEDIOS_PAGO, textoMedioPago } from '@/features/ventas/store/ventas.module'
+import TicketBoleta from '@/features/ventas/components/TicketBoleta.vue'
+import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 export default {
   name: 'VentasView',
-  components: {  },
+  components: { TicketBoleta },
 
   setup() {
     const store = useStore()
-    const { usarResalte, usarAviso } = useTemporizadores()
+    const { usarAviso } = useTemporizadores()
     const { aviso, avisar } = usarAviso()
-    const resalte = usarResalte()
 
     const esAdmin = computed(() => store.getters['auth/esAdmin'])
 
@@ -498,30 +400,23 @@ export default {
     const cargando = computed(() => store.getters['ventas/cargando'])
     const error = computed(() => store.getters['ventas/error'])
 
-    /* ---------------- Turnos ---------------- */
-    const turnos = computed(() => store.getters['caja/historial'])
-    const cargandoCaja = computed(() => store.getters['caja/cargando'])
-
-    let control = null
-
-    onMounted(() => {
-      control = new AbortController()
-      store.dispatch('ventas/cargar', { signal: control.signal })
+    const hayFiltro = computed(() => {
+      const f = filtro.value
+      return !!(f.buscar || f.medioPago || f.desde || f.hasta || f.incluirAnuladas)
     })
 
-    onUnmounted(() => control?.abort())
-
-    const recargar = () => {
-      if (pestana.value === 'boletas') store.dispatch('ventas/cargar')
-      else store.dispatch('caja/cargarHistorial')
-    }
-
-    const filtrar = (cambios) => store.dispatch('ventas/filtrar', cambios)
-
-    const irATurnos = () => {
-      pestana.value = 'turnos'
-      if (!turnos.value.length) store.dispatch('caja/cargarHistorial')
-    }
+    /* Resumen de lo que se está viendo. Se calcula sobre la página actual, no
+       sobre el total: es una referencia rápida, no un reporte. */
+    const resumen = computed(() => {
+      if (!ventas.value.length) return null
+      const vivas = ventas.value.filter(v => !v.anulada)
+      return {
+        boletas: vivas.length,
+        total: vivas.reduce((t, v) => t + v.total, 0),
+        descuentos: vivas.reduce((t, v) => t + v.descuentoTotal, 0),
+        anuladas: ventas.value.filter(v => v.anulada).length
+      }
+    })
 
     const busqueda = ref(filtro.value.buscar || '')
     let tmr = null
@@ -529,435 +424,162 @@ export default {
       clearTimeout(tmr)
       tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
     })
-    onUnmounted(() => clearTimeout(tmr))
 
-    /* ---------------- Modales ---------------- */
-    const modal = ref(null)
+    const filtrar = (cambios) => store.dispatch('ventas/filtrar', cambios)
+    const recargar = () => store.dispatch('ventas/cargar')
+
+    /* ---------------- Detalle ---------------- */
+    const detalleId = ref(null)
     const detalle = ref(null)
-    const resumen = ref(null)
-    const ticket = ref(null)
-    const anulando = ref(false)
+    const cargandoDetalle = ref(false)
 
-    const cerrarModal = () => {
-      modal.value = null
+    /* El detalle se pide al abrir, no al cargar la lista: son dos consultas
+       más por boleta —líneas y consumos— y traerlas para veinte filas que
+       nadie va a expandir sería trabajo perdido. */
+    const alternarDetalle = async (id) => {
+      if (detalleId.value === id) {
+        detalleId.value = null
+        detalle.value = null
+        return
+      }
+
+      detalleId.value = id
       detalle.value = null
-      resumen.value = null
-      ticket.value = null
-    }
+      cargandoDetalle.value = true
 
-    const volverABoleta = () => {
-      modal.value = { tipo: 'boleta', f: { venta: detalle.value, error: '' } }
-      ticket.value = null
-    }
-
-    const abrirDetalle = async (v) => {
-      modal.value = { tipo: 'boleta', f: { venta: v, error: '' } }
-      detalle.value = await store.dispatch('ventas/cargarDetalle', { id: v.id, forzar: true })
-    }
-
-    const abrirTurno = async (t) => {
-      modal.value = { tipo: 'turno', f: { turno: t } }
-      resumen.value = await store.dispatch('caja/resumen', { id: t.id })
-    }
-
-    /* Ver las boletas de un turno es la pregunta que sigue naturalmente a
-       "este turno quedó descuadrado". */
-    const verBoletasDelTurno = () => {
-      const id = modal.value.f.turno.id
-      cerrarModal()
-      pestana.value = 'boletas'
-      filtrar({ cajaId: id, desde: null, hasta: null })
-      avisar('Mostrando las boletas de ese turno')
-    }
-
-    const verTicket = async () => {
       try {
-        ticket.value = await store.dispatch('ventas/ticket', { id: detalle.value.id })
-        modal.value = { tipo: 'ticket', f: {} }
+        detalle.value = await store.dispatch('ventas/cargarDetalle', { id })
       } catch (e) {
-        modal.value.f.error = e.message
-      }
-    }
-
-    const imprimir = () => window.print()
-
-    const abrirAnular = () => {
-      modal.value = { tipo: 'anular', f: { motivo: '', error: '' } }
-    }
-
-    const confirmarAnular = async () => {
-      const f = modal.value.f
-      f.error = ''
-      anulando.value = true
-      try {
-        await store.dispatch('ventas/anular', { id: detalle.value.id, motivo: f.motivo })
-        detalle.value = await store.dispatch('ventas/cargarDetalle', {
-          id: detalle.value.id, forzar: true
-        })
-        volverABoleta()
-        avisar('Boleta anulada · stock devuelto')
-        resalte.marcar(detalle.value.id)
-      } catch (e) {
-        f.error = e.message
+        avisar(e.message, true)
+        detalleId.value = null
       } finally {
-        anulando.value = false
+        cargandoDetalle.value = false
       }
     }
 
-    /* ---------------- Utilidades ---------------- */
-    const claseTurno = (t) => ({
-      abierta: !t.cerradaEn,
-      descuadrada: (t.diferencia ?? 0) !== 0
+    /* ---------------- Ticket ---------------- */
+    const ticket = ref(null)
+
+    const verTicket = async (id) => {
+      try {
+        ticket.value = await store.dispatch('ventas/ticket', { id })
+      } catch (e) {
+        avisar(e.message, true)
+      }
+    }
+
+    /* ---------------- Anulación ---------------- */
+    const anulando = ref(null)
+    const anulandoAhora = ref(false)
+    const campoMotivo = ref(null)
+
+    const abrirAnulacion = (d) => {
+      anulando.value = {
+        id: d.id,
+        folio: d.folio,
+        total: d.total,
+        creadoEn: d.creadoEn,
+        consumos: d.consumos || [],
+        motivo: '',
+        error: ''
+      }
+      nextTick(() => campoMotivo.value?.focus())
+    }
+
+    const confirmarAnulacion = async () => {
+      const a = anulando.value
+      a.error = ''
+
+      if (a.motivo.trim().length < 5) {
+        return (a.error = 'Explica el motivo, con al menos 5 caracteres.')
+      }
+
+      anulandoAhora.value = true
+      try {
+        const r = await store.dispatch('ventas/anular', { id: a.id, motivo: a.motivo })
+        avisar(`Boleta ${r.folio} anulada · ${r.devuelto} unidad(es) devuelta(s)`)
+        anulando.value = null
+
+        /* El detalle abierto quedó obsoleto: se relee para que muestre el
+           sello de anulada. */
+        if (detalleId.value === a.id) {
+          detalle.value = await store.dispatch('ventas/cargarDetalle', { id: a.id, forzar: true })
+        }
+      } catch (e) {
+        /* El mensaje viene del RAISE: "La caja de esta boleta ya se cerró.
+           Anularla descuadraría ese arqueo." */
+        a.error = e.message
+      } finally {
+        anulandoAhora.value = false
+      }
+    }
+
+    /* ---------------- Turnos ---------------- */
+    const turnos = computed(() => store.getters['caja/historial'])
+    const cargandoCaja = computed(() => store.getters['caja/cargando'])
+
+    const irATurnos = () => {
+      pestana.value = 'turnos'
+      store.dispatch('caja/cargarHistorial')
+    }
+
+    const claseDiferencia = (d) => (d === 0 ? 'exacto' : d > 0 ? 'sobra' : 'falta')
+
+    /* ---------------- Carga ---------------- */
+    let control = null
+
+    onMounted(() => {
+      control = new AbortController()
+      store.dispatch('ventas/cargar', { signal: control.signal })
     })
 
-    const claseDiferencia = (d) => {
-      if (d === 0) return 'cuadrada'
-      return d > 0 ? 'sobrante' : 'faltante'
-    }
+    onUnmounted(() => {
+      control?.abort()
+      clearTimeout(tmr)
+    })
 
-    const textoDiferencia = (d) => {
-      if (d === 0) return 'Cuadrada'
-      return d > 0 ? 'Sobrante' : 'Faltante'
-    }
-
+    /* ---------------- Utilidades ---------------- */
     const fmt = new Intl.NumberFormat('es-CL', {
       style: 'currency', currency: 'CLP', maximumFractionDigits: 0
     })
     const clp = (n) => fmt.format(Math.round(n || 0))
 
-    const fmtFecha = new Intl.DateTimeFormat('es-CL', {
-      day: '2-digit', month: '2-digit', year: '2-digit'
-    })
-    const fecha = (v) => (v ? fmtFecha.format(new Date(v)) : '—')
+    const fecha = (iso) => (iso
+      ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+      : '—')
 
-    const fmtHora = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit' })
-    const hora = (v) => (v ? fmtHora.format(new Date(v)) : '—')
-
-    const fmtCompleta = new Intl.DateTimeFormat('es-CL', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-    })
-    const fechaHora = (v) => (v ? fmtCompleta.format(new Date(v)) : '—')
+    const hora = (iso) => (iso
+      ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+      : '—')
 
     return {
-      MEDIOS_PAGO, Math, textoMedioPago,
+      Number, MEDIOS_PAGO, textoMedioPago,
       esAdmin, pestana, irATurnos,
-      ventas, total, totalPaginas, filtro, cargando, error, recargar, filtrar, busqueda,
-      turnos, cargandoCaja, claseTurno,
-      modal, detalle, resumen, ticket, anulando,
-      cerrarModal, volverABoleta, abrirDetalle, abrirTurno, verBoletasDelTurno,
-      verTicket, imprimir, abrirAnular, confirmarAnular,
-      claseDiferencia, textoDiferencia,
-      resalte, aviso, clp, fecha, hora, fechaHora
+      ventas, total, totalPaginas, filtro, cargando, error, hayFiltro, resumen,
+      busqueda, filtrar, recargar,
+      detalleId, detalle, cargandoDetalle, alternarDetalle,
+      ticket, verTicket,
+      anulando, anulandoAhora, campoMotivo, abrirAnulacion, confirmarAnulacion,
+      turnos, cargandoCaja, claseDiferencia,
+      aviso, clp, fecha, hora
     }
   }
 }
 </script>
 
 <style scoped>
-.cabecera,
-.cabecera *,
-.tabla-envoltura *,
-.fondo * {
-  box-sizing: border-box;
-}
-
-@keyframes entra {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.al-entrar {
-  animation: entra 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 50ms);
-}
-
-@keyframes aparece {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.fila {
-  animation: aparece 220ms ease-out backwards;
-  animation-delay: calc(var(--i, 0) * 25ms);
-}
-
-@keyframes resalta {
-  0% {
-    background: #fee2e2;
-  }
-
-  70% {
-    background: #fef2f2;
-  }
-
-  100% {
-    background: transparent;
-  }
-}
-
-.fila.resaltada td {
-  animation: resalta 1400ms ease-out;
-}
-
-.spinner {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: girar 0.8s linear infinite;
-}
-
-@keyframes girar {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ---------- Encabezado ---------- */
-.cabecera {
-  margin-bottom: 16px;
-}
-
-.cabecera h2 {
-  margin: 0;
-  font-size: clamp(1.25rem, 4.5vw, 1.5rem);
-  color: #0f172a;
-}
-
-.pista {
-  margin: 4px 0 0;
-  font-size: 0.875rem;
-  color: #64748b;
-  max-width: 64ch;
-  line-height: 1.5;
-}
-
-/* ---------- Pestañas ---------- */
-.pestanas {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.pestana {
-  padding: 11px 18px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: #64748b;
-  font-family: inherit;
-  font-size: 0.92rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.pestana:hover {
-  color: #0f172a;
-}
-
-.pestana.on {
-  color: #047857;
-  border-bottom-color: #059669;
-}
-
-.banda {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  border-radius: 10px;
-  margin-bottom: 16px;
-  font-size: 0.875rem;
-}
-
-.banda-error {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
-}
-
-.banda .btn {
-  margin-left: auto;
-}
-
-/* ---------- Filtros ---------- */
-.barra-filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.rango {
+.ventas {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 14px;
 }
 
-.buscador {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex: 1 1 220px;
+.min0 {
   min-width: 0;
-  min-height: 44px;
-  padding: 0 12px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  transition: border-color 0.18s, box-shadow 0.18s;
 }
 
-.buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
-
-.buscador input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: none;
-  font-family: inherit;
-  font-size: max(0.9rem, 16px);
-}
-
-.campo {
-  width: 100%;
-  min-height: 44px;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-family: inherit;
-  font-size: max(0.9rem, 16px);
-  color: #0f172a;
-  outline: none;
-}
-
-.campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
-
-.campo-corto {
-  width: auto;
-  flex: 0 1 180px;
-}
-
-.campo-fecha {
-  width: auto;
-  min-width: 148px;
-}
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.85rem;
-  color: #475569;
-  cursor: pointer;
-}
-
-.check input {
-  width: 17px;
-  height: 17px;
-  accent-color: #059669;
-  cursor: pointer;
-}
-
-/* ---------- Tabla ---------- */
-.tabla-envoltura {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
-  overflow-x: auto;
-  transition: opacity 0.14s ease;
-}
-
-.tabla-envoltura.atenuada {
-  opacity: 0.45;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th {
+.izq {
   text-align: left;
-  padding: 11px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #64748b;
-  white-space: nowrap;
-}
-
-td {
-  padding: 11px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 0.875rem;
-  vertical-align: middle;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-tr.clic {
-  cursor: pointer;
-}
-
-tr.anulada {
-  opacity: 0.5;
-}
-
-.fila td {
-  transition: background-color 0.16s ease;
-}
-
-tr.clic:hover td {
-  background: #f8fafc;
-}
-
-/* Un turno descuadrado tiene que verse en la fila, no solo en su columna */
-tr.descuadrada td {
-  background: #fffbeb;
-}
-
-tr.descuadrada:hover td {
-  background: #fef3c7;
-}
-
-tr.abierta td {
-  background: #f0fdf4;
 }
 
 .der {
@@ -965,23 +587,28 @@ tr.abierta td {
 }
 
 .suave {
-  color: #64748b;
+  color: var(--text-muted);
+}
+
+.tenue {
+  color: var(--text-faint);
 }
 
 .mini {
-  font-size: 0.76rem;
+  font-size: .78rem;
 }
 
 .rojo {
-  color: #dc2626;
-}
-
-.ambar {
-  color: #b45309;
+  color: var(--danger);
 }
 
 .verde {
-  color: #047857;
+  color: var(--success);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: .95em;
 }
 
 .dato {
@@ -990,483 +617,673 @@ tr.abierta td {
 }
 
 .dato.grande {
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
-.corta {
-  max-width: 150px;
+.rot {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.desglose {
+  font-size: .72rem;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.ayuda {
+  font-size: .82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 6px;
+}
+
+/* Solo para lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  clip: rect(0, 0, 0, 0);
   white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Cabecera ─── */
+
+h1 {
+  font-size: clamp(1.2rem, 5vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.cabecera .ayuda {
+  max-width: 60ch;
+}
+
+.pestanas {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.pestanas button {
+  padding: 10px 18px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+
+.pestanas button:hover {
+  color: var(--text);
+}
+
+.pestanas button.on {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+
+.pestanas button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* ─── Filtros ─── */
+/* CAMBIO 1: alturas homogéneas, buscador separado de filtros secundarios */
+
+.filtros {
+  display: flex;
+  flex-wrap: nowrap;      /* fuerza fila única en desktop */
+  align-items: flex-end;  /* alinea por la base (las fechas tienen label arriba) */
+  gap: 12px;
+}
+
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1 1 auto;         /* absorbe el espacio sobrante */
+  min-width: 200px;
+  height: 44px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: 0 12px;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.buscador:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.buscador input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+}
+
+/* Elimina la clase .filtros-grupo (ya no existe) */
+
+.campo {
+  height: 44px;           /* altura fija, no min-height, para alinear exacto */
+  padding: 0 .75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+/* El campo del modal necesita padding vertical */
+.grupo .campo {
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  padding: .6rem .75rem;
+}
+
+.campo:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.campo.corto {
+  flex: 0 0 auto;
+  width: 170px;
+}
+
+.campo-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.campo-fecha > span {
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.campo-fecha input {
+  height: 44px;
+  width: 150px;
+  padding: 0 .6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.campo-fecha input:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  flex: 0 0 auto;
+  padding: 0 4px;
+  font-size: .85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ─── Tiras de resumen ─── */
+/* CAMBIO 4: total como protagonista, alerta diferenciada */
+
+.tiras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tira {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  min-width: 140px;
+}
+
+/* La primera tira (total vendido) es la protagonista */
+.tira:first-child {
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  border-color: var(--accent-soft);
+}
+
+.tira:first-child .dato {
+  font-size: 1.15rem;
+}
+
+.tira.alerta {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.tira.alerta .rot {
+  color: inherit;
+  opacity: .8;
+}
+
+/* ─── Tabla ─── */
+
+.tabla-envoltura {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: auto;
+  transition: opacity .14s ease;
+}
+
+.tabla-envoltura.atenuada {
+  opacity: .45;
+}
+
+table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: right;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+th.izq {
+  text-align: left;
+}
+
+td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: .86rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* La fila entera abre el detalle: en una tabla de boletas, buscar un botón
+   chiquito para ver qué se vendió es fricción sin motivo. */
+.fila {
+  cursor: pointer;
+}
+
+.fila:hover td {
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+/* CAMBIO 3: foco visible para navegación por teclado */
+.fila:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.fila.abierta td {
+  background: var(--surface-2);
+  border-bottom-color: transparent;
+}
+
+/* Una boleta anulada se atenúa pero no se esconde: el folio existe y el
+   hueco en el correlativo tiene que poder explicarse. */
+.fila.anulada {
+  opacity: .55;
+}
+
+.fila.anulada .folio {
+  text-decoration: line-through;
+}
+
+.folio {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: .85rem;
+}
+
+.flecha {
+  display: inline-block;
+  color: var(--text-faint);
+  font-size: 1.1rem;
+  transition: transform var(--t-fast);
+}
+
+.flecha.girada {
+  transform: rotate(90deg);
 }
 
 .acciones-col {
   width: 1%;
-  white-space: nowrap;
 }
 
-.flecha {
-  color: #cbd5e1;
+/* ─── Detalle ─── */
+
+.fila-detalle td {
+  padding: 0;
+  background: var(--surface-2);
+  white-space: normal;
+}
+
+.detalle {
+  padding: 18px 20px 16px;
+  border-bottom: 2px solid var(--accent-soft);
+}
+
+.detalle-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+}
+
+.detalle h4 {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 0;
+  font-size: .84rem;
+}
+
+.item .emoji {
   font-size: 1.1rem;
+  flex-shrink: 0;
 }
 
-.min0 {
-  min-width: 0;
+.item .min0 {
+  flex: 1;
 }
+
+.item-nombre {
+  font-weight: 600;
+}
+
+.numeros .fila-num {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: .84rem;
+  color: var(--text-muted);
+}
+
+.fila-num.verde {
+  color: var(--success);
+}
+
+.fila-num.total {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 700;
+  font-size: .95rem;
+}
+
+.fila-num.margen {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-strong);
+}
+
+.detalle-pie {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.cargando {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: .85rem;
+}
+
+/* ─── Chips ─── */
 
 .chip {
   display: inline-block;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 0.7rem;
-  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: .74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cada medio con su color: en una lista larga, el efectivo se distingue de
+   la transferencia sin leer. */
+.pago-efectivo {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.pago-debito {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.pago-credito {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.pago-transferencia {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.chip.exacto {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.chip.sobra {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.chip.falta {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .etiqueta {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.62rem;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  font-size: .62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
+  letter-spacing: .04em;
+  margin-left: 5px;
 }
 
-.et-rojo {
-  background: #fee2e2;
-  color: #991b1b;
+.et-roja {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
-.paginador {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  margin: 14px 0 0;
-}
+/* ─── Modal ─── */
 
-/* ---------- Modales ---------- */
 .fondo {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 100;
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--overlay);
 }
 
 .modal {
   width: 100%;
-  max-width: 480px;
-  max-height: 92vh;
-  max-height: 92dvh;
+  max-width: 420px;
+  max-height: 90dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
-}
-
-.modal.ancho {
-  max-width: 620px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
 }
 
 .modal-cab {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .modal-cab h3 {
-  margin: 0;
   font-size: 1.1rem;
-  color: #0f172a;
+  font-weight: 700;
 }
 
 .modal-cab p {
-  margin: 4px 0 0;
-  font-size: 0.82rem;
-  color: #64748b;
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .modal-cuerpo {
-  padding: 18px 20px;
+  flex: 1;
   overflow-y: auto;
+  padding: 20px 22px;
 }
 
 .modal-pie {
   display: flex;
-  gap: 9px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
-h4 {
-  margin: 18px 0 9px;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-h4:first-child {
-  margin-top: 0;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #475569;
+.modal-pie .btn {
+  flex: 1;
 }
 
 .grupo {
-  margin-bottom: 15px;
+  margin-top: 16px;
 }
 
-.seccion {
-  margin-top: 18px;
-}
-
-table.interna {
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  overflow: hidden;
-}
-
-table.interna td {
-  padding: 8px 11px;
-  font-size: 0.82rem;
-}
-
-.totales {
-  margin-top: 13px;
-  padding: 12px 14px;
-  background: #f8fafc;
-  border-radius: 10px;
-}
-
-.totales .fila {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 0;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.totales .fila.verde {
-  color: #047857;
-}
-
-.totales .fila.total {
-  margin-top: 6px;
-  padding-top: 9px;
-  border-top: 1px solid #e2e8f0;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.totales em {
-  font-style: normal;
-}
-
-.cifras {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px;
-  margin-top: 13px;
-}
-
-.cifras>div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  background: #f8fafc;
-  border-radius: 9px;
-}
-
-.cifras span {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #94a3b8;
-}
-
-.cifras b {
-  font-size: 1rem;
-  color: #0f172a;
-}
-
-.lista {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.lista li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 0;
-  border-bottom: 1px dotted #e2e8f0;
-  font-size: 0.83rem;
-}
-
-.lista li:last-child {
-  border-bottom: 0;
-}
-
-.lista li b {
-  color: #0f172a;
-}
-
-.lista em {
-  font-style: normal;
-}
-
-.notas {
-  margin: 14px 0 0;
-  padding: 9px 11px;
-  background: #f8fafc;
-  border-left: 3px solid #6ee7b7;
-  border-radius: 0 7px 7px 0;
-  font-size: 0.8rem;
-  color: #475569;
-  font-style: italic;
-}
-
-.resultado-cierre {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 18px;
-  border-radius: 12px;
-  margin-bottom: 14px;
-}
-
-.resultado-cierre .rot {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.resultado-cierre .val {
-  font-size: 1.8rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.resultado-cierre.cuadrada {
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.resultado-cierre.sobrante {
-  background: #fffbeb;
-  color: #78350f;
-}
-
-.resultado-cierre.faltante {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.error {
-  padding: 10px 13px;
-  margin-bottom: 14px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.85rem;
-}
-
-.nota {
-  padding: 11px 13px;
-  margin: 0 0 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
-  font-size: 0.83rem;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.nota.alerta {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #78350f;
-}
-
-.ayuda {
-  margin: 5px 0 0;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.5;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-
-/* ---------- Ticket ---------- */
-.ticket {
-  width: 270px;
-  margin: 0 auto;
-  padding: 14px;
-  background: #fff;
-  color: #000;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.68rem;
-  line-height: 1.45;
-  border: 1px solid #e2e8f0;
-}
-
-.ticket .cen {
-  text-align: center;
-}
-
-.ticket .logo {
-  font-size: 1.5rem;
-}
-
-.ticket h4 {
-  margin: 4px 0 2px;
-  font-size: 0.8rem;
-  font-family: inherit;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #000;
-}
-
-.ticket .chico {
-  font-size: 0.6rem;
-}
-
-.ticket .sep {
-  border-top: 1px dashed #000;
-  margin: 7px 0;
-}
-
-.ticket .atencion {
-  border: 1px solid #000;
-  padding: 4px;
-  margin: 6px 0;
-}
-
-.ticket .atencion b {
+.grupo label {
   display: block;
-  font-size: 1.15rem;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
 }
 
-.ticket table {
-  width: 100%;
-  border-collapse: collapse;
+.devolucion {
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
 }
 
-.ticket td {
-  padding: 2px 0;
-  font-size: 0.64rem;
-  vertical-align: top;
-  border: 0;
+.devolucion .rot {
+  margin-bottom: 6px;
 }
 
-.ticket .der {
-  text-align: right;
-}
+/* ─── Botones y bandas ─── */
 
-.ticket .tot {
-  display: flex;
-  justify-content: space-between;
-}
-
-.ticket .tot.g {
-  font-size: 0.88rem;
-  font-weight: 700;
-  border-top: 1px solid #000;
-  margin-top: 4px;
-  padding-top: 4px;
-}
-
-.ticket .anulado {
-  margin: 8px 0;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-}
-
-/* ---------- Botones ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 44px;
-  padding: 0.65rem 1.15rem;
+  padding: .65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.92rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: .92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--t-fast);
 }
 
 .btn:hover:not(:disabled) {
-  background: #047857;
+  background: var(--accent-hover);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
-  background: #a7c9bb;
+  opacity: .55;
   cursor: not-allowed;
+}
+
+/* Anular es irreversible y mueve stock: va en peligro, no en acento. */
+.btn.peligro {
+  background: var(--danger);
+}
+
+.btn.peligro:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(.92);
 }
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
 .btn-linea:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
+  background: var(--surface-2);
+  color: var(--text);
 }
 
-.btn-linea:disabled {
+.btn-linea.peligro {
   background: transparent;
-  color: #cbd5e1;
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
-.btn-rojo {
-  background: #dc2626;
-}
-
-.btn-rojo:hover:not(:disabled) {
-  background: #b91c1c;
+.btn-linea.peligro:hover:not(:disabled) {
+  background: var(--danger-soft);
+  filter: none;
 }
 
 .btn-mini {
   min-height: 34px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
+  padding: .35rem .8rem;
+  font-size: .82rem;
 }
 
 .btn-icono {
@@ -1476,121 +1293,176 @@ table.interna td {
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #64748b;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .btn-icono.chico {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
+  font-size: .78rem;
 }
 
-.enlace-boton {
+.banda {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: var(--r-sm);
+  font-size: .85rem;
+}
+
+.banda-error {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+}
+
+.detalle .banda {
   margin-top: 14px;
-  padding: 0;
-  border: none;
-  background: none;
-  color: #059669;
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
+}
+
+.banda .btn {
+  margin-left: auto;
+}
+
+.error {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: .85rem;
 }
 
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: .88rem;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
-  font-size: 1.05rem;
+  color: var(--text);
+  font-size: 1.02rem;
   margin-bottom: 5px;
+}
+
+.paginador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .aviso {
   position: fixed;
-  bottom: 22px;
   left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0));
   transform: translateX(-50%);
-  z-index: 80;
-  max-width: 90vw;
-  padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
+  z-index: 200;
+  padding: 12px 22px;
+  border-radius: var(--r-full);
+  background: var(--success);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: .88rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
-  text-align: center;
+  box-shadow: var(--shadow-lg);
 }
 
 .aviso.malo {
-  background: #b91c1c;
+  background: var(--danger);
 }
 
-/* ---------- Móvil ---------- */
-@media (max-width: 900px) {
-  .tabla-envoltura {
-    border: none;
-    background: transparent;
-    overflow: visible;
+/* ─── Móvil ─── */
+/* CAMBIO 2: detalle unido a su card + CAMBIO 5: zona muerta */
+
+@media (max-width: 860px) {
+
+    /* Bajo el breakpoint sí se apilan: en móvil una sola fila no cabe */
+  .filtros {
+    flex-wrap: wrap;
   }
 
-  table:not(.interna):not(.ticket table),
-  table:not(.interna) thead,
-  table:not(.interna) tbody,
-  table:not(.interna) tr,
-  table:not(.interna) td {
-    display: block;
+  .buscador { flex: 1 1 100%; }
+
+  .campo.corto,
+  .campo-fecha,
+  .campo-fecha input {
+    flex: 1 1 100%;
     width: 100%;
   }
 
-  table:not(.interna) thead {
+  .check { flex: 1 1 100%; }
+
+
+  table,
+  thead,
+  tbody,
+  tr,
+  td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* sin scroll horizontal bajo el breakpoint */
+  table {
+    min-width: 0;
+  }
+
+  thead {
     display: none;
   }
 
-  table:not(.interna) tbody tr {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    margin-bottom: 11px;
-    padding: 12px;
+  /* Filas de boleta (interactivas) y de turno (estáticas) como card */
+  tbody tr.fila,
+  tbody tr.fila-turno {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    margin-bottom: 10px;
+    padding: 12px 14px;
   }
 
-  table:not(.interna) td {
+  tbody tr.fila td,
+  tbody tr.fila-turno td {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 0;
+    align-items: baseline;
+    gap: 14px;
+    padding: 5px 0;
     border: none;
-    text-align: right;
+    white-space: normal;
   }
 
-  table:not(.interna) td::before {
-    content: attr(data-label);
-    font-size: 0.64rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    text-align: left;
+  tbody tr.fila td::before,
+  tbody tr.fila-turno td::before {
+    content: attr(data-label) ":";
+    font-size: .76rem;
+    color: var(--text-muted);
     flex-shrink: 0;
   }
 
   td[data-label="Folio"],
   td[data-label="Turno"] {
     display: block;
-    text-align: left;
+    padding-bottom: 10px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid var(--border);
   }
 
   td[data-label="Folio"]::before,
@@ -1598,78 +1470,65 @@ table.interna td {
     content: none;
   }
 
-  tr.clic:hover td {
-    background: transparent;
+  .acciones-col {
+    display: none;
   }
 
-  tr.descuadrada td,
-  tr.abierta td {
-    background: transparent;
+  /* La fila abierta se une visualmente con su detalle */
+  tbody tr.fila.abierta {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
-  tr.descuadrada {
-    border-color: #fcd34d;
+  /* ✅ El detalle: continuación de la card de arriba, no card suelta */
+  tbody tr.fila-detalle {
+    margin-top: 0;
+    margin-bottom: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--r-sm) var(--r-sm);
+    padding: 0;
   }
 
-  tr.abierta {
-    border-color: #86efac;
+  tbody tr.fila-detalle td {
+    display: block;
+    padding: 0;
+    border: none;
   }
 
-  .fila.resaltada {
-    animation: resalta 1400ms ease-out;
+  tbody tr.fila-detalle td::before {
+    content: none;
   }
 
-  .fila.resaltada td {
-    animation: none;
+  .detalle {
+    padding: 14px;
+    border-bottom: none;
   }
 
-  .campo-corto,
-  .campo-fecha {
+  /* una sola columna en móvil */
+  .detalle-cols {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .detalle-pie {
+    flex-direction: column;
+  }
+
+  .detalle-pie .btn {
+    width: 100%;
+  }
+
+  .campo.corto {
     flex: 1 1 100%;
     width: 100%;
   }
 
-  .corta {
-    max-width: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-
-  .btn,
-  .pestana,
-  .campo,
-  .buscador,
-  .tabla-envoltura,
-  .fila td {
-    transition: none;
-  }
-
-  .al-entrar,
-  .fila,
-  .fila.resaltada,
-  .fila.resaltada td,
-  .spinner {
-    animation: none;
-  }
-
-  .tabla-envoltura.atenuada {
-    opacity: 1;
-  }
-}
-
-@media print {
-
-  .modal-cab,
-  .modal-pie,
-  .pestanas,
-  .cabecera,
-  .barra-filtros {
-    display: none;
-  }
-
-  .ticket {
-    border: 0;
+  /* CAMBIO en recomendación 4: paginador cómodo en móvil */
+  .paginador .btn {
+    flex: 1;
   }
 }
 </style>

@@ -8,6 +8,17 @@
  *
  * Si el total de la boleta difiere del previsualizado, manda el de la
  * boleta.
+ *
+ * ── QUÉ IDENTIFICA UNA LÍNEA ──
+ *
+ * La PARTIDA, no el lote. Una partida es lo que bajó de un balde concreto
+ * al mesón, con su propio código y su QR: el servidor descuenta de esa
+ * partida exacta y guarda su lote en venta_consumos, que es lo que permite
+ * devolver las varas al balde correcto si se anula la boleta.
+ *
+ * Sin partida se manda solo el producto y el servidor reparte por FIFO
+ * entre lo que hay adelante. Sirve para lo que no se escanea —un jarrón—
+ * pero pierde el precio propio de un lote rebajado.
  * =========================================================================
  */
 
@@ -24,15 +35,14 @@ export const textoMedioPago = (v) => MEDIOS_PAGO.find(m => m.valor === v)?.texto
 
 const filtroInicial = () => ({
   buscar: '',
-  cajaId: null,
   clienteId: null,
   usuarioId: null,
   medioPago: null,
-  anulada: false,
+  incluirAnuladas: false,
   desde: null,
   hasta: null,
   pagina: 1,
-  porPagina: 30
+  tamano: 30
 })
 
 let contadorLinea = 0
@@ -48,7 +58,6 @@ export default {
     promocionId: null,
     promocionesAplicables: [],
     descuentoManual: 0,
-    motivoDescuento: '',
     puntosACanjear: 0,
     cotizacionId: null,
 
@@ -84,7 +93,6 @@ export default {
       state.promocionId = null
       state.promocionesAplicables = []
       state.descuentoManual = 0
-      state.motivoDescuento = ''
       state.puntosACanjear = 0
       state.cotizacionId = null
     },
@@ -96,10 +104,7 @@ export default {
     },
     SET_PROMOCION (state, id) { state.promocionId = id },
     SET_APLICABLES (state, lista) { state.promocionesAplicables = lista || [] },
-    SET_DESCUENTO (state, { monto, motivo }) {
-      state.descuentoManual = monto
-      state.motivoDescuento = motivo
-    },
+    SET_DESCUENTO (state, monto) { state.descuentoManual = monto },
     SET_PUNTOS (state, p) { state.puntosACanjear = p },
     SET_COTIZACION (state, id) { state.cotizacionId = id },
 
@@ -126,16 +131,21 @@ export default {
   },
 
   actions: {
+
     /* ================= Carrito ================= */
 
     /**
-     * Agrega un producto. Si ya está en el carrito sin lote escaneado, se
-     * suma la cantidad; con lote escaneado va como línea aparte, porque cada
-     * lote tiene su propio costo y puede tener su propio precio.
+     * Agrega un producto al carrito.
+     *
+     * Con `partida` va como línea aparte SIEMPRE, aunque el producto ya
+     * esté: dos partidas del mismo producto pueden tener precios distintos
+     * —una de flor recuperada, otra normal— y sumarlas ocultaría eso.
+     *
+     * Sin partida, se acumula sobre la línea existente del mismo producto.
      */
-    agregarProducto ({ state, commit, dispatch }, { producto, cantidad = 1, loteId = null }) {
-      const existente = !loteId && state.carrito.find(
-        l => l.productoId === producto.id && !l.loteId && !l.esServicio
+    agregarProducto ({ state, commit, dispatch }, { producto, cantidad = 1, partida = null }) {
+      const existente = !partida && state.carrito.find(
+        l => l.productoId === producto.id && !l.partida && !l.esServicio
       )
 
       if (existente) {
@@ -150,9 +160,9 @@ export default {
           emoji: producto.emoji,
           precio: producto.precio,
           cantidad,
-          loteId,
+          /* El código de la partida: PAR-000001. Es lo que viaja al cobrar. */
+          partida,
           loteCodigo: producto.loteCodigo ?? null,
-          lotesAutorizados: [],
           esServicio: false,
           disponible: producto.disponible ?? null
         })
@@ -165,7 +175,7 @@ export default {
     agregarServicio ({ commit, dispatch }, { nombre, precio, cantidad = 1 }) {
       commit('AGREGAR', {
         productoId: null, nombre, emoji: '🚚', precio, cantidad,
-        loteId: null, loteCodigo: null, lotesAutorizados: [],
+        partida: null, loteCodigo: null,
         esServicio: true, disponible: null
       })
       dispatch('consultarPromociones')
@@ -194,19 +204,22 @@ export default {
 
     elegirPromocion ({ commit }, id) { commit('SET_PROMOCION', id) },
 
-    aplicarDescuento ({ commit }, { monto, motivo }) {
-      commit('SET_DESCUENTO', { monto: Math.round(monto || 0), motivo: (motivo || '').trim() })
+    aplicarDescuento ({ commit }, monto) {
+      commit('SET_DESCUENTO', Math.max(0, Math.round(monto || 0)))
     },
 
-    canjearPuntos ({ commit }, puntos) { commit('SET_PUNTOS', Math.max(0, Math.round(puntos || 0))) },
+    canjearPuntos ({ commit }, puntos) {
+      commit('SET_PUNTOS', Math.max(0, Math.round(puntos || 0)))
+    },
 
     /**
      * Pregunta al servidor qué promociones aplican a este carrito, con el
-     * descuento ya calculado. Se llama tras cada cambio: una promoción por
-     * monto mínimo puede activarse al agregar la tercera rosa, y no
-     * ofrecerla sería regalarle plata al local en contra del cliente.
+     * descuento ya calculado. Se llama tras cada cambio: una promo por monto
+     * mínimo puede activarse al agregar la tercera rosa, y no ofrecerla sería
+     * cobrarle de más al cliente sin que nadie se diera cuenta.
      *
-     * Elige sola la más conveniente si no hay una elegida a mano.
+     * El servidor solo necesita producto, cantidad y subtotal: con eso
+     * resuelve el alcance —boleta, categoría o producto— y el mínimo.
      */
     async consultarPromociones ({ state, commit }) {
       if (!state.carrito.length) {
@@ -216,22 +229,28 @@ export default {
       }
 
       try {
-        const items = state.carrito.map(l => ({
-          productoId: l.productoId,
-          cantidad: l.cantidad,
-          loteId: l.loteId,
-          lotesAutorizados: l.lotesAutorizados,
-          esServicio: l.esServicio,
-          nombre: l.nombre,
-          precio: l.esServicio ? l.precio : null
-        }))
+        /* Los servicios no entran: no tienen producto contra el que evaluar
+           categoría ni alcance. */
+        const items = state.carrito
+          .filter(l => !l.esServicio && l.productoId)
+          .map(l => ({
+            productoId: l.productoId,
+            cantidad: l.cantidad,
+            subtotal: l.precio * l.cantidad
+          }))
+
+        if (!items.length) {
+          commit('SET_APLICABLES', [])
+          commit('SET_PROMOCION', null)
+          return
+        }
 
         const aplicables = await ventasService.promocionesAplicables(items)
         commit('SET_APLICABLES', aplicables)
 
-        /* Vienen ordenadas por conveniencia: la primera es la mejor. */
-        const elegida = state.promocionId
-        const sigueValiendo = aplicables.some(p => p.id === elegida)
+        /* Vienen ordenadas por conveniencia: la primera es la mejor. Si la
+           que estaba elegida dejó de aplicar, se cambia sola. */
+        const sigueValiendo = aplicables.some(p => p.id === state.promocionId)
         if (!sigueValiendo) commit('SET_PROMOCION', aplicables[0]?.id ?? null)
       } catch {
         commit('SET_APLICABLES', [])
@@ -241,11 +260,12 @@ export default {
     /* ================= Cobro ================= */
 
     /**
-     * Cobra. Lo que viaja son productos, cantidades y lotes: los montos los
-     * arma el servidor.
+     * Cobra. Lo que viaja son partidas, productos y cantidades: los montos
+     * los arma el servidor leyendo los precios de la base.
      *
-     * `autorizacion` solo se manda si el descuento supera el umbral. La API
-     * responde 403 si las credenciales no corresponden a una administradora.
+     * `autorizacion` solo se manda si el descuento supera el umbral
+     * (configuracion.venta.descuentoSinAutorizacion). La API verifica el
+     * correo y la clave contra la base y exige que sea una administradora.
      */
     async cobrar ({ state, commit, dispatch }, { medioPago, recibido = null, autorizacion = null }) {
       commit('SET_COBRANDO', true)
@@ -257,19 +277,15 @@ export default {
           promocionId: state.promocionId,
           cotizacionId: state.cotizacionId,
           items: state.carrito.map(l => ({
-            productoId: l.productoId,
-            cantidad: l.cantidad,
-            loteId: l.loteId,
-            lotesAutorizados: l.lotesAutorizados,
-            esServicio: l.esServicio,
-            nombre: l.esServicio ? l.nombre : null,
-            precio: l.esServicio ? l.precio : null
+            /* Uno de los dos: la partida manda si está. */
+            partida: l.partida,
+            productoId: l.partida ? null : l.productoId,
+            cantidad: l.cantidad
           })),
           medioPago,
           recibido: medioPago === 'efectivo' ? recibido : null,
           descuentoManual: state.descuentoManual,
-          motivoDescuento: state.motivoDescuento || null,
-          puntosACanjear: state.puntosACanjear,
+          puntosCanjeados: state.puntosACanjear,
           autorizacion
         })
 
@@ -277,8 +293,9 @@ export default {
         commit('SET_DETALLE', venta)
         commit('VACIAR')
 
-        /* El turno cambió y el stock también */
-        dispatch('caja/refrescar', null, { root: true })
+        /* El turno cambió y el mostrador también: las partidas que se
+           vendieron tienen menos varas o se agotaron. */
+        dispatch('caja/cargarActual', null, { root: true })
         dispatch('productos/cargar', {}, { root: true })
 
         return venta
@@ -320,18 +337,26 @@ export default {
     },
 
     /**
-     * Devuelve al inventario exactamente lo que sacó, lote por lote. Solo
-     * admin: mueve dinero y stock.
+     * Devuelve al inventario exactamente lo que sacó, lote por lote. Las
+     * varas vuelven a BODEGA, no al mostrador: la partida pudo haberse
+     * agotado y reabrirla sería inventar una historia que no ocurrió.
+     *
+     * Solo admin, y solo si la caja del turno sigue abierta: anular una
+     * boleta de un arqueo ya firmado lo descuadraría.
      */
     async anular ({ commit, dispatch }, { id, motivo }) {
       const limpio = (motivo || '').trim()
       if (limpio.length < 5) throw new Error('Explica el motivo, con al menos 5 caracteres.')
 
-      const venta = await ventasService.anular(id, limpio)
-      commit('UPSERT', venta)
-      commit('SET_DETALLE', { ...venta, items: [], consumos: [] })
-      dispatch('caja/refrescar', null, { root: true })
-      return venta
+      const resultado = await ventasService.anular(id, limpio)
+
+      /* La API devuelve el resumen de la anulación, no la boleta completa:
+         hay que releer el detalle para reflejar el estado nuevo. */
+      commit('UPSERT', { id, anulada: true, motivoAnulacion: limpio })
+      await dispatch('cargarDetalle', { id, forzar: true })
+      dispatch('caja/cargarActual', null, { root: true })
+
+      return resultado
     }
   },
 
@@ -343,7 +368,6 @@ export default {
     promocionId: state => state.promocionId,
     promocionesAplicables: state => state.promocionesAplicables,
     descuentoManual: state => state.descuentoManual,
-    motivoDescuento: state => state.motivoDescuento,
     puntosACanjear: state => state.puntosACanjear,
     cobrando: state => state.cobrando,
 

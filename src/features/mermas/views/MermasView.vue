@@ -1,450 +1,392 @@
 <template>
-  
-    <div class="cabecera al-entrar">
-      <div>
-        <h2>Mermas</h2>
-        <p class="pista">
-          Flor que se marchitó, se quebró o volvió de un pedido. Registrarla es
-          lo que permite saber por qué no cuadra el inventario.
+  <div class="mermas">
+    <header class="cabecera">
+      <div class="min0">
+        <h1>Mermas</h1>
+        <p class="ayuda">
+          La flor que sale sin venderse. Registrarla mantiene el inventario
+          honesto: sin esto quedan varas fantasma y el valorizado deja de
+          servir para decidir cuánto comprar.
         </p>
       </div>
-      <div class="acciones-cab">
-        <button v-if="puedeRegistrar && candidatos.length" class="btn btn-linea"
-          @click="abrirDescarte">Descartar lote</button>
-        <button v-if="puedeRegistrar" class="btn btn-rojo" @click="abrirRegistro">
-          ＋ Registrar merma
-        </button>
-      </div>
+      <button v-if="puedeEditar" class="btn" @click="registrando = true">
+        <span aria-hidden="true">＋</span> Registrar merma
+      </button>
+    </header>
+
+    <nav v-if="esAdmin" class="pestanas">
+      <button :class="{ on: pestana === 'registro' }" @click="pestana = 'registro'">
+        Registro
+      </button>
+      <button :class="{ on: pestana === 'control' }" @click="irAControl">
+        Control
+        <span v-if="alertasControl" class="punto" aria-hidden="true"></span>
+      </button>
+    </nav>
+
+    <div v-if="error" class="banda banda-error">
+      <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
+      <button class="btn btn-mini" @click="recargar">Reintentar</button>
     </div>
 
-    <!-- ---------- Indicadores ---------- -->
-    <div class="kpis">
-      <div class="kpi destacado al-entrar" style="--i: 1">
-        <div class="rot">Pérdida real del período</div>
-        <div class="val">{{ clp(costoPerdido) }}</div>
-        <div class="pie">{{ unidadesPerdidas }} unidades botadas</div>
-      </div>
-      <div class="kpi al-entrar" style="--i: 2">
-        <div class="rot">Volvió al inventario</div>
-        <div class="val verde">{{ clp(costoRecuperado) }}</div>
-        <div class="pie">{{ unidadesRecuperadas }} unidades recuperadas</div>
-      </div>
-      <div class="kpi al-entrar" style="--i: 3">
-        <div class="rot">Merma sobre ventas</div>
-        <div class="val" :class="{ rojo: mermaAlta }">
-          {{ resumen ? Number(porcentajeSobreVentas).toFixed(1) + '%' : '—' }}
+    <!-- ═══════════════ REGISTRO ═══════════════ -->
+    <template v-if="pestana === 'registro'">
+
+      <!-- El resumen separa lo botado de lo desvalorizado: un ramo
+           desarmado con todas sus varas útiles no es una pérdida entera. -->
+      <section v-if="resumen" class="resumen">
+        <div class="kpi principal" :class="{ alerta: mermaAlta }">
+          <span class="rot">Se perdió</span>
+          <b class="val">{{ clp(costoPerdido) }}</b>
+          <span class="pie">
+            {{ Number(porcentajeSobreVentas).toFixed(1) }}% de lo vendido
+            <template v-if="mermaAlta"> · alto</template>
+          </span>
         </div>
-        <div class="pie">{{ mermaAlta ? 'Sobre 5%: se compra de más' : 'Dentro de lo razonable' }}</div>
-      </div>
-      <div class="kpi al-entrar" style="--i: 4">
-        <div class="rot">Perdido por deterioro</div>
-        <div class="val">{{ clp(costoDesvalorizado) }}</div>
-        <div class="pie">Flor que volvió valiendo menos</div>
-      </div>
-    </div>
 
-    <!-- ---------- Período ---------- -->
-    <div class="barra-filtros al-entrar" style="--i: 5">
-      <label class="rango">
-        <span class="mini suave">Desde</span>
-        <input class="campo campo-fecha" type="date" :value="filtro.desde"
-          @change="filtrar({ desde: $event.target.value || null })">
-      </label>
-      <label class="rango">
-        <span class="mini suave">Hasta</span>
-        <input class="campo campo-fecha" type="date" :value="filtro.hasta"
-          @change="filtrar({ hasta: $event.target.value || null })">
-      </label>
-      <span v-if="resumen" class="mini suave">
-        {{ resumen.registros }} registros · {{ resumen.desde }} a {{ resumen.hasta }}
-      </span>
-    </div>
-
-    <!-- ---------- Análisis ---------- -->
-    <div v-if="porMotivo.length || porProducto.length" class="paneles">
-      <div v-if="porMotivo.length" class="panel al-entrar" style="--i: 6">
-        <h3>Pérdida por motivo</h3>
-        <div v-for="(m, ix) in porMotivo" :key="m.motivo" class="barra-fila">
-          <div class="barra-eti">
-            <span>{{ m.motivo }}</span>
-            <b class="dato">{{ clp(m.costoPerdido) }} · {{ m.unidades }} un</b>
-          </div>
-          <div class="barra">
-            <i :style="{
-              width: barrasListas ? porcentaje(m.costoPerdido, porMotivo[0].costoPerdido) : '0%',
-              transitionDelay: (ix * 60) + 'ms'
-            }"></i>
-          </div>
+        <div class="kpi">
+          <span class="rot">Se botó</span>
+          <b class="val">{{ clp(costoBotado) }}</b>
+          <span class="pie">{{ unidadesPerdidas }} unidad(es)</span>
         </div>
-      </div>
 
-      <div v-if="porProducto.length" class="panel al-entrar" style="--i: 7">
-        <h3>Dónde se está yendo la plata</h3>
-        <div v-for="(p, ix) in porProducto.slice(0, 6)" :key="p.productoId" class="barra-fila">
-          <div class="barra-eti">
-            <span>{{ p.emoji }} {{ p.producto }}</span>
-            <b class="dato">{{ clp(p.costoPerdido) }}</b>
-          </div>
-          <div class="barra">
-            <i class="rosa" :style="{
-              width: barrasListas ? porcentaje(p.costoPerdido, porProducto[0].costoPerdido) : '0%',
-              transitionDelay: (ix * 60) + 'ms'
-            }"></i>
-          </div>
-          <!--
-            El porcentaje sobre lo comprado es el denominador que falta en
-            "se perdieron 40 rosas": sin él no se sabe si es mucho o poco.
-          -->
-          <div v-if="p.porcentajeDeLoComprado != null" class="mini suave">
-            {{ p.unidadesPerdidas }} de lo comprado
-            ({{ Number(p.porcentajeDeLoComprado).toFixed(1) }}%)
-          </div>
+        <div class="kpi">
+          <span class="rot">Bajó de precio</span>
+          <b class="val">{{ clp(costoDesvalorizado) }}</b>
+          <span class="pie">{{ unidadesRecuperadas }} recuperada(s)</span>
         </div>
-        <p class="pie-nota">
-          Si un producto se repite acá, conviene revisar cuánto se compra o cómo se conserva.
-        </p>
-      </div>
-    </div>
 
-    <!-- ---------- Filtros de la lista ---------- -->
-    <div class="barra-filtros al-entrar" style="--i: 8">
+        <div class="kpi bueno">
+          <span class="rot">Sigue valiendo</span>
+          <b class="val">{{ clp(costoRecuperado) }}</b>
+          <span class="pie">volvió al inventario</span>
+        </div>
+      </section>
+
+      <div v-if="motivoPrincipal && motivoPrincipal.costoPerdido > 0" class="banda banda-aviso">
+        <span aria-hidden="true">💡</span>
+        <span>
+          Lo que más cuesta es <b>{{ motivoPrincipal.motivo.toLowerCase() }}</b>:
+          {{ clp(motivoPrincipal.costoPerdido) }} en
+          {{ motivoPrincipal.unidades }} unidad(es).
+        </span>
+      </div>
+
       <div class="buscador">
         <span aria-hidden="true">🔎</span>
-        <input v-model="busqueda" placeholder="Producto, lote o detalle…" aria-label="Buscar merma">
+        <input v-model="busqueda" placeholder="Producto, motivo o código…" aria-label="Buscar merma">
         <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
       </div>
 
-      <select class="campo campo-corto" :value="filtro.destino ?? ''"
-        @change="filtrar({ destino: $event.target.value || null })" aria-label="Destino">
-        <option value="">Todos los destinos</option>
-        <option v-for="d in DESTINOS" :key="d.valor" :value="d.valor">{{ d.texto }}</option>
-      </select>
+      <div class="filtros">
+        <select class="campo corto" :value="filtro.destino ?? ''"
+          @change="filtrar({ destino: $event.target.value || null })" aria-label="Destino">
+          <option value="">Todos los destinos</option>
+          <option v-for="d in DESTINOS" :key="d.valor" :value="d.valor">{{ d.texto }}</option>
+        </select>
 
-      <select class="campo campo-corto" :value="filtro.motivo ?? ''"
-        @change="filtrar({ motivo: $event.target.value || null })" aria-label="Motivo">
-        <option value="">Todos los motivos</option>
-        <option v-for="m in motivos" :key="m" :value="m">{{ m }}</option>
-      </select>
+        <select class="campo corto" :value="filtro.motivo ?? ''"
+          @change="filtrar({ motivo: $event.target.value || null })" aria-label="Motivo">
+          <option value="">Todos los motivos</option>
+          <option v-for="m in nombresMotivo" :key="m" :value="m">{{ m }}</option>
+        </select>
 
-      <label class="check">
-        <input type="checkbox" :checked="filtro.revertida === null"
-          @change="filtrar({ revertida: $event.target.checked ? null : false })">
-        <span>Ver revertidas</span>
-      </label>
-    </div>
-
-    <!-- ---------- Registro ---------- -->
-    <div v-if="cargando && !mermas.length" class="vacio">Cargando registros…</div>
-
-    <div v-else-if="!mermas.length" class="vacio">
-      <strong>Sin mermas en el período</strong>
-      Cuando descartes producto, anótalo acá. Es lo único que distingue una
-      pérdida de un descuadre.
-    </div>
-
-    <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
-      <table>
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Producto</th>
-            <th>Destino</th>
-            <th class="der">Movidas</th>
-            <th class="der">Perdidas</th>
-            <th class="der">Costo real</th>
-            <th>Registró</th>
-            <th class="acciones-col"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(m, ix) in mermas" :key="m.id" class="fila" :style="{ '--i': Math.min(ix, 12) }"
-            :class="{ revertida: m.revertida, resaltada: m.id === resalte.id }">
-            <td data-label="Fecha" class="dato mini">{{ fechaHora(m.fecha) }}</td>
-
-            <td data-label="Producto">
-              <b>{{ m.emoji }} {{ m.producto }}</b>
-              <div v-if="m.loteCodigo" class="detalle-linea">
-                Lote {{ m.loteCodigo }}
-                <span v-if="m.diasEnCamara != null"> · {{ m.diasEnCamara }} días en cámara</span>
-              </div>
-              <div class="detalle-linea">
-                {{ m.motivo }}<span v-if="m.detalle"> — {{ m.detalle }}</span>
-              </div>
-              <div v-if="m.loteRecuperacionCodigo" class="detalle-linea verde">
-                Recuperado en {{ m.loteRecuperacionCodigo }}
-                <span v-if="m.calidadReingreso"> · {{ m.calidadReingreso }}</span>
-              </div>
-              <div v-if="m.revertida" class="detalle-linea rojo">
-                Revertida el {{ fechaHora(m.revertidaEn) }}
-              </div>
-            </td>
-
-            <td data-label="Destino">
-              <span class="etiqueta" :class="claseDestino(m.destino)">{{ textoDestino(m.destino) }}</span>
-            </td>
-
-            <td data-label="Movidas" class="der dato">{{ m.cantidad }}</td>
-            <td data-label="Perdidas" class="der dato">
-              {{ m.cantidadPerdida }}
-              <div v-if="m.cantidadRecuperada" class="mini verde">+{{ m.cantidadRecuperada }} vuelven</div>
-            </td>
-
-            <!-- CostoPerdido, no CostoTotal: en una devolución al proveedor
-                 la mercadería sale del stock pero se abona. -->
-            <td data-label="Costo real" class="der dato" :class="{ rojo: m.costoPerdido > 0 }">
-              {{ clp(m.costoPerdido) }}
-            </td>
-
-            <td data-label="Registró" class="suave corta">{{ m.usuario || '—' }}</td>
-
-            <td class="der acciones-col">
-              <button v-if="puedeRevertir && !m.revertida" class="btn btn-linea btn-mini"
-                @click="abrirReversion(m)">Revertir</button>
-              <span v-else-if="m.revertida" class="etiqueta et-gris">revertida</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p v-if="totalPaginas > 1" class="paginador">
-      <button class="btn btn-linea btn-mini" :disabled="filtro.pagina <= 1"
-        @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
-      <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }}</span>
-      <button class="btn btn-linea btn-mini" :disabled="filtro.pagina >= totalPaginas"
-        @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
-    </p>
-
-    <!-- ================= MODALES ================= -->
-    <div v-if="modal" class="fondo" @click.self="cerrarModal">
-
-      <!-- Registrar -->
-      <div v-if="modal.tipo === 'registrar'" class="modal ancho">
-        <div class="modal-cab">
-          <h3>Registrar merma</h3>
-          <p>Descuenta del inventario y deja anotado qué pasó con lo que salió.</p>
+        <div class="rango">
+          <input type="date" :value="filtro.desde ?? ''" aria-label="Desde"
+            @change="filtrar({ desde: $event.target.value || null })">
+          <span class="guion" aria-hidden="true">→</span>
+          <input type="date" :value="filtro.hasta ?? ''" aria-label="Hasta"
+            @change="filtrar({ hasta: $event.target.value || null })">
+          <button v-if="filtro.desde || filtro.hasta" class="btn-icono chico"
+            @click="filtrar({ desde: null, hasta: null })" aria-label="Quitar fechas">✕</button>
         </div>
 
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-
-          <div class="grupo">
-            <label for="m-prod">Producto</label>
-            <select id="m-prod" class="campo" v-model.number="modal.f.productoId" @change="alElegirProducto">
-              <option :value="null">Selecciona…</option>
-              <option v-for="p in productosDisponibles" :key="p.id" :value="p.id">
-                {{ p.emoji }} {{ p.nombre }} — hay {{ p.disponible }}
-              </option>
-            </select>
-          </div>
-
-          <!--
-            El lote es obligatorio si el producto se controla por lote: una
-            flor perdida pertenece a un lote concreto, con su costo y su
-            procedencia. Sin eso, la pérdida no se puede valorizar.
-          -->
-          <div v-if="productoElegido?.controlaLotes" class="grupo">
-            <label for="m-lote">Lote</label>
-            <div v-if="cargandoLotes" class="suave mini">Buscando lotes…</div>
-            <select v-else id="m-lote" class="campo" v-model.number="modal.f.loteId">
-              <option :value="null">Selecciona el lote…</option>
-              <option v-for="l in lotesDelProducto" :key="l.id" :value="l.id">
-                {{ l.codigo }} — {{ l.varasDisponibles }} varas ·
-                {{ l.diasEnCamara }} días · {{ l.alerta }}
-              </option>
-            </select>
-            <p v-if="!cargandoLotes && !lotesDelProducto.length" class="ayuda mala">
-              Este producto no tiene lotes con existencias.
-            </p>
-          </div>
-
-          <div class="grupo">
-            <label>¿Qué pasó con lo que salió?</label>
-            <div class="opciones">
-              <button v-for="d in DESTINOS" :key="d.valor" type="button" class="opcion"
-                :class="{ on: modal.f.destino === d.valor }" @click="elegirDestino(d.valor)">
-                <b>{{ d.texto }}</b>
-                <span>{{ d.descripcion }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="rejilla grupo">
-            <div>
-              <label for="m-cant">Cantidad que sale</label>
-              <input id="m-cant" class="campo dato" type="number" min="1" :max="maximo"
-                v-model.number="modal.f.cantidad">
-              <p v-if="maximo" class="ayuda">Hay {{ maximo }} disponibles.</p>
-            </div>
-            <div>
-              <label for="m-motivo">Motivo</label>
-              <select id="m-motivo" class="campo" v-model="modal.f.motivo">
-                <option v-for="m in motivos" :key="m" :value="m">{{ m }}</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Solo con reingreso -->
-          <template v-if="modal.f.destino === 'reingreso'">
-            <div class="rejilla grupo">
-              <div>
-                <label for="m-rec">Cuántas vuelven al stock</label>
-                <input id="m-rec" class="campo dato" type="number" min="0" :max="modal.f.cantidad"
-                  v-model.number="modal.f.cantidadRecuperada">
-              </div>
-              <div>
-                <label for="m-cal">En qué estado vuelven</label>
-                <select id="m-cal" class="campo" v-model="modal.f.calidad">
-                  <option v-for="c in CALIDADES" :key="c.valor" :value="c.valor">{{ c.texto }}</option>
-                </select>
-                <p class="ayuda">{{ descripcionCalidad }}</p>
-              </div>
-            </div>
-
-            <!--
-              Óptima vuelve a su lote original y conserva su precio. Buena y
-              limitada van a un lote de recuperación aparte, con precio
-              propio y fuera del reparto automático: hay que escanearlo para
-              venderlo.
-            -->
-            <div v-if="modal.f.calidad !== 'optima'" class="rejilla grupo">
-              <div>
-                <label for="m-precio">Precio rebajado (opcional)</label>
-                <input id="m-precio" class="campo dato" type="number" min="1" step="100"
-                  v-model.number="modal.f.precioRecuperado">
-                <p class="ayuda">Sin precio propio se vende al del producto.</p>
-              </div>
-              <div>
-                <label for="m-costo">Costo con que vuelve (opcional)</label>
-                <input id="m-costo" class="campo dato" type="number" min="0" step="50"
-                  v-model.number="modal.f.costoRecuperado">
-                <p class="ayuda">
-                  Bajarlo reconoce la diferencia como pérdida por deterioro en
-                  este mismo registro.
-                </p>
-              </div>
-            </div>
-          </template>
-
-          <div class="grupo">
-            <label for="m-det">Detalle (opcional)</label>
-            <input id="m-det" class="campo" v-model="modal.f.detalle" maxlength="600"
-              placeholder="Se cortó la cadena de frío el sábado…">
-          </div>
-
-          <div v-if="modal.f.productoId" class="nota" :class="{ alerta: modal.f.destino === 'perdida' }">
-            Salen <b>{{ modal.f.cantidad || 0 }}</b> unidades ·
-            se pierden <b class="dato">{{ perdidas }}</b>
-            <span v-if="modal.f.destino === 'devolucion_proveedor'">
-              <br>La mercadería sale del stock pero <b>no cuenta como costo</b>: se abona.
-            </span>
-            <span v-else-if="modal.f.cantidadRecuperada > 0">
-              <br>{{ modal.f.cantidadRecuperada }} vuelven al inventario.
-            </span>
-          </div>
-        </div>
-
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-          <button class="btn btn-rojo" :disabled="guardando" @click="confirmarRegistro">
-            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-            {{ guardando ? 'Registrando…' : 'Registrar' }}
-          </button>
-        </div>
+        <label class="check">
+          <input type="checkbox" :checked="filtro.revertida === null"
+            @change="filtrar({ revertida: $event.target.checked ? null : false })">
+          <span>Ver revertidas</span>
+        </label>
       </div>
 
-      <!-- Descartar lote -->
-      <div v-else-if="modal.tipo === 'descarte'" class="modal">
-        <div class="modal-cab">
-          <h3>Descartar lote completo</h3>
-          <p>Da de baja el lote con todo lo que le quede.</p>
+      <div v-if="cargando && !mermas.length" class="vacio">Cargando…</div>
+
+      <div v-else-if="!mermas.length" class="vacio">
+        <strong>{{ hayFiltro ? 'Ninguna merma coincide' : 'Sin mermas en el período' }}</strong>
+        {{ hayFiltro
+          ? 'Prueba con otro filtro.'
+          : 'Buena señal: nada salió del inventario sin venderse.' }}
+      </div>
+
+      <!-- ═══ Escritorio ═══ -->
+      <div v-else class="tabla-envoltura solo-escritorio" :class="{ atenuada: cargando }">
+        <table>
+          <thead>
+            <tr>
+              <th class="izq">Producto</th>
+              <th class="izq">Motivo</th>
+              <th class="izq">Destino</th>
+              <th>Salió</th>
+              <th>Volvió</th>
+              <th>Costo perdido</th>
+              <th class="izq">Registro</th>
+              <th class="acciones-col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in mermas" :key="m.id" class="fila" :class="{ revertida: m.revertida }">
+              <td class="izq">
+                <div class="prod">
+                  <span class="emoji" aria-hidden="true">{{ m.emoji }}</span>
+                  <span class="nombre">{{ m.producto }}</span>
+                </div>
+                <div class="desglose">
+                  <span v-if="m.origenCodigo" class="mono">{{ m.origenCodigo }}</span>
+                  <span v-else class="tenue">sin lote</span>
+                  · {{ m.origen }}
+                </div>
+              </td>
+
+              <td class="izq">
+                <div>{{ m.motivo }}</div>
+                <div v-if="m.detalle" class="desglose corta">{{ m.detalle }}</div>
+              </td>
+
+              <td class="izq">
+                <span class="chip" :class="'dst-' + m.destino">{{ textoDestino(m.destino) }}</span>
+              </td>
+
+              <td class="der dato">{{ m.cantidad }}</td>
+
+              <td class="der">
+                <template v-if="m.cantidadRecuperada">
+                  <div class="dato verde">{{ m.cantidadRecuperada }}</div>
+                  <div class="desglose">{{ textoCalidad(m.calidadReingreso) }}</div>
+                </template>
+                <span v-else class="tenue">—</span>
+              </td>
+
+              <!-- Una devolución al proveedor cuesta cero: sale del stock
+                   pero se abona. Mostrar el total ahí sería contarlo como
+                   pérdida. -->
+              <td class="der">
+                <span v-if="m.costoPerdido" class="dato">{{ clp(m.costoPerdido) }}</span>
+                <span v-else class="tenue">sin costo</span>
+              </td>
+
+              <td class="izq suave">
+                <div>{{ fecha(m.creadoEn) }} · {{ hora(m.creadoEn) }}</div>
+                <div class="desglose">
+                  {{ m.usuario || '—' }}
+                  <!-- Quien registra con el balde en la mano escanea; quien
+                       inventa la merma, tipea. La marca lo deja a la vista. -->
+                  <span v-if="!m.escaneado" class="marca" title="Registrada sin escanear">
+                    ✎ a mano
+                  </span>
+                  <span v-if="m.autorizadoPor" class="marca ok" :title="`Autorizada por ${m.autorizadoPor}`">🔐</span>
+                </div>
+              </td>
+
+              <td class="acciones-col der">
+                <span v-if="m.revertida" class="etiqueta">revertida</span>
+                <button v-else-if="esAdmin" class="btn-icono" title="Revertir" @click="abrirReversa(m)">↩</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ═══ Móvil ═══ -->
+      <div v-if="mermas.length" class="tarjetas solo-movil" :class="{ atenuada: cargando }">
+        <article v-for="m in mermas" :key="m.id" class="tarjeta" :class="{ revertida: m.revertida }">
+          <div class="t-fila-1">
+            <div class="prod min0">
+              <span class="emoji" aria-hidden="true">{{ m.emoji }}</span>
+              <span class="nombre">{{ m.producto }}</span>
+            </div>
+            <b class="dato">{{ m.costoPerdido ? clp(m.costoPerdido) : 'sin costo' }}</b>
+          </div>
+
+          <div class="t-fila-2">
+            <span class="chip chico" :class="'dst-' + m.destino">{{ textoDestino(m.destino) }}</span>
+            <span class="suave">{{ m.cantidad }} salieron</span>
+            <span v-if="m.cantidadRecuperada" class="verde">
+              · {{ m.cantidadRecuperada }} volvieron
+            </span>
+          </div>
+
+          <div class="t-fila-3 desglose">
+            {{ m.motivo }}
+            <template v-if="m.origenCodigo"> · <span class="mono">{{ m.origenCodigo }}</span></template>
+            · {{ fecha(m.creadoEn) }}
+            <template v-if="m.usuario"> · {{ m.usuario }}</template>
+            <span v-if="!m.escaneado" class="marca">✎ a mano</span>
+          </div>
+
+          <div v-if="m.revertida" class="t-revertida">Revertida</div>
+          <button v-else-if="esAdmin" class="btn btn-linea btn-mini" @click="abrirReversa(m)">
+            Revertir
+          </button>
+        </article>
+      </div>
+
+      <p v-if="totalPaginas > 1" class="paginador">
+        <button class="btn btn-linea btn-mini" :disabled="filtro.pagina <= 1"
+          @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
+        <span class="mini suave">{{ filtro.pagina }} / {{ totalPaginas }} · {{ total }} registros</span>
+        <button class="btn btn-linea btn-mini" :disabled="filtro.pagina >= totalPaginas"
+          @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
+      </p>
+    </template>
+
+    <!-- ═══════════════ CONTROL ═══════════════ -->
+    <template v-else>
+      <div v-if="cargandoPatrones && !patrones" class="vacio">Calculando…</div>
+
+      <template v-else-if="patrones">
+        <!-- Esto NO acusa a nadie: una florería con una sola persona en
+             bodega va a mostrar 100% para ella y eso no significa nada. Pone
+             los números donde alguien pueda mirarlos. -->
+        <div class="banda banda-info">
+          <span aria-hidden="true">ℹ️</span>
+          <span>
+            Estos números no acusan a nadie: si una sola persona maneja la
+            bodega, va a aparecer en todo. Sirven para notar cambios, no para
+            sacar conclusiones solos.
+          </span>
         </div>
 
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-
-          <div class="grupo">
-            <label for="d-lote">Lote</label>
-            <select id="d-lote" class="campo" v-model.number="modal.f.loteId">
-              <option :value="null">Selecciona…</option>
-              <option v-for="l in candidatos" :key="l.id" :value="l.id">
-                {{ l.codigo }} — {{ l.producto }} · {{ l.varasDisponibles }} varas ·
-                {{ l.alerta }}
-              </option>
-            </select>
-            <p class="ayuda">
-              Aparecen los lotes vencidos, por vencer y los restos rezagados:
-              son los que terminan en merma si no se liquidan.
-            </p>
-          </div>
-
-          <div class="grupo">
-            <label for="d-motivo">Motivo</label>
-            <select id="d-motivo" class="campo" v-model="modal.f.motivo">
-              <option v-for="m in motivos" :key="m" :value="m">{{ m }}</option>
-            </select>
-          </div>
-
-          <div class="grupo">
-            <label for="d-det">Detalle (opcional)</label>
-            <input id="d-det" class="campo" v-model="modal.f.detalle" maxlength="600">
-          </div>
-
-          <label class="interruptor">
-            <input type="checkbox" v-model="modal.f.esDevolucionProveedor">
-            <span>Es devolución al proveedor</span>
-          </label>
+        <section class="panel">
+          <h2>Quién registra las mermas</h2>
           <p class="ayuda">
-            Marcado, la mercadería sale del stock pero no cuenta como costo:
-            el proveedor la abona.
+            La columna que importa es <b>sin escanear</b>: quien registra con
+            el balde en la mano escanea; quien no lo tiene, tipea.
           </p>
 
-          <div v-if="loteADescartar" class="nota alerta">
-            Se dan de baja <b>{{ loteADescartar.varasDisponibles }}</b> varas de
-            {{ loteADescartar.producto }},
-            por {{ clp(loteADescartar.valorRestante) }}.
+          <div class="tabla-envoltura">
+            <table class="compacta">
+              <thead>
+                <tr>
+                  <th class="izq">Persona</th>
+                  <th>Registros</th>
+                  <th>Costo</th>
+                  <th>Sin escanear</th>
+                  <th class="izq">Lo que más merma</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in patrones.porUsuario" :key="u.usuarioId ?? 0">
+                  <td class="izq">
+                    <b>{{ u.usuario || 'sin usuario' }}</b>
+                    <div class="desglose">{{ u.rol }}</div>
+                  </td>
+                  <td class="der dato">{{ u.registros }}</td>
+                  <td class="der dato">{{ clp(u.costoPerdido) }}</td>
+                  <td class="der">
+                    <span class="chip" :class="claseEscaneo(u.porcentajeSinEscanear)">
+                      {{ Number(u.porcentajeSinEscanear).toFixed(0) }}%
+                    </span>
+                  </td>
+                  <td class="izq suave">
+                    {{ u.productoTop || '—' }}
+                    <div v-if="u.motivoTop" class="desglose">{{ u.motivoTop }}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
 
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-          <button class="btn btn-rojo" :disabled="guardando" @click="confirmarDescarte">
-            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-            {{ guardando ? 'Descartando…' : 'Descartar lote' }}
-          </button>
-        </div>
-      </div>
+        <section class="panel">
+          <h2>A qué hora se merma</h2>
+          <p class="ayuda">
+            Lo normal es que se concentre cuando se revisa la cámara: temprano
+            o al cerrar. Un bloque a media tarde vale una pregunta.
+          </p>
 
-      <!-- Revertir -->
-      <div v-else-if="modal.tipo === 'revertir'" class="modal">
+          <!-- Un gráfico de barras con divs: son 24 valores y una librería
+               entera para esto sería peso sin motivo. -->
+          <div class="horas">
+            <div v-for="h in horasCompletas" :key="h.hora" class="hora">
+              <div class="barra-caja">
+                <div class="barra" :style="{ height: alturaBarra(h) }" :class="{ vacia: !h.registros }"
+                  :title="`${h.hora}:00 · ${h.registros} registro(s) · ${clp(h.costoPerdido)}`"></div>
+              </div>
+              <span class="hora-num">{{ h.hora }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="patrones.sinEscanear.length" class="panel">
+          <h2>Registradas a mano</h2>
+          <p class="ayuda">
+            No todas son sospechosas: una etiqueta rota obliga a tipear. La
+            lista permite revisar de a una en vez de sospechar en general.
+          </p>
+
+          <div class="lista-manual">
+            <div v-for="m in patrones.sinEscanear" :key="m.id" class="item-manual">
+              <span class="emoji" aria-hidden="true">{{ m.emoji }}</span>
+              <div class="min0">
+                <b>{{ m.cantidad }} × {{ m.producto }}</b>
+                <div class="desglose">
+                  {{ m.motivo }}
+                  <template v-if="m.loteCodigo"> · <span class="mono">{{ m.loteCodigo }}</span></template>
+                  · {{ m.usuario || '—' }} · {{ fecha(m.creadoEn) }} {{ hora(m.creadoEn) }}
+                </div>
+              </div>
+              <b class="dato">{{ clp(m.costoPerdido) }}</b>
+            </div>
+          </div>
+        </section>
+
+        <p class="nota-pie">
+          Nada de esto detecta el robo de flor que nunca entró al sistema, ni
+          el de alguien que además registra la merma correctamente. Para eso
+          hace falta contar la cámara y comparar.
+        </p>
+      </template>
+    </template>
+
+    <!-- ═══ Modales ═══ -->
+    <ModalMerma v-if="registrando" @cerrar="registrando = false" @registrada="alRegistrar" />
+
+    <div v-if="rev" class="fondo" @click.self="rev = null">
+      <div class="modal angosto" role="dialog" aria-modal="true">
         <div class="modal-cab">
           <h3>Revertir merma</h3>
-          <p>{{ modal.f.merma.cantidad }} × {{ modal.f.merma.producto }}</p>
+          <p>{{ rev.cantidad }} × {{ rev.producto }} · {{ fecha(rev.creadoEn) }}</p>
         </div>
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
 
-          <p class="parrafo">
-            Las varas vuelven al lote del que salieron, conservando su costo y
-            su vencimiento. Si el lote se había descartado, se reactiva.
-          </p>
+        <div class="modal-cuerpo">
+          <div v-if="rev.error" class="error">{{ rev.error }}</div>
+
+          <div class="nota">
+            Las varas vuelven
+            <template v-if="rev.origenCodigo">
+              a <b class="mono">{{ rev.origenCodigo }}</b>
+            </template>
+            <template v-else>al stock</template>
+            con su costo y su vencimiento originales.
+            <template v-if="rev.loteRecuperacion">
+              <br><br>El lote recuperado <b class="mono">{{ rev.loteRecuperacion }}</b> se anula.
+              Si ya se vendió algo de ahí, la reversa no se puede hacer.
+            </template>
+          </div>
 
           <div class="grupo">
             <label for="r-motivo">¿Por qué se revierte?</label>
-            <input id="r-motivo" class="campo" v-model="modal.f.motivo" maxlength="300"
-              placeholder="Se registró el lote equivocado" @keyup.enter="confirmarReversion">
-            <p class="ayuda">Mínimo 5 caracteres. Queda en el registro con tu nombre.</p>
-          </div>
-
-          <div class="nota alerta">
-            Si hubo reingreso y esas varas ya se vendieron, la reversa se
-            rechaza: no hay forma de deshacerla sin inventar stock.
+            <input id="r-motivo" ref="campoMotivo" class="campo" v-model="rev.motivo" maxlength="200"
+              placeholder="Se registró el producto equivocado" @keyup.enter="revertir">
+            <p class="ayuda-campo">
+              Mínimo 5 caracteres. Dentro de seis meses alguien va a querer
+              saber por qué.
+            </p>
           </div>
         </div>
+
         <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-          <button class="btn" :disabled="guardando" @click="confirmarReversion">
-            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
+          <button class="btn btn-linea" :disabled="guardando" @click="rev = null">Cancelar</button>
+          <button class="btn peligro" :disabled="guardando" @click="revertir">
             {{ guardando ? 'Revirtiendo…' : 'Revertir' }}
           </button>
         </div>
@@ -452,88 +394,57 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+  </div>
 </template>
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
+import {
+  DESTINOS, CALIDADES, textoDestino, textoCalidad
+} from '@/features/mermas/store/mermas.module'
+import ModalMerma from '@/features/mermas/components/ModalMerma.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
-import { DESTINOS, CALIDADES, textoDestino } from '@/features/mermas/store/mermas.module'
-
-const CLASE_DESTINO = {
-  perdida: 'et-rojo',
-  reingreso: 'et-verde',
-  devolucion_proveedor: 'et-azul'
-}
 
 export default {
   name: 'MermasView',
-  components: {  },
+  components: { ModalMerma },
 
-  setup () {
+  setup() {
     const store = useStore()
-    const { espera, usarResalte, usarAviso } = useTemporizadores()
+    const { usarAviso } = useTemporizadores()
+    const { aviso, avisar } = usarAviso()
 
-    /* Registrar: admin y bodega. Revertir: solo admin — deshace un registro
-       de pérdida, que es una corrección contable. */
-    const puedeRegistrar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega'))
-    const puedeRevertir = computed(() => store.getters['auth/esAdmin'])
+    const esAdmin = computed(() => store.getters['auth/esAdmin'])
+    const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega'))
 
-    /* ---------------- Datos ---------------- */
+    const pestana = ref('registro')
+
+    /* ---------------- Registro ---------------- */
     const mermas = computed(() => store.getters['mermas/mermas'])
-    const totalPaginas = computed(() => Math.ceil(
-      store.getters['mermas/total'] / (store.getters['mermas/filtro'].porPagina || 50)
-    ))
+    const total = computed(() => store.getters['mermas/total'])
+    const totalPaginas = computed(() => store.getters['mermas/totalPaginas'])
     const filtro = computed(() => store.getters['mermas/filtro'])
     const cargando = computed(() => store.getters['mermas/cargando'])
     const guardando = computed(() => store.getters['mermas/guardando'])
-    const motivos = computed(() => store.getters['mermas/motivos'])
-    const resumen = computed(() => store.getters['mermas/resumen'])
+    const error = computed(() => store.getters['mermas/error'])
 
+    const resumen = computed(() => store.getters['mermas/resumen'])
     const costoPerdido = computed(() => store.getters['mermas/costoPerdido'])
-    const costoRecuperado = computed(() => store.getters['mermas/costoRecuperado'])
+    const costoBotado = computed(() => store.getters['mermas/costoBotado'])
     const costoDesvalorizado = computed(() => store.getters['mermas/costoDesvalorizado'])
+    const costoRecuperado = computed(() => store.getters['mermas/costoRecuperado'])
     const unidadesPerdidas = computed(() => store.getters['mermas/unidadesPerdidas'])
     const unidadesRecuperadas = computed(() => store.getters['mermas/unidadesRecuperadas'])
     const porcentajeSobreVentas = computed(() => store.getters['mermas/porcentajeSobreVentas'])
+    const motivoPrincipal = computed(() => store.getters['mermas/motivoPrincipal'])
     const mermaAlta = computed(() => store.getters['mermas/mermaAlta'])
-    const porMotivo = computed(() => store.getters['mermas/porMotivo'])
-    const porProducto = computed(() => store.getters['mermas/porProducto'])
+    const nombresMotivo = computed(() => store.getters['mermas/nombresMotivo'])
 
-    const productosDisponibles = computed(() =>
-      store.getters['productos/productos'].filter(p => p.activo && p.disponible > 0)
-    )
-
-    /* Candidatos a descarte: exactamente para lo que existe el endpoint. */
-    const candidatos = computed(() => store.getters['lotes/criticos'])
-
-    /* ---------------- Carga ---------------- */
-    let control = null
-
-    onMounted(async () => {
-      control = new AbortController()
-      const señal = { signal: control.signal }
-
-      store.dispatch('mermas/cargarMotivos', señal)
-      store.dispatch('mermas/cargarResumen', señal)
-      store.dispatch('lotes/cargarAlertas', señal)
-
-      /* Reutiliza lo que ya esté cargado: el selector de producto no
-         justifica volver a pedir el catálogo entero. */
-      if (!store.getters['productos/productos'].length) {
-        store.dispatch('productos/cargar', señal)
-      }
-
-      await store.dispatch('mermas/cargar', señal)
-
-      await nextTick()
-      await espera(120)
-      barrasListas.value = true
+    const hayFiltro = computed(() => {
+      const f = filtro.value
+      return !!(f.buscar || f.destino || f.motivo || f.desde || f.hasta || f.revertida === null)
     })
-
-    onUnmounted(() => control?.abort())
-
-    const filtrar = (cambios) => store.dispatch('mermas/filtrar', cambios)
 
     const busqueda = ref(filtro.value.buscar || '')
     let tmr = null
@@ -541,196 +452,107 @@ export default {
       clearTimeout(tmr)
       tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
     })
-    onUnmounted(() => clearTimeout(tmr))
 
-    /* ---------------- Barras ----------------
-     * Nacen en cero y crecen tras el primer pintado: sin ese paso el
-     * navegador ve un solo estado y no hay transición que interpolar. */
-    const barrasListas = ref(false)
+    const filtrar = (cambios) => store.dispatch('mermas/filtrar', cambios)
+    const recargar = () => store.dispatch('mermas/cargar')
 
-    watch(porMotivo, async () => {
-      if (!barrasListas.value) return
-      barrasListas.value = false
-      await nextTick()
-      barrasListas.value = true
-    })
+    const registrando = ref(false)
 
-    const porcentaje = (valor, maximo) =>
-      maximo > 0 ? `${Math.max(2, (valor / maximo) * 100)}%` : '0%'
-
-    /* ---------------- Modales ---------------- */
-    const modal = ref(null)
-    const resalte = usarResalte()
-    const { aviso, avisar } = usarAviso()
-
-    const lotesDelProducto = ref([])
-    const cargandoLotes = ref(false)
-
-    const cerrarModal = () => { modal.value = null }
-
-    const abrirRegistro = () => {
-      lotesDelProducto.value = []
-      modal.value = {
-        tipo: 'registrar',
-        f: {
-          productoId: null, loteId: null, cantidad: 1,
-          destino: 'perdida', cantidadRecuperada: 0, calidad: 'optima',
-          precioRecuperado: null, costoRecuperado: null,
-          motivo: motivos.value[0] || '', detalle: '', error: ''
-        }
-      }
+    const alRegistrar = (m) => {
+      registrando.value = false
+      avisar(m.cantidadRecuperada
+        ? `${m.cantidadRecuperada} varas recuperadas en ${m.loteRecuperacion}`
+        : `${m.cantidad} de ${m.producto} · ${clp(m.costoPerdido)} de pérdida`)
+      store.dispatch('productos/cargar')
     }
 
-    const abrirDescarte = () => {
-      modal.value = {
-        tipo: 'descarte',
-        f: {
-          loteId: null, motivo: motivos.value[0] || '',
-          detalle: '', esDevolucionProveedor: false, error: ''
-        }
-      }
+    /* ---------------- Control ---------------- */
+    const patrones = computed(() => store.getters['mermas/patrones'])
+    const cargandoPatrones = computed(() => store.getters['mermas/cargandoPatrones'])
+
+    const irAControl = () => {
+      pestana.value = 'control'
+      store.dispatch('mermas/cargarPatrones')
     }
 
-    const abrirReversion = (m) => {
-      modal.value = { tipo: 'revertir', f: { merma: m, motivo: '', error: '' } }
-    }
-
-    const productoElegido = computed(() => {
-      const id = modal.value?.f?.productoId
-      return id ? store.getters['productos/porId'](id) : null
+    /* Un punto en la pestaña cuando hay algo que mirar. No dice qué: eso lo
+       decide quien entra, no un semáforo. */
+    const alertasControl = computed(() => {
+      const p = patrones.value
+      if (!p?.porUsuario?.length) return false
+      return p.porUsuario.some(u => u.registros >= 3 && u.porcentajeSinEscanear > 50)
     })
 
-    const loteADescartar = computed(() => {
-      const id = modal.value?.f?.loteId
-      return id ? candidatos.value.find(l => l.id === id) : null
+    const claseEscaneo = (pct) =>
+      pct >= 70 ? 'malo' : pct >= 30 ? 'medio' : 'bueno'
+
+    /* Las 24 horas siempre, aunque no tengan registros: el hueco de la
+       madrugada es tan informativo como el pico de la mañana. */
+    const horasCompletas = computed(() => {
+      const datos = patrones.value?.porHora ?? []
+      return Array.from({ length: 24 }, (_, h) =>
+        datos.find(d => d.hora === h) ?? { hora: h, registros: 0, costoPerdido: 0, sinEscanear: 0 }
+      )
     })
 
-    /* El techo es el lote elegido cuando hay control por lote: no se pueden
-       perder más varas de las que ese paquete tiene. */
-    const maximo = computed(() => {
-      const p = productoElegido.value
-      if (!p) return 0
-      if (!p.controlaLotes) return p.disponible
-      const lote = lotesDelProducto.value.find(l => l.id === modal.value.f.loteId)
-      return lote ? lote.varasDisponibles : p.disponible
-    })
-
-    const perdidas = computed(() => {
-      const f = modal.value?.f
-      if (!f) return 0
-      if (f.destino !== 'reingreso') return f.cantidad || 0
-      return Math.max(0, (f.cantidad || 0) - (f.cantidadRecuperada || 0))
-    })
-
-    const descripcionCalidad = computed(() =>
-      CALIDADES.find(c => c.valor === modal.value?.f?.calidad)?.descripcion || ''
+    const maxHora = computed(() =>
+      Math.max(1, ...horasCompletas.value.map(h => h.registros))
     )
 
-    const alElegirProducto = async () => {
-      const f = modal.value.f
-      f.loteId = null
-      lotesDelProducto.value = []
+    const alturaBarra = (h) =>
+      h.registros ? `${Math.max(8, (h.registros / maxHora.value) * 100)}%` : '3px'
 
-      if (!productoElegido.value?.controlaLotes) return
+    /* ---------------- Revertir ---------------- */
+    const rev = ref(null)
+    const campoMotivo = ref(null)
 
-      cargandoLotes.value = true
-      try {
-        lotesDelProducto.value = await store.dispatch('lotes/lotesDeProducto', {
-          productoId: f.productoId
-        })
-      } finally {
-        cargandoLotes.value = false
+    const abrirReversa = async (m) => {
+      rev.value = {
+        id: m.id,
+        producto: m.producto,
+        cantidad: m.cantidad,
+        creadoEn: m.creadoEn,
+        origenCodigo: m.origenCodigo,
+        loteRecuperacion: m.loteRecuperacion,
+        motivo: '',
+        error: ''
       }
+      await nextTick()
+      campoMotivo.value?.focus()
     }
 
-    const elegirDestino = (destino) => {
-      const f = modal.value.f
-      f.destino = destino
-      if (destino !== 'reingreso') {
-        f.cantidadRecuperada = 0
-        f.precioRecuperado = null
-        f.costoRecuperado = null
-      }
-    }
-
-    /* ---------------- Acciones ---------------- */
-    const confirmarRegistro = async () => {
-      const f = modal.value.f
-      f.error = ''
-
-      if (!f.productoId) return (f.error = 'Elige el producto.')
-      if (productoElegido.value?.controlaLotes && !f.loteId) {
-        return (f.error = 'Este producto se controla por lote: indica de cuál salió.')
-      }
-      if (!f.cantidad || f.cantidad < 1) return (f.error = 'La cantidad debe ser al menos 1.')
-      if (maximo.value && f.cantidad > maximo.value) {
-        return (f.error = `Solo hay ${maximo.value} disponibles.`)
-      }
-      if ((f.motivo || '').trim().length < 3) return (f.error = 'Indica el motivo.')
-      if (f.destino === 'reingreso') {
-        if (f.cantidadRecuperada < 1) {
-          return (f.error = 'Con reingreso, al menos una unidad tiene que volver.')
-        }
-        if (f.cantidadRecuperada > f.cantidad) {
-          return (f.error = 'No pueden volver más unidades de las que salieron.')
-        }
-      }
+    const revertir = async () => {
+      const r = rev.value
+      r.error = ''
 
       try {
-        const merma = await store.dispatch('mermas/registrar', {
-          productoId: f.productoId,
-          loteId: f.loteId,
-          cantidad: f.cantidad,
-          destino: f.destino,
-          cantidadRecuperada: f.destino === 'reingreso' ? f.cantidadRecuperada : 0,
-          calidad: f.destino === 'reingreso' ? f.calidad : null,
-          precioRecuperado: f.precioRecuperado || null,
-          costoRecuperado: f.costoRecuperado ?? null,
-          motivo: f.motivo.trim(),
-          detalle: (f.detalle || '').trim() || null
-        })
-        cerrarModal()
-        avisar(`Registrado · pérdida de ${clp(merma.costoPerdido)}`)
-        resalte.marcar(merma.id)
+        await store.dispatch('mermas/revertir', { id: r.id, motivo: r.motivo })
+        rev.value = null
+        avisar(`${r.cantidad} de ${r.producto} volvieron al inventario`)
+        store.dispatch('productos/cargar')
       } catch (e) {
-        f.error = e.message
+        r.error = e.message
       }
     }
 
-    const confirmarDescarte = async () => {
-      const f = modal.value.f
-      f.error = ''
-      if (!f.loteId) return (f.error = 'Elige el lote a descartar.')
-      if ((f.motivo || '').trim().length < 3) return (f.error = 'Indica el motivo.')
+    /* ---------------- Carga ---------------- */
+    let control = null
 
-      try {
-        const merma = await store.dispatch('mermas/descartarLote', {
-          loteId: f.loteId,
-          motivo: f.motivo.trim(),
-          detalle: (f.detalle || '').trim() || null,
-          esDevolucionProveedor: f.esDevolucionProveedor
-        })
-        cerrarModal()
-        avisar(`Lote ${merma.loteCodigo} descartado`)
-        store.dispatch('lotes/cargarAlertas')
-        resalte.marcar(merma.id)
-      } catch (e) {
-        f.error = e.message
-      }
-    }
+    onMounted(() => {
+      control = new AbortController()
+      const señal = { signal: control.signal }
 
-    const confirmarReversion = async () => {
-      const f = modal.value.f
-      f.error = ''
-      try {
-        await store.dispatch('mermas/revertir', { id: f.merma.id, motivo: f.motivo })
-        cerrarModal()
-        avisar('Merma revertida y stock devuelto')
-        resalte.marcar(f.merma.id)
-      } catch (e) {
-        f.error = e.message
-      }
-    }
+      store.dispatch('mermas/cargar', señal)
+      store.dispatch('mermas/cargarResumen', señal)
+      store.dispatch('mermas/cargarMotivos', señal)
+      store.dispatch('mermas/cargarUmbral')
+      store.dispatch('productos/cargar', señal)
+    })
+
+    onUnmounted(() => {
+      control?.abort()
+      clearTimeout(tmr)
+    })
 
     /* ---------------- Utilidades ---------------- */
     const fmt = new Intl.NumberFormat('es-CL', {
@@ -738,262 +560,235 @@ export default {
     })
     const clp = (n) => fmt.format(Math.round(n || 0))
 
-    const fmtFecha = new Intl.DateTimeFormat('es-CL', {
-      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
-    })
-    const fechaHora = (v) => (v ? fmtFecha.format(new Date(v)) : '—')
+    const fecha = (iso) => (iso
+      ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+      : '—')
 
-    const claseDestino = (d) => CLASE_DESTINO[d] || 'et-gris'
+    const hora = (iso) => (iso
+      ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+      : '')
 
     return {
-      DESTINOS, CALIDADES, Math, textoDestino, claseDestino,
-      puedeRegistrar, puedeRevertir,
-      mermas, totalPaginas, filtro, cargando, guardando, motivos, resumen,
-      costoPerdido, costoRecuperado, costoDesvalorizado,
-      unidadesPerdidas, unidadesRecuperadas, porcentajeSobreVentas, mermaAlta,
-      porMotivo, porProducto, porcentaje, barrasListas,
-      productosDisponibles, candidatos, lotesDelProducto, cargandoLotes,
-      busqueda, filtrar,
-      modal, cerrarModal, abrirRegistro, abrirDescarte, abrirReversion,
-      productoElegido, loteADescartar, maximo, perdidas, descripcionCalidad,
-      alElegirProducto, elegirDestino,
-      confirmarRegistro, confirmarDescarte, confirmarReversion,
-      resalte, aviso, clp, fechaHora
+      Number, DESTINOS, CALIDADES, textoDestino, textoCalidad,
+      esAdmin, puedeEditar, pestana, irAControl,
+      mermas, total, totalPaginas, filtro, cargando, guardando, error, hayFiltro,
+      resumen, costoPerdido, costoBotado, costoDesvalorizado, costoRecuperado,
+      unidadesPerdidas, unidadesRecuperadas, porcentajeSobreVentas,
+      motivoPrincipal, mermaAlta, nombresMotivo,
+      busqueda, filtrar, recargar,
+      registrando, alRegistrar,
+      patrones, cargandoPatrones, alertasControl, claseEscaneo,
+      horasCompletas, alturaBarra,
+      rev, campoMotivo, abrirReversa, revertir,
+      aviso, clp, fecha, hora
     }
   }
 }
 </script>
 
 <style scoped>
-.cabecera,
-.cabecera *,
-.kpis *,
-.paneles *,
-.tabla-envoltura *,
-.fondo * {
-  box-sizing: border-box;
+.mermas {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-@keyframes entra {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: none; }
+.min0 {
+  min-width: 0;
 }
 
-.al-entrar {
-  animation: entra 380ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
-  animation-delay: calc(var(--i, 0) * 55ms);
+.izq {
+  text-align: left;
 }
 
-@keyframes aparece {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
+.der {
+  text-align: right;
 }
 
-.fila {
-  animation: aparece 220ms ease-out backwards;
-  animation-delay: calc(var(--i, 0) * 25ms);
+.suave {
+  color: var(--text-muted);
 }
 
-/* Revertir corrige, no celebra: el resalte va en rojo */
-@keyframes resalta {
-  0% { background: #fee2e2; }
-  70% { background: #fef2f2; }
-  100% { background: transparent; }
+.tenue {
+  color: var(--text-faint);
 }
 
-.fila.resaltada td { animation: resalta 1400ms ease-out; }
-
-.spinner {
-  display: inline-block;
-  width: 15px;
-  height: 15px;
-  flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: girar 0.8s linear infinite;
+.mini {
+  font-size: .78rem;
 }
 
-@keyframes girar { to { transform: rotate(360deg); } }
+.verde {
+  color: var(--success);
+}
 
-/* ---------- Encabezado ---------- */
+.mono {
+  font-family: var(--font-mono);
+  font-size: .95em;
+}
+
+.dato {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.rot {
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.desglose {
+  font-size: .73rem;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.corta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 26ch;
+}
+
+.ayuda {
+  font-size: .82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin-top: 4px;
+  max-width: 62ch;
+}
+
+.solo-movil {
+  display: none;
+}
+
+/* ─── Cabecera ─── */
+
 .cabecera {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
 }
 
-.cabecera h2 {
-  margin: 0;
-  font-size: clamp(1.25rem, 4.5vw, 1.5rem);
-  color: #0f172a;
+h1 {
+  font-size: clamp(1.2rem, 5vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -.02em;
 }
 
-.pista {
-  margin: 4px 0 0;
-  font-size: 0.875rem;
-  color: #64748b;
-  max-width: 62ch;
-  line-height: 1.5;
-}
-
-.acciones-cab {
+.pestanas {
   display: flex;
-  gap: 9px;
-  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* ---------- KPIs ---------- */
-.kpis {
+.pestanas button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color var(--t-fast), border-color var(--t-fast);
+}
+
+.pestanas button:hover {
+  color: var(--text);
+}
+
+.pestanas button.on {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+}
+
+/* Un punto cuando hay algo que mirar. No dice qué: eso lo decide quien
+   entra, no un semáforo. */
+.punto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+/* ─── Resumen ─── */
+
+.resumen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
 }
 
 .kpi {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 15px;
-  transition: border-color 0.18s, box-shadow 0.18s;
-}
-
-.kpi:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-}
-
-.kpi .rot {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #64748b;
-}
-
-.kpi .val {
-  font-size: clamp(1.2rem, 4.5vw, 1.5rem);
-  font-weight: 700;
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
-}
-
-.kpi .pie {
-  font-size: 0.72rem;
-  color: #64748b;
-  margin-top: 3px;
-}
-
-.kpi.destacado {
-  background: #7f1d1d;
-  border-color: #7f1d1d;
-  color: #fff;
-}
-
-.kpi.destacado .rot { color: #fca5a5; }
-.kpi.destacado .pie { color: #fecaca; }
-
-/* ---------- Paneles ---------- */
-.paneles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 18px;
-}
-
-.panel h3 {
-  margin: 0 0 14px;
-  font-size: 0.95rem;
-  color: #0f172a;
-}
-
-.barra-fila { margin-bottom: 12px; }
-
-.barra-eti {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 0.8rem;
-  margin-bottom: 5px;
-}
-
-.barra-eti span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.barra-eti b { white-space: nowrap; }
-
-.barra {
-  height: 7px;
-  background: #f1f5f9;
-  border-radius: 99px;
-  overflow: hidden;
-}
-
-.barra i {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: #d97706;
-  border-radius: 99px;
-  transition: width 0.62s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.barra i.rosa { background: #be185d; }
-
-.pie-nota {
-  margin: 12px 0 0;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.45;
-}
-
-/* ---------- Filtros ---------- */
-.barra-filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.rango {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  padding: 15px 17px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
 }
+
+.kpi .val {
+  font-size: clamp(1.15rem, 4vw, 1.4rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+
+.kpi .pie {
+  font-size: .74rem;
+  color: var(--text-muted);
+}
+
+.kpi.principal {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
+/* Rojo sobre el 5% de lo vendido: en una florería es la señal de que se
+   compra más de lo que se alcanza a vender. */
+.kpi.principal.alerta {
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.kpi.principal.alerta .rot,
+.kpi.principal.alerta .pie {
+  color: inherit;
+  opacity: .85;
+}
+
+.kpi.bueno .val {
+  color: var(--success);
+}
+
+/* ─── Filtros ─── */
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 240px;
-  min-width: 0;
-  min-height: 44px;
-  padding: 0 12px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  min-height: 46px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  transition: border-color var(--t-fast);
 }
 
 .buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
 }
 
 .buscador input {
@@ -1002,200 +797,562 @@ export default {
   border: 0;
   outline: 0;
   background: none;
-  font-family: inherit;
-  font-size: max(0.9rem, 16px);
+  color: var(--text);
+  font: inherit;
+  /* 16px mínimo: bajo eso iOS hace zoom al enfocar. */
+  font-size: max(.9rem, 16px);
+}
+
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.filtros .campo,
+.rango {
+  min-height: 44px;
 }
 
 .campo {
   width: 100%;
-  min-height: 44px;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
-  font-family: inherit;
-  font-size: max(0.9rem, 16px);
-  color: #0f172a;
-  outline: none;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  padding: .6rem .75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.9rem, 16px);
+  transition: border-color var(--t-fast);
 }
 
 .campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  outline: 0;
+  border-color: var(--accent);
 }
 
-.campo-corto { width: auto; flex: 0 1 200px; }
-.campo-fecha { width: auto; min-width: 150px; }
+.filtros .campo.corto {
+  width: auto;
+  flex: 0 1 180px;
+}
+
+.rango {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  transition: border-color var(--t-fast);
+}
+
+.rango:focus-within {
+  border-color: var(--accent);
+}
+
+.rango input {
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+  /* Sin ancho fijo, Chrome le da casi 200px a cada input de fecha. */
+  width: 8.4em;
+  padding: 0;
+}
+
+.guion {
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.85rem;
-  color: #475569;
+  gap: 8px;
+  padding: 0 6px;
+  font-size: .85rem;
+  color: var(--text-muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .check input {
-  width: 17px;
-  height: 17px;
-  accent-color: #059669;
-  cursor: pointer;
-}
-
-.interruptor {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 4px;
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #0f172a;
-  cursor: pointer;
-}
-
-.interruptor input {
   width: 18px;
   height: 18px;
-  flex-shrink: 0;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
-/* ---------- Tabla ---------- */
+/* ─── Tabla ─── */
+
 .tabla-envoltura {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
-  overflow-x: auto;
-  transition: opacity 0.14s ease;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: auto;
+  transition: opacity .14s ease;
 }
 
-.tabla-envoltura.atenuada { opacity: 0.45; }
+.tabla-envoltura.atenuada,
+.tarjetas.atenuada {
+  opacity: .45;
+}
 
-table { width: 100%; border-collapse: collapse; }
+table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+table.compacta {
+  min-width: 620px;
+}
 
 th {
-  text-align: left;
-  padding: 11px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0.66rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: right;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: .66rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: .07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-muted);
   white-space: nowrap;
+}
+
+th.izq {
+  text-align: left;
 }
 
 td {
-  padding: 11px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 0.875rem;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: .86rem;
   vertical-align: middle;
-}
-
-tbody tr:last-child td { border-bottom: 0; }
-tr.revertida { opacity: 0.5; }
-
-.der { text-align: right; }
-.suave { color: #64748b; }
-.mini { font-size: 0.78rem; }
-.rojo { color: #dc2626; }
-.verde { color: #047857; }
-
-.dato {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.corta {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.acciones-col { width: 1%; white-space: nowrap; }
-
-.detalle-linea {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  margin-top: 2px;
+tbody tr:last-child td {
+  border-bottom: 0;
 }
 
-.detalle-linea.verde { color: #047857; }
-.detalle-linea.rojo { color: #dc2626; }
+/* Una merma revertida se atenúa pero no se esconde: dejó de ser pérdida,
+   pero el registro de que ocurrió tiene que poder consultarse. */
+.fila.revertida {
+  opacity: .5;
+}
+
+.prod {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prod .emoji {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.nombre {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acciones-col {
+  width: 1%;
+}
+
+/* La marca de "a mano" no es una acusación: es un dato. Va en el color de
+   aviso, no en el de error. */
+.marca {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: .66rem;
+  font-weight: 700;
+  cursor: help;
+}
+
+.marca.ok {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* ─── Tarjetas ─── */
+
+.tarjetas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity .14s ease;
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.tarjeta.revertida {
+  opacity: .55;
+}
+
+.t-fila-1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.t-fila-2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: .78rem;
+}
+
+.t-revertida {
+  font-size: .74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-faint);
+}
+
+/* ─── Control ─── */
+
+.panel {
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.panel h2 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.panel .tabla-envoltura {
+  margin-top: 14px;
+  border-radius: var(--r-sm);
+}
+
+/* Un gráfico con divs: son 24 valores y una librería entera para esto
+   sería peso sin motivo. */
+.horas {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 120px;
+  margin-top: 16px;
+}
+
+.hora {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+}
+
+.barra-caja {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.barra {
+  width: 100%;
+  min-height: 3px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  transition: opacity var(--t-fast);
+}
+
+.barra:hover {
+  opacity: .75;
+}
+
+/* Las horas sin registros dejan una marca tenue en vez de nada: el hueco
+   de la madrugada es tan informativo como el pico de la mañana. */
+.barra.vacia {
+  background: var(--border);
+}
+
+.hora-num {
+  font-size: .6rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.lista-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+}
+
+.item-manual {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .85rem;
+}
+
+.item-manual:last-child {
+  border-bottom: 0;
+}
+
+.item-manual .emoji {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.item-manual .min0 {
+  flex: 1;
+}
+
+.nota-pie {
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  font-size: .8rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ─── Chips ─── */
+
+.chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  font-size: .74rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chip.chico {
+  padding: 2px 8px;
+  font-size: .7rem;
+}
+
+/* Cada destino con su color: la devolución no es pérdida y no debería
+   verse como tal. */
+.dst-perdida {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.dst-reingreso {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.dst-devolucion_proveedor {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.chip.bueno {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.chip.medio {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.chip.malo {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
 
 .etiqueta {
   display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.62rem;
+  padding: 1px 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .62rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
+  letter-spacing: .04em;
 }
 
-.et-verde { background: #d1fae5; color: #047857; }
-.et-rojo { background: #fee2e2; color: #991b1b; }
-.et-azul { background: #dbeafe; color: #1d4ed8; }
-.et-gris { background: #f1f5f9; color: #64748b; }
+/* ─── Modal ─── */
 
-.paginador {
+.fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  margin: 14px 0 0;
+  padding: 16px;
+  background: var(--overlay);
 }
 
-/* ---------- Botones ---------- */
+.modal {
+  width: 100%;
+  max-width: 500px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal.angosto {
+  max-width: 400px;
+}
+
+.modal-cab {
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-cab h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.modal-cab p {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.modal-cuerpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 22px;
+}
+
+.modal-pie {
+  display: flex;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.modal-pie .btn {
+  flex: 1;
+}
+
+.grupo {
+  margin-bottom: 16px;
+}
+
+label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.ayuda-campo {
+  font-size: .75rem;
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+
+.nota {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--info-soft);
+  border-left: 3px solid var(--info);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: .8rem;
+  line-height: 1.55;
+}
+
+/* ─── Botones y bandas ─── */
+
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 44px;
-  padding: 0.65rem 1.15rem;
+  padding: .65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.92rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-size: .92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
-  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  transition: background-color var(--t-fast);
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
-.btn:active:not(:disabled) { transform: scale(0.97); }
-.btn:disabled { background: #a7c9bb; cursor: not-allowed; }
+.btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Revertir deshace un registro de pérdida y mueve el resultado del mes. */
+.btn.peligro {
+  background: var(--danger);
+}
+
+.btn.peligro:hover:not(:disabled) {
+  filter: brightness(.92);
+}
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
-.btn-linea:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
-.btn-linea:disabled { background: transparent; color: #cbd5e1; }
-
-.btn-rojo { background: #dc2626; }
-.btn-rojo:hover:not(:disabled) { background: #b91c1c; }
-.btn-rojo:disabled { background: #f2a5a5; }
+.btn-linea:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
 
 .btn-mini {
-  min-height: 34px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.8rem;
+  min-height: 36px;
+  padding: .35rem .85rem;
+  font-size: .82rem;
 }
 
 .btn-icono {
@@ -1204,256 +1361,194 @@ tr.revertida { opacity: 0.5; }
   justify-content: center;
   width: 30px;
   height: 30px;
+  flex-shrink: 0;
   padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #64748b;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--t-fast), color var(--t-fast);
 }
 
-.btn-icono:hover { border-color: #059669; color: #059669; }
-.btn-icono.chico { width: 28px; height: 28px; }
-
-/* ---------- Modales ---------- */
-.fondo {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgba(15, 23, 42, 0.55);
+.btn-icono:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
 }
 
-.modal {
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  max-height: 90dvh;
+.btn-icono.chico {
+  width: 26px;
+  height: 26px;
+  font-size: .78rem;
+}
+
+.banda {
   display: flex;
-  flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
-}
-
-.modal.ancho { max-width: 640px; }
-
-.modal-cab {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.modal-cab h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
-.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
-
-.modal-cuerpo { padding: 18px 20px; overflow-y: auto; }
-
-.modal-pie {
-  display: flex;
-  gap: 9px;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 11px;
   flex-wrap: wrap;
-  padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
-}
-
-label {
-  display: block;
-  margin-bottom: 5px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: #475569;
-}
-
-.grupo { margin-bottom: 15px; }
-
-.rejilla {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 13px;
-}
-
-.ayuda {
-  margin: 5px 0 0;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.5;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-
-.ayuda.mala { color: #dc2626; }
-
-.parrafo {
-  margin: 0 0 14px;
-  font-size: 0.875rem;
+  padding: 12px 16px;
+  border-radius: var(--r-sm);
+  font-size: .85rem;
   line-height: 1.55;
-  color: #475569;
+}
+
+.banda-error {
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+}
+
+.banda-aviso {
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-border);
+  color: var(--warn);
+}
+
+.banda-info {
+  background: var(--info-soft);
+  border: 1px solid var(--info-border);
+  color: var(--info);
+}
+
+.banda .btn {
+  margin-left: auto;
 }
 
 .error {
-  padding: 10px 13px;
-  margin-bottom: 14px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.85rem;
-}
-
-.nota {
-  padding: 10px 13px;
-  margin-top: 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
-  font-size: 0.83rem;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.nota.alerta {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #78350f;
-}
-
-.opciones {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.opcion {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
   padding: 11px 13px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.15s, background-color 0.15s;
+  margin-bottom: 16px;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: .85rem;
+  line-height: 1.5;
 }
 
-.opcion b { font-size: 0.88rem; color: #0f172a; }
-.opcion span { font-size: 0.75rem; color: #64748b; line-height: 1.45; }
-
-.opcion.on {
-  border-color: #059669;
-  background: #f0fdf4;
-}
-
-/* ---------- Varios ---------- */
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: .88rem;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
-  font-size: 1.05rem;
+  color: var(--text);
+  font-size: 1.02rem;
   margin-bottom: 5px;
+}
+
+.paginador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .aviso {
   position: fixed;
-  bottom: 22px;
   left: 50%;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0));
   transform: translateX(-50%);
-  z-index: 80;
-  max-width: 90vw;
-  padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
+  z-index: 200;
+  max-width: calc(100vw - 32px);
+  padding: 12px 22px;
+  border-radius: var(--r-full);
+  background: var(--success);
   color: #fff;
-  font-size: 0.875rem;
+  font-size: .88rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
   text-align: center;
+  box-shadow: var(--shadow-lg);
 }
 
-.aviso.malo { background: #b91c1c; }
+.aviso.malo {
+  background: var(--danger);
+}
 
-/* ---------- Móvil ---------- */
+/* ─── Móvil ─── */
+
 @media (max-width: 860px) {
-  .tabla-envoltura {
-    border: none;
-    background: transparent;
-    overflow: visible;
+  .solo-escritorio {
+    display: none;
   }
 
-  table, thead, tbody, tr, td { display: block; width: 100%; }
-  thead { display: none; }
-
-  tbody tr {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    margin-bottom: 11px;
-    padding: 12px;
-  }
-
-  td {
+  .solo-movil {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 0;
+  }
+
+  .cabecera .btn {
+    width: 100%;
+  }
+
+  .resumen {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .filtros {
+    gap: 8px;
+  }
+
+  .filtros .campo.corto,
+  .rango {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .rango input {
+    flex: 1;
+    width: auto;
+  }
+
+  /* Área táctil completa: un checkbox de 18px es difícil de acertar con el
+     pulgar. */
+  .check {
+    min-height: 44px;
+    padding: 6px 2px;
+  }
+
+  .panel {
+    padding: 15px;
+  }
+
+  /* Cada tercera hora en el eje: 24 números de 10px no se leen en un
+     teléfono. */
+  .hora-num {
+    font-size: .55rem;
+  }
+
+  .hora:nth-child(even) .hora-num {
+    visibility: hidden;
+  }
+
+  .fondo {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-width: none;
+    max-height: 100dvh;
+    height: 100dvh;
     border: none;
-    text-align: right;
+    border-radius: 0;
   }
 
-  td::before {
-    content: attr(data-label);
-    font-size: 0.66rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #94a3b8;
-    text-align: left;
-    flex-shrink: 0;
+  .modal-pie {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
   }
 
-  td:not([data-label]) { justify-content: flex-end; }
-  td:not([data-label])::before { content: none; }
-
-  td[data-label="Producto"] {
-    display: block;
-    text-align: left;
-    padding-bottom: 9px;
-    border-bottom: 1px solid #f1f5f9;
-    margin-bottom: 5px;
+  .tarjeta .btn {
+    width: 100%;
+    margin-top: 4px;
   }
-
-  td[data-label="Producto"]::before { content: none; }
-
-  .fila.resaltada { animation: resalta 1400ms ease-out; }
-  .fila.resaltada td { animation: none; }
-
-  .corta { max-width: none; }
-  .campo-corto { flex: 1 1 100%; width: 100%; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn, .btn-icono, .campo, .buscador, .kpi, .opcion,
-  .barra i, .tabla-envoltura { transition: none; }
-
-  .al-entrar, .fila, .fila.resaltada, .fila.resaltada td, .spinner { animation: none; }
-
-  .tabla-envoltura.atenuada { opacity: 1; }
 }
 </style>

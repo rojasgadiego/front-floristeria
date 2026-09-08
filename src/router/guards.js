@@ -22,6 +22,10 @@ const RUTA_LOGIN = 'Login'
 const RUTA_INICIO = 'Dashboard'
 const RUTA_SIN_PERMISO = 'SinPermiso'
 
+/* Deja los logs de bloqueo solo en desarrollo: en producción llenarían la
+   consola del navegador del local con ruido que nadie va a leer. */
+const DEPURAR = process.env.NODE_ENV !== 'production'
+
 const esPublica = (to) =>
   to.meta.publica === true || to.meta.requiresAuth === false
 
@@ -44,10 +48,24 @@ export function instalarGuards (router) {
     }
 
     if (to.meta.roles?.length && !store.getters['auth/tieneRol'](...to.meta.roles)) {
+      if (DEPURAR) {
+        console.warn('[guard] bloqueo por ROL', {
+          ruta: to.name,
+          pide: to.meta.roles,
+          tiene: store.getters['auth/userRoles']
+        })
+      }
       return { name: RUTA_SIN_PERMISO }
     }
 
     if (to.meta.permiso && !store.getters['auth/puede'](to.meta.permiso)) {
+      if (DEPURAR) {
+        console.warn('[guard] bloqueo por PERMISO', {
+          ruta: to.name,
+          pide: to.meta.permiso,
+          tiene: store.getters['auth/permisos']
+        })
+      }
       return { name: RUTA_SIN_PERMISO }
     }
 

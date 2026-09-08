@@ -67,6 +67,11 @@ export default {
         },
         SET_FILTRO(state, cambios) {
             state.filtro = { ...state.filtro, ...cambios, pagina: cambios.pagina ?? 1 }
+
+            /* La lista se vacía al cambiar el filtro: si no, la grilla muestra el
+               resultado anterior hasta que llega el nuevo, y al pasar del POS a
+               bodega eso significa ver el mostrador en la pantalla de bodega. */
+            state.lista = []
         },
         RESET_FILTRO(state) { state.filtro = filtroInicial() },
         SET_CARGANDO(state, v) { state.cargando = v },

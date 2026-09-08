@@ -255,10 +255,11 @@ export default {
       if (!puedeCobrar.value || cobrando.value) return
       error.value = ''
 
-      store.dispatch('ventas/aplicarDescuento', {
-        monto: descuento.value || 0,
-        motivo: motivo.value
-      })
+      /* El motivo se pide en pantalla pero la API no lo guarda: `ventas` no
+         tiene columna para él. Queda como control de la persona que cobra
+         —tener que escribirlo hace pensar dos veces— y si algún día se
+         quiere auditar, hay que agregar la columna. */
+      store.dispatch('ventas/aplicarDescuento', descuento.value || 0)
       store.dispatch('ventas/canjearPuntos', puntos.value || 0)
 
       try {
@@ -271,8 +272,9 @@ export default {
         })
         emit('cobrada', venta)
       } catch (e) {
-        /* El 403 es credenciales que no corresponden a una administradora;
-           el 400, stock o caja. Los dos mensajes vienen redactados. */
+        /* Los mensajes vienen redactados desde el servidor: credenciales
+           que no son de una administradora, partida sin stock, caja
+           cerrada. Se muestran tal cual. */
         error.value = e.message
         auth.password = ''
       }
@@ -310,47 +312,61 @@ export default {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--overlay);
 }
 
 .modal {
   width: 100%;
   max-width: 480px;
-  max-height: 92vh;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal-cab {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
-.modal-cab h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
-.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
+.modal-cab h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+}
 
-.modal-cuerpo { padding: 18px 20px; overflow-y: auto; }
+.modal-cab p {
+  margin: 4px 0 0;
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+
+.modal-cuerpo {
+  padding: 18px 20px;
+  overflow-y: auto;
+}
 
 .modal-pie {
   display: flex;
   gap: 9px;
   justify-content: flex-end;
   padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
 }
 
 label {
   display: block;
   margin-bottom: 5px;
-  font-size: 0.68rem;
+  font-size: .68rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: .07em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .seccion-cab {
@@ -365,26 +381,39 @@ label {
 .campo {
   width: 100%;
   min-height: 46px;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
+  padding: .6rem .75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
-  font-size: max(0.95rem, 16px);
-  color: #0f172a;
+  /* 16px mínimo: bajo eso iOS hace zoom al enfocar y descoloca el modal
+     justo cuando hay un cliente esperando el vuelto. */
+  font-size: max(.95rem, 16px);
   outline: none;
+  transition: border-color var(--t-fast);
 }
 
-.campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
-}
+.campo:focus { border-color: var(--accent); }
 
 .campo.grande {
   min-height: 58px;
   font-size: 1.5rem;
   font-weight: 700;
   text-align: right;
+}
+
+/* Sin flechitas: al contar plata estorban, y un click accidental cambia
+   el monto sin que nadie lo note. */
+.campo[type=number]::-webkit-outer-spin-button,
+.campo[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.campo[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .campo.motivo { margin-top: 9px; }
@@ -396,6 +425,7 @@ label {
 }
 
 /* ---------- Medios de pago ---------- */
+
 .medios {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -408,26 +438,29 @@ label {
   gap: 9px;
   min-height: 52px;
   padding: 0 14px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  background: #fff;
-  color: #475569;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: .9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition: border-color var(--t-fast), background-color var(--t-fast), color var(--t-fast);
 }
+
+.medio:hover { border-color: var(--border-strong); }
 
 .medio .icono { font-size: 1.15rem; }
 
 .medio.on {
-  border-color: #059669;
-  background: #059669;
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 /* ---------- Efectivo ---------- */
+
 .billetes {
   display: flex;
   gap: 6px;
@@ -437,19 +470,25 @@ label {
 
 .chip-boton {
   padding: 8px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  background: #fff;
-  color: #475569;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: .82rem;
   font-weight: 700;
-  cursor: pointer;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast);
 }
 
-.chip-boton:hover { border-color: #059669; color: #047857; }
+.chip-boton:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
 
+/* El vuelto en grande y con color: es el número que se dice en voz alta
+   con el cliente enfrente. */
 .vuelto {
   display: flex;
   align-items: baseline;
@@ -457,23 +496,27 @@ label {
   gap: 12px;
   margin-top: 12px;
   padding: 13px 15px;
-  border-radius: 10px;
-  background: #f0fdf4;
-  color: #166534;
+  border-radius: var(--r-sm);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .vuelto span {
-  font-size: 0.68rem;
+  font-size: .68rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }
 
 .vuelto b { font-size: 1.6rem; }
 
-.vuelto.falta { background: #fee2e2; color: #991b1b; }
+.vuelto.falta {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
 
 /* ---------- Canje ---------- */
+
 .fila-canje {
   display: flex;
   gap: 8px;
@@ -483,12 +526,15 @@ label {
 .fila-canje .campo { flex: 1; }
 
 /* ---------- Autorización ---------- */
+
+/* En ámbar y no en el color de acento: no es un paso más del cobro, es una
+   interrupción que pide traer a otra persona. */
 .autorizacion {
   margin-top: 12px;
   padding: 13px 14px;
-  border: 1.5px solid #fcd34d;
-  border-radius: 10px;
-  background: #fffbeb;
+  border: 1.5px solid var(--warn-border);
+  border-radius: var(--r-sm);
+  background: var(--warn-soft);
 }
 
 .auth-cab {
@@ -496,17 +542,22 @@ label {
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
-  color: #78350f;
-  font-size: 0.9rem;
+  color: var(--warn);
+  font-size: .9rem;
 }
 
-.autorizacion .ayuda { color: #92400e; margin-bottom: 11px; }
+.autorizacion .ayuda {
+  color: var(--warn);
+  opacity: .85;
+  margin-bottom: 11px;
+}
 
 /* ---------- Totales ---------- */
+
 .totales {
   padding: 13px 15px;
-  background: #f8fafc;
-  border-radius: 10px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
 }
 
 .totales .linea {
@@ -514,83 +565,101 @@ label {
   justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
-  font-size: 0.86rem;
-  color: #64748b;
+  font-size: .86rem;
+  color: var(--text-muted);
 }
 
-.totales .linea.verde { color: #047857; }
+.totales .linea.verde { color: var(--success); }
 
 .totales .linea.total {
   margin-top: 7px;
   padding-top: 9px;
-  border-top: 1px solid #e2e8f0;
-  color: #0f172a;
+  border-top: 1px solid var(--border);
+  color: var(--text);
   font-weight: 700;
 }
 
 .totales .linea.total b { font-size: 1.4rem; }
 
 /* ---------- Botones ---------- */
+
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   min-height: 46px;
-  padding: 0.65rem 1.15rem;
+  padding: .65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: .95rem;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--t-med);
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
-.btn:disabled { background: #a7c9bb; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 
-.btn.grande { min-height: 54px; font-size: 1.05rem; flex: 1; }
+.btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn.grande {
+  min-height: 54px;
+  font-size: 1.05rem;
+  flex: 1;
+}
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
-.btn-linea:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
+.btn-linea:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
 
 .btn-mini {
   min-height: 40px;
-  padding: 0.35rem 0.8rem;
-  font-size: 0.82rem;
+  padding: .35rem .8rem;
+  font-size: .82rem;
 }
 
 .spinner {
   display: inline-block;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
   border-radius: 50%;
-  animation: girar 0.8s linear infinite;
+  opacity: .7;
+  animation: girar .8s linear infinite;
 }
 
 @keyframes girar { to { transform: rotate(360deg); } }
 
 /* ---------- Varios ---------- */
-.dato { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.dato {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .dato.grande { font-size: 1.3rem; }
-.mini { font-size: 0.76rem; }
-.suave { color: #64748b; }
-.mala { color: #dc2626; }
+.mini { font-size: .76rem; }
+.suave { color: var(--text-muted); }
+.mala { color: var(--danger); }
 
 .ayuda {
   margin: 7px 0 0;
-  font-size: 0.76rem;
-  color: #94a3b8;
+  font-size: .76rem;
+  color: var(--text-faint);
   line-height: 1.5;
   text-transform: none;
   letter-spacing: 0;
@@ -600,11 +669,11 @@ label {
 .error {
   padding: 11px 13px;
   margin-bottom: 15px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.86rem;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: .86rem;
   line-height: 1.5;
 }
 
@@ -614,7 +683,7 @@ label {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .medio { transition: none; }
+  .btn, .medio, .campo { transition: none; }
   .spinner { animation: none; }
 }
 </style>

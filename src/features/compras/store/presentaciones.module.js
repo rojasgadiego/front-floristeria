@@ -1,18 +1,8 @@
-/**
- * features/compras/store/presentaciones.module.js
- * =========================================================================
- * Cacheadas por producto: el formulario de compra las pide cada vez que se
- * elige un producto en una línea, y en una compra de ocho líneas eso serían
- * ocho peticiones repetidas.
- * =========================================================================
- */
-
-import { presentacionesService } from "../service/presentaciones.service" 
+import { presentacionesService } from "../service/presentaciones.service"
 
 export const TIPOS_PRESENTACION = [
-  { valor: 'vara', texto: 'Vara', ayuda: 'Se compra de a una.' },
-  { valor: 'paquete', texto: 'Paquete', ayuda: 'Atado de varias varas.' },
-  { valor: 'caja', texto: 'Caja', ayuda: 'Varios paquetes juntos.' }
+  { valor: 'paquete', texto: 'Paquete', ayuda: 'Atado de varias varas. Cada uno lleva su QR.' },
+  { valor: 'caja', texto: 'Caja', ayuda: 'Varios paquetes juntos. Sale un QR por paquete.' }
 ]
 
 export default {
@@ -27,21 +17,21 @@ export default {
   }),
 
   mutations: {
-    SET_LISTA (state, { productoId, lista }) {
+    SET_LISTA(state, { productoId, lista }) {
       state.porProducto = { ...state.porProducto, [productoId]: lista || [] }
     },
-    INVALIDAR (state, productoId) {
+    INVALIDAR(state, productoId) {
       const copia = { ...state.porProducto }
       delete copia[productoId]
       state.porProducto = copia
     },
-    SET_CARGANDO (state, id) { state.cargando = id },
-    SET_GUARDANDO (state, v) { state.guardando = v },
-    SET_ERROR (state, e) { state.error = e }
+    SET_CARGANDO(state, id) { state.cargando = id },
+    SET_GUARDANDO(state, v) { state.guardando = v },
+    SET_ERROR(state, e) { state.error = e }
   },
 
   actions: {
-    async cargar ({ commit, state }, { productoId, forzar = false, signal } = {}) {
+    async cargar({ commit, state }, { productoId, forzar = false, signal } = {}) {
       if (state.porProducto[productoId] && !forzar) return state.porProducto[productoId]
 
       commit('SET_CARGANDO', productoId)
@@ -57,7 +47,7 @@ export default {
       }
     },
 
-    async crear ({ commit, dispatch }, { productoId, ...peticion }) {
+    async crear({ commit, dispatch }, { productoId, ...peticion }) {
       commit('SET_GUARDANDO', true)
       try {
         const creada = await presentacionesService.crear(productoId, peticion)
@@ -70,7 +60,7 @@ export default {
       }
     },
 
-    async actualizar ({ commit, dispatch }, { id, productoId, ...peticion }) {
+    async actualizar({ commit, dispatch }, { id, productoId, ...peticion }) {
       commit('SET_GUARDANDO', true)
       try {
         const actualizada = await presentacionesService.actualizar(id, peticion)
@@ -81,7 +71,7 @@ export default {
       }
     },
 
-    async eliminar ({ dispatch }, { id, productoId }) {
+    async eliminar({ dispatch }, { id, productoId }) {
       await presentacionesService.eliminar(id)
       await dispatch('cargar', { productoId, forzar: true })
     }

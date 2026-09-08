@@ -1,451 +1,439 @@
 <template>
-  
-    <div class="cabecera al-entrar">
-      <div>
-        <h2>Compras</h2>
-        <p class="pista">
-          La única puerta por la que entra flor al inventario. Recibir una
-          compra genera los lotes con su vencimiento y su costo por vara.
-        </p>
-      </div>
-      <button v-if="puedeEditar" class="btn" @click="abrirNueva">＋ Nueva compra</button>
+  <div class="cabecera al-entrar">
+    <div>
+      <h2>Compras</h2>
+    </div>
+    <button v-if="puedeEditar" class="btn" @click="abrirNueva">＋ Nueva compra</button>
+  </div>
+
+  <div v-if="error" class="banda banda-error">
+    <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
+    <button class="btn btn-mini" @click="recargar">Reintentar</button>
+  </div>
+
+  <div v-if="borradores.length" class="banda banda-aviso">
+    <span aria-hidden="true">📋</span>
+    <span>
+      {{ borradores.length }} compra(s) en borrador sin recibir.
+      Mientras no se reciban, esa flor no existe en el inventario.
+    </span>
+  </div>
+
+  <!-- ---------- Filtros ---------- -->
+  <div class="barra-filtros al-entrar" style="--i: 2">
+    <div class="buscador">
+      <span aria-hidden="true">🔎</span>
+      <input v-model="busqueda" placeholder="Folio, documento o proveedor…" aria-label="Buscar compra">
+      <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
     </div>
 
-    <div v-if="error" class="banda banda-error">
-      <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
-      <button class="btn btn-mini" @click="recargar">Reintentar</button>
-    </div>
+    <select class="campo campo-corto" :value="filtro.estado ?? ''"
+      @change="filtrar({ estado: $event.target.value || null })" aria-label="Estado">
+      <option value="">Todos los estados</option>
+      <option value="borrador">Borradores</option>
+      <option value="recibida">Recibidas</option>
+      <option value="anulada">Anuladas</option>
+    </select>
 
-    <div v-if="borradores.length" class="banda banda-aviso">
-      <span aria-hidden="true">📋</span>
-      <span>
-        {{ borradores.length }} compra(s) en borrador sin recibir.
-        Mientras no se reciban, esa flor no existe en el inventario.
-      </span>
-    </div>
+    <select class="campo campo-corto" :value="filtro.proveedorId ?? ''"
+      @change="filtrar({ proveedorId: $event.target.value ? Number($event.target.value) : null })"
+      aria-label="Proveedor">
+      <option value="">Todos los proveedores</option>
+      <option v-for="p in proveedores" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+    </select>
 
-    <!-- ---------- Filtros ---------- -->
-    <div class="barra-filtros al-entrar" style="--i: 2">
-      <div class="buscador">
-        <span aria-hidden="true">🔎</span>
-        <input v-model="busqueda" placeholder="Folio, documento o proveedor…" aria-label="Buscar compra">
-        <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
-      </div>
+    <label class="rango">
+      <span class="mini suave">Desde</span>
+      <input class="campo campo-fecha" type="date" :value="filtro.desde"
+        @change="filtrar({ desde: $event.target.value || null })">
+    </label>
+    <label class="rango">
+      <span class="mini suave">Hasta</span>
+      <input class="campo campo-fecha" type="date" :value="filtro.hasta"
+        @change="filtrar({ hasta: $event.target.value || null })">
+    </label>
+  </div>
 
-      <select class="campo campo-corto" :value="filtro.estado ?? ''"
-        @change="filtrar({ estado: $event.target.value || null })" aria-label="Estado">
-        <option value="">Todos los estados</option>
-        <option value="borrador">Borradores</option>
-        <option value="recibida">Recibidas</option>
-        <option value="anulada">Anuladas</option>
-      </select>
+  <!-- ---------- Listado ---------- -->
+  <div v-if="cargando && !compras.length" class="vacio">Cargando compras…</div>
 
-      <select class="campo campo-corto" :value="filtro.proveedorId ?? ''"
-        @change="filtrar({ proveedorId: $event.target.value ? Number($event.target.value) : null })"
-        aria-label="Proveedor">
-        <option value="">Todos los proveedores</option>
-        <option v-for="p in proveedores" :key="p.id" :value="p.id">{{ p.nombre }}</option>
-      </select>
+  <div v-else-if="!compras.length" class="vacio">
+    <strong>Sin compras registradas</strong>
+    Crea la primera para que entre flor al inventario.
+  </div>
 
-      <label class="rango">
-        <span class="mini suave">Desde</span>
-        <input class="campo campo-fecha" type="date" :value="filtro.desde"
-          @change="filtrar({ desde: $event.target.value || null })">
-      </label>
-      <label class="rango">
-        <span class="mini suave">Hasta</span>
-        <input class="campo campo-fecha" type="date" :value="filtro.hasta"
-          @change="filtrar({ hasta: $event.target.value || null })">
-      </label>
-    </div>
-
-    <!-- ---------- Listado ---------- -->
-    <div v-if="cargando && !compras.length" class="vacio">Cargando compras…</div>
-
-    <div v-else-if="!compras.length" class="vacio">
-      <strong>Sin compras registradas</strong>
-      Crea la primera para que entre flor al inventario.
-    </div>
-
-    <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
-      <table>
-        <thead>
-          <tr>
-            <th>Folio</th>
-            <th>Proveedor</th>
-            <th>Fecha</th>
-            <th>Estado</th>
-            <th class="der">Líneas</th>
-            <th class="der">Varas</th>
-            <th class="der">Total</th>
-            <th class="acciones-col"></th>
+  <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
+    <table>
+      <thead>
+        <tr>
+          <th>Folio</th>
+          <th>Proveedor</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th class="der">Líneas</th>
+          <th class="der">Varas</th>
+          <th class="der">Total</th>
+          <th class="acciones-col"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <template v-for="(c, ix) in compras" :key="c.id">
+          <tr class="fila clic" :style="{ '--i': Math.min(ix, 12) }"
+            :class="{ anulada: c.estado === 'anulada', abierta: abierta === c.id, resaltada: c.id === resalte.id }"
+            @click="alternarDetalle(c.id)">
+            <td data-label="Folio">
+              <b>{{ c.folio }}</b>
+              <div v-if="c.documento" class="detalle-linea">Doc. {{ c.documento }}</div>
+            </td>
+            <td data-label="Proveedor">{{ c.proveedor }}</td>
+            <td data-label="Fecha" class="dato mini">{{ fecha(c.fecha) }}</td>
+            <td data-label="Estado">
+              <span class="etiqueta" :class="claseEstado(c.estado)">{{ textoEstado(c.estado) }}</span>
+            </td>
+            <td data-label="Líneas" class="der dato">{{ c.lineas }}</td>
+            <td data-label="Varas" class="der dato">{{ c.varasTotales }}</td>
+            <td data-label="Total" class="der dato">{{ clp(c.total) }}</td>
+            <td class="der acciones-col">
+              <span class="flecha" aria-hidden="true">▾</span>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          <template v-for="(c, ix) in compras" :key="c.id">
-            <tr class="fila clic" :style="{ '--i': Math.min(ix, 12) }"
-              :class="{ anulada: c.estado === 'anulada', abierta: abierta === c.id, resaltada: c.id === resalte.id }"
-              @click="alternarDetalle(c.id)">
-              <td data-label="Folio">
-                <b>{{ c.folio }}</b>
-                <div v-if="c.documento" class="detalle-linea">Doc. {{ c.documento }}</div>
-              </td>
-              <td data-label="Proveedor">{{ c.proveedor }}</td>
-              <td data-label="Fecha" class="dato mini">{{ fecha(c.fecha) }}</td>
-              <td data-label="Estado">
-                <span class="etiqueta" :class="claseEstado(c.estado)">{{ textoEstado(c.estado) }}</span>
-              </td>
-              <td data-label="Líneas" class="der dato">{{ c.lineas }}</td>
-              <td data-label="Varas" class="der dato">{{ c.varasTotales }}</td>
-              <td data-label="Total" class="der dato">{{ clp(c.total) }}</td>
-              <td class="der acciones-col">
-                <span class="flecha" aria-hidden="true">▾</span>
-              </td>
-            </tr>
 
-            <tr v-if="abierta === c.id" class="fila-detalle">
-              <td colspan="8">
-                <div class="detalle">
-                  <div v-if="!detalleDe(c.id)" class="suave mini">Cargando detalle…</div>
+          <tr v-if="abierta === c.id" class="fila-detalle">
+            <td colspan="8">
+              <div class="detalle">
+                <div v-if="!detalleDe(c.id)" class="suave mini">Cargando detalle…</div>
 
-                  <template v-else>
-                    <table class="interna">
-                      <thead>
-                        <tr>
-                          <th>Producto</th>
-                          <th>Presentación</th>
-                          <th class="der">Cant.</th>
-                          <th class="der">Costo unit.</th>
-                          <th class="der">Varas</th>
-                          <th class="der">Por vara</th>
-                          <th class="der">Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="it in detalleDe(c.id).items" :key="it.id">
-                          <td data-label="Producto">{{ it.emoji }} {{ it.producto }}</td>
-                          <td data-label="Presentación" class="suave mini">{{ it.presentacion }}</td>
-                          <td data-label="Cant." class="der dato">{{ it.cantidad }}</td>
-                          <td data-label="Costo unit." class="der dato">{{ clp(it.costoUnitario) }}</td>
-                          <td data-label="Varas" class="der dato">{{ it.varasTotales }}</td>
-                          <td data-label="Por vara" class="der dato">
-                            {{ clp(it.costoPorVara) }}
-                            <!-- Lo que se pagó la vez pasada por el mismo
-                                 producto: la comparación que importa. -->
-                            <div v-if="it.costoAnterior" class="mini"
-                              :class="it.costoPorVara > it.costoAnterior ? 'rojo' : 'verde'">
-                              antes {{ clp(it.costoAnterior) }}
-                            </div>
-                          </td>
-                          <td data-label="Subtotal" class="der dato">{{ clp(it.subtotal) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                <template v-else>
+                  <table class="interna">
+                    <thead>
+                      <tr>
+                        <th>Producto</th>
+                        <th>Presentación</th>
+                        <th class="der">Cant.</th>
+                        <th class="der">Costo unit.</th>
+                        <th class="der">Varas</th>
+                        <th class="der">Por vara</th>
+                        <th class="der">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="it in detalleDe(c.id).items" :key="it.id">
+                        <td data-label="Producto">{{ it.emoji }} {{ it.producto }}</td>
+                        <td data-label="Presentación" class="suave mini">{{ it.presentacion }}</td>
+                        <td data-label="Cant." class="der dato">{{ it.cantidad }}</td>
+                        <td data-label="Costo unit." class="der dato">{{ clp(it.costoUnitario) }}</td>
+                        <td data-label="Varas" class="der dato">{{ it.varasTotales }}</td>
+                        <td data-label="Por vara" class="der dato">
+                          {{ clp(it.costoPorVara) }}
+                          <div v-if="it.costoAnterior" class="mini"
+                            :class="it.costoPorVara > it.costoAnterior ? 'rojo' : 'verde'">
+                            antes {{ clp(it.costoAnterior) }}
+                          </div>
+                        </td>
+                        <td data-label="Subtotal" class="der dato">{{ clp(it.subtotal) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                    <div class="totales">
-                      <div><span>Neto</span><b class="dato">{{ clp(detalleDe(c.id).neto) }}</b></div>
-                      <div><span>IVA</span><b class="dato">{{ clp(detalleDe(c.id).iva) }}</b></div>
-                      <div><span>Total</span><b class="dato grande">{{ clp(detalleDe(c.id).total) }}</b></div>
-                    </div>
+                  <div class="totales">
+                    <div><span>Neto</span><b class="dato">{{ clp(detalleDe(c.id).neto) }}</b></div>
+                    <div><span>IVA</span><b class="dato">{{ clp(detalleDe(c.id).iva) }}</b></div>
+                    <div><span>Total</span><b class="dato grande">{{ clp(detalleDe(c.id).total) }}</b></div>
+                  </div>
 
-                    <div v-if="detalleDe(c.id).lotes.length" class="lotes">
-                      <h4>Lotes generados</h4>
-                      <div class="chips">
-                        <span v-for="l in detalleDe(c.id).lotes" :key="l.id" class="chip">
-                          <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
-                          <span v-if="l.fechaVencimiento" class="suave">
-                            · vence {{ fecha(l.fechaVencimiento) }}
-                          </span>
+                  <div v-if="detalleDe(c.id).lotes.length" class="lotes">
+                    <h4>Lotes generados</h4>
+                    <div class="chips">
+                      <span v-for="l in detalleDe(c.id).lotes" :key="l.id" class="chip">
+                        <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
+                        <span v-if="l.fechaVencimiento" class="suave">
+                          · vence {{ fecha(l.fechaVencimiento) }}
                         </span>
-                      </div>
+                      </span>
                     </div>
+                  </div>
 
-                    <p v-if="detalleDe(c.id).notas" class="notas">“{{ detalleDe(c.id).notas }}”</p>
+                  <p v-if="detalleDe(c.id).notas" class="notas">“{{ detalleDe(c.id).notas }}”</p>
 
-                    <div v-if="puedeEditar" class="acciones-detalle">
-                      <template v-if="c.estado === 'borrador'">
-                        <button class="btn btn-linea btn-mini" @click.stop="abrirEdicion(c)">
-                          ✏️ Editar
-                        </button>
-                        <button class="btn btn-mini" @click.stop="abrirRecepcion(c)">
-                          📦 Recibir mercadería
-                        </button>
-                        <button class="btn btn-linea btn-mini" @click.stop="anular(c)">
-                          Anular
-                        </button>
-                      </template>
-                      <p v-else-if="c.estado === 'recibida'" class="mini suave">
-                        Recibida el {{ fechaHora(c.recibidaEn) }}. Para revertirla hay que
-                        registrar la merma de sus lotes como devolución al proveedor.
-                      </p>
-                    </div>
-                  </template>
-                </div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-
-    <p v-if="totalPaginas > 1" class="paginador">
-      <button class="btn btn-linea btn-mini" :disabled="!hayAnterior"
-        @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
-      <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }}</span>
-      <button class="btn btn-linea btn-mini" :disabled="!haySiguiente"
-        @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
-    </p>
-
-    <!-- ================= MODALES ================= -->
-    <div v-if="modal" class="fondo" @click.self="cerrarModal">
-
-      <!-- Crear / editar compra -->
-      <div v-if="modal.tipo === 'compra'" class="modal ancho">
-        <div class="modal-cab">
-          <h3>{{ modal.f.id ? `Editar ${modal.f.folio}` : 'Nueva compra' }}</h3>
-          <p>Queda en borrador. La flor entra al inventario recién al recibirla.</p>
-        </div>
-
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-
-          <div class="rejilla grupo">
-            <div>
-              <label for="c-prov">Proveedor</label>
-              <select id="c-prov" class="campo" v-model.number="modal.f.proveedorId">
-                <option :value="null">Selecciona…</option>
-                <option v-for="p in proveedoresActivos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
-              </select>
-            </div>
-            <div>
-              <label for="c-fecha">Fecha</label>
-              <input id="c-fecha" class="campo dato" type="date" v-model="modal.f.fecha">
-            </div>
-          </div>
-
-          <div class="rejilla grupo">
-            <div>
-              <label for="c-doc">N° de factura o guía</label>
-              <input id="c-doc" class="campo dato" v-model="modal.f.documento" maxlength="60">
-            </div>
-            <div>
-              <label for="c-iva">IVA del documento (%)</label>
-              <input id="c-iva" class="campo dato" type="number" min="0" max="100" step="1"
-                v-model.number="modal.f.ivaTasa">
-            </div>
-          </div>
-
-          <!-- ---------- Líneas ---------- -->
-          <label>Líneas de la compra</label>
-          <div class="constructor">
-            <div v-if="!modal.f.items.length" class="constructor-vacio">
-              Sin líneas. Agrega al menos un producto.
-            </div>
-
-            <div v-for="(l, i) in modal.f.items" :key="l.uid" class="linea">
-              <div class="linea-cab">
-                <b class="crece">{{ nombreProducto(l.productoId) }}</b>
-                <button class="btn-icono chico" @click="modal.f.items.splice(i, 1)"
-                  aria-label="Quitar línea">✕</button>
+                  <div v-if="puedeEditar" class="acciones-detalle">
+                    <template v-if="c.estado === 'borrador'">
+                      <button class="btn btn-linea btn-mini" @click.stop="abrirEdicion(c)">
+                        ✏️ Editar
+                      </button>
+                      <button class="btn btn-mini" @click.stop="abrirRecepcion(c)">
+                        📦 Recibir mercadería
+                      </button>
+                      <button class="btn btn-linea btn-mini" @click.stop="anular(c)">
+                        Anular
+                      </button>
+                    </template>
+                    <p v-else-if="c.estado === 'recibida'" class="mini suave">
+                      Recibida el {{ fechaHora(c.recibidaEn) }}. Para revertirla hay que
+                      registrar la merma de sus lotes como devolución al proveedor.
+                    </p>
+                  </div>
+                </template>
               </div>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
 
-              <div class="linea-campos">
-                <div>
-                  <label :for="`l-pres-${l.uid}`">Presentación</label>
-                  <select :id="`l-pres-${l.uid}`" class="campo chico" v-model.number="l.presentacionId">
-                    <option :value="null">Selecciona…</option>
-                    <option v-for="p in presentacionesDe(l.productoId)" :key="p.id" :value="p.id">
-                      {{ p.nombre }} — {{ p.varasTotales }} varas
-                    </option>
-                  </select>
-                  <button class="enlace-boton" @click="abrirPresentacion(l.productoId)">
-                    ＋ Nueva presentación
-                  </button>
-                </div>
+  <p v-if="totalPaginas > 1" class="paginador">
+    <button class="btn btn-linea btn-mini" :disabled="!hayAnterior"
+      @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
+    <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }}</span>
+    <button class="btn btn-linea btn-mini" :disabled="!haySiguiente"
+      @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
+  </p>
 
-                <div>
-                  <label :for="`l-cant-${l.uid}`">Cantidad</label>
-                  <input :id="`l-cant-${l.uid}`" class="campo chico dato" type="number" min="1"
-                    v-model.number="l.cantidad">
-                </div>
+  <!-- ================= MODALES ================= -->
+  <div v-if="modal" class="fondo" @click.self="cerrarModal">
 
-                <div>
-                  <!--
-                    Lo que cuesta UNA caja o UN paquete, no una vara. Pedir el
-                    costo por vara obligaría a dividir mentalmente en cada
-                    recepción, y ahí es donde se cuelan los errores.
-                  -->
-                  <label :for="`l-costo-${l.uid}`">Costo por {{ tipoDe(l) }}</label>
-                  <input :id="`l-costo-${l.uid}`" class="campo chico dato" type="number" min="0" step="500"
-                    v-model.number="l.costoUnitario">
-                </div>
-              </div>
+    <!-- Crear / editar compra -->
+    <div v-if="modal.tipo === 'compra'" class="modal ancho">
+      <div class="modal-cab">
+        <h3>{{ modal.f.id ? `Editar ${modal.f.folio}` : 'Nueva compra' }}</h3>
+        <p>Queda en borrador. La flor entra al inventario recién al recibirla.</p>
+      </div>
 
-              <div class="linea-calculo">
-                <span>{{ varasDe(l) }} varas</span>
-                <span class="sep" aria-hidden="true">·</span>
-                <b class="dato">{{ clp(costoPorVaraDe(l)) }} por vara</b>
-                <span v-if="anteriorDe(l.productoId)" class="mini"
-                  :class="costoPorVaraDe(l) > anteriorDe(l.productoId) ? 'rojo' : 'verde'">
-                  (la vez pasada, {{ clp(anteriorDe(l.productoId)) }})
-                </span>
-                <b class="dato subtotal">{{ clp(subtotalDe(l)) }}</b>
-              </div>
-            </div>
-          </div>
+      <div class="modal-cuerpo">
+        <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
 
-          <div class="grupo">
-            <label for="c-add">Agregar producto</label>
-            <select id="c-add" class="campo"
-              @change="agregarLinea($event.target.value); $event.target.value = ''">
-              <option value="">Selecciona un producto…</option>
-              <option v-for="p in comprables" :key="p.id" :value="p.id">
-                {{ p.emoji }} {{ p.nombre }}
-              </option>
+        <div class="rejilla grupo">
+          <div>
+            <label for="c-prov">Proveedor</label>
+            <select id="c-prov" class="campo" v-model.number="modal.f.proveedorId">
+              <option :value="null">Selecciona…</option>
+              <option v-for="p in proveedoresActivos" :key="p.id" :value="p.id">{{ p.nombre }}</option>
             </select>
-            <p class="ayuda">
-              Solo productos simples: un ramo no se compra, se arma.
-            </p>
           </div>
-
-          <div class="grupo">
-            <label for="c-notas">Notas</label>
-            <input id="c-notas" class="campo" v-model="modal.f.notas" maxlength="600">
-          </div>
-
-          <div class="totales">
-            <div><span>Neto</span><b class="dato">{{ clp(neto) }}</b></div>
-            <div><span>IVA {{ modal.f.ivaTasa }}%</span><b class="dato">{{ clp(iva) }}</b></div>
-            <div><span>Total</span><b class="dato grande">{{ clp(totalCompra) }}</b></div>
-            <div><span>Varas</span><b class="dato">{{ varasTotales }}</b></div>
+          <div>
+            <label for="c-fecha">Fecha</label>
+            <input id="c-fecha" class="campo dato" type="date" v-model="modal.f.fecha">
           </div>
         </div>
 
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-          <button class="btn" :disabled="guardando" @click="guardarCompra">
-            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-            {{ guardando ? 'Guardando…' : 'Guardar borrador' }}
-          </button>
+        <div class="rejilla grupo">
+          <div>
+            <label for="c-doc">N° de factura o guía</label>
+            <input id="c-doc" class="campo dato" v-model="modal.f.documento" maxlength="60">
+          </div>
+          <div>
+            <label for="c-iva">IVA del documento (%)</label>
+            <input id="c-iva" class="campo dato" type="number" min="0" max="100" step="1"
+              v-model.number="modal.f.ivaTasa">
+          </div>
         </div>
-      </div>
 
-      <!-- Nueva presentación -->
-      <div v-else-if="modal.tipo === 'presentacion'" class="modal">
-        <div class="modal-cab">
-          <h3>Nueva presentación</h3>
-          <p>{{ nombreProducto(modal.f.productoId) }}</p>
-        </div>
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-
-          <div class="grupo">
-            <label for="pr-nom">Nombre</label>
-            <input id="pr-nom" class="campo" v-model="modal.f.nombre" maxlength="120"
-              placeholder="Caja de 12 paquetes">
+        <!-- ---------- Líneas ---------- -->
+        <label>Líneas de la compra</label>
+        <div class="constructor">
+          <div v-if="!modal.f.items.length" class="constructor-vacio">
+            Sin líneas. Agrega al menos un producto.
           </div>
 
-          <div class="grupo">
-            <label>Tipo</label>
-            <div class="segmentado ancho-total">
-              <button v-for="t in TIPOS_PRESENTACION" :key="t.valor"
-                :class="{ on: modal.f.tipo === t.valor }" @click="modal.f.tipo = t.valor">
-                {{ t.texto }}
-              </button>
+          <div v-for="(l, i) in modal.f.items" :key="l.uid" class="linea">
+            <div class="linea-cab">
+              <b class="crece">{{ nombreProducto(l.productoId) }}</b>
+              <button class="btn-icono chico" @click="modal.f.items.splice(i, 1)"
+                aria-label="Quitar línea">✕</button>
+            </div>
+
+            <div class="linea-campos">
+              <div>
+                <label :for="`l-pres-${l.uid}`">Presentación</label>
+                <select :id="`l-pres-${l.uid}`" class="campo chico" v-model.number="l.presentacionId">
+                  <option :value="null">Selecciona…</option>
+                  <option v-for="p in presentacionesDe(l.productoId)" :key="p.id" :value="p.id">
+                    {{ p.nombre }} — {{ p.varasTotales }} varas
+                  </option>
+                </select>
+                <button class="enlace-boton" @click="abrirPresentacion(l.productoId)">
+                  ＋ Nueva presentación
+                </button>
+              </div>
+
+              <div>
+                <label :for="`l-cant-${l.uid}`">Cantidad</label>
+                <input :id="`l-cant-${l.uid}`" class="campo chico dato" type="number" min="1"
+                  v-model.number="l.cantidad">
+              </div>
+
+              <div>
+                <label :for="`l-costo-${l.uid}`">Costo por {{ tipoDe(l) }}</label>
+                <input :id="`l-costo-${l.uid}`" class="campo chico dato" type="number" min="0" step="500"
+                  v-model.number="l.costoUnitario">
+              </div>
+            </div>
+
+            <div class="linea-calculo">
+              <span>{{ varasDe(l) }} varas</span>
+              <span class="sep" aria-hidden="true">·</span>
+              <b class="dato">{{ clp(costoPorVaraDe(l)) }} por vara</b>
+              <span v-if="anteriorDe(l.productoId)" class="mini"
+                :class="costoPorVaraDe(l) > anteriorDe(l.productoId) ? 'rojo' : 'verde'">
+                (la vez pasada, {{ clp(anteriorDe(l.productoId)) }})
+              </span>
+              <b class="dato subtotal">{{ clp(subtotalDe(l)) }}</b>
             </div>
           </div>
-
-          <div class="rejilla grupo">
-            <div>
-              <label for="pr-paq">Paquetes que trae</label>
-              <input id="pr-paq" class="campo dato" type="number" min="1" max="1000"
-                v-model.number="modal.f.paquetes">
-            </div>
-            <div>
-              <label for="pr-var">Varas por paquete</label>
-              <input id="pr-var" class="campo dato" type="number" min="1"
-                v-model.number="modal.f.varasPorPaquete">
-            </div>
-          </div>
-
-          <label class="interruptor">
-            <input type="checkbox" v-model="modal.f.predeterminada">
-            <span>Usar por defecto para este producto</span>
-          </label>
-
-          <div class="nota">
-            Equivale a <b class="dato">{{ (modal.f.paquetes || 0) * (modal.f.varasPorPaquete || 0) }}</b> varas.
-            <br>
-            <span class="mini">
-              La equivalencia depende de la especie —25 por paquete en rosas, 10 en
-              maule—, por eso vive en el producto y no como una constante del sistema.
-            </span>
-          </div>
         </div>
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="volverACompra">Cancelar</button>
-          <button class="btn" @click="guardarPresentacion">Crear</button>
-        </div>
-      </div>
 
-      <!-- Confirmar recepción -->
-      <div v-else-if="modal.tipo === 'recibir'" class="modal">
-        <div class="modal-cab">
-          <h3>Recibir {{ modal.f.compra.folio }}</h3>
-          <p>{{ modal.f.compra.proveedor }}</p>
-        </div>
-        <div class="modal-cuerpo">
-          <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-
-          <p class="parrafo">
-            Entran <b>{{ modal.f.compra.varasTotales }}</b> varas en
-            {{ modal.f.compra.lineas }} lote(s), cada uno con su código QR, su
-            vencimiento y su costo por vara.
+        <div class="grupo">
+          <label for="c-add">Agregar producto</label>
+          <select id="c-add" class="campo"
+            @change="agregarLinea($event.target.value); $event.target.value = ''">
+            <option value="">Selecciona un producto…</option>
+            <option v-for="p in comprables" :key="p.id" :value="p.id">
+              {{ p.emoji }} {{ p.nombre }}
+            </option>
+          </select>
+          <p class="ayuda">
+            Solo productos simples: un ramo no se compra, se arma.
           </p>
-
-          <div class="nota alerta">
-            <b>Esto no se deshace.</b> Una compra recibida no se anula: para
-            revertirla hay que registrar la merma de sus lotes indicando
-            devolución al proveedor.
-          </div>
         </div>
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-          <button class="btn" :disabled="guardando" @click="confirmarRecepcion">
-            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-            {{ guardando ? 'Recibiendo…' : 'Recibir e ingresar' }}
-          </button>
+
+        <div class="grupo">
+          <label for="c-notas">Notas</label>
+          <input id="c-notas" class="campo" v-model="modal.f.notas" maxlength="600">
+        </div>
+
+        <div class="totales">
+          <div><span>Neto</span><b class="dato">{{ clp(neto) }}</b></div>
+          <div><span>IVA {{ modal.f.ivaTasa }}%</span><b class="dato">{{ clp(iva) }}</b></div>
+          <div><span>Total</span><b class="dato grande">{{ clp(totalCompra) }}</b></div>
+          <div><span>Varas</span><b class="dato">{{ varasTotales }}</b></div>
         </div>
       </div>
 
-      <!-- Resultado: etiquetas -->
-      <div v-else-if="modal.tipo === 'recibida'" class="modal">
-        <div class="modal-cab">
-          <h3>Mercadería ingresada</h3>
-          <p>{{ recepcion.lotesGenerados }} lote(s) · {{ recepcion.varasIngresadas }} varas</p>
-        </div>
-        <div class="modal-cuerpo">
-          <div class="chips">
-            <span v-for="l in recepcion.lotes" :key="l.id" class="chip">
-              <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
-              <span v-if="l.fechaVencimiento" class="suave">· vence {{ fecha(l.fechaVencimiento) }}</span>
-            </span>
-          </div>
-
-          <div class="nota">
-            El paso siguiente es imprimir las etiquetas y pegarlas
-            <b>antes</b> de meter los paquetes a la cámara. Un lote sin etiqueta
-            no se puede escanear al vender.
-          </div>
-        </div>
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="cerrarRecepcion">Después</button>
-          <button class="btn" @click="irAEtiquetas">Imprimir etiquetas</button>
-        </div>
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
+        <button class="btn" :disabled="guardando" @click="guardarCompra">
+          <span v-if="guardando" class="spinner" aria-hidden="true"></span>
+          {{ guardando ? 'Guardando…' : 'Guardar borrador' }}
+        </button>
       </div>
     </div>
 
-    <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+    <!-- Nueva presentación -->
+    <div v-else-if="modal.tipo === 'presentacion'" class="modal">
+      <div class="modal-cab">
+        <h3>Nueva presentación</h3>
+        <p>{{ nombreProducto(modal.f.productoId) }}</p>
+      </div>
+      <div class="modal-cuerpo">
+        <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+
+        <div class="grupo">
+          <label for="pr-nom">Nombre</label>
+          <input id="pr-nom" class="campo" v-model="modal.f.nombre" maxlength="120"
+            placeholder="Caja de 12 paquetes">
+        </div>
+
+        <div class="grupo">
+          <label>Tipo</label>
+          <div class="segmentado ancho-total">
+            <button v-for="t in TIPOS_PRESENTACION" :key="t.valor"
+              :class="{ on: modal.f.tipo === t.valor }" @click="modal.f.tipo = t.valor">
+              {{ t.texto }}
+            </button>
+          </div>
+        </div>
+
+        <div class="rejilla grupo">
+          <div>
+            <label for="pr-paq">Paquetes que trae</label>
+            <input id="pr-paq" class="campo dato" type="number" min="1" max="1000"
+              v-model.number="modal.f.paquetes">
+          </div>
+          <div>
+            <label for="pr-var">Varas por paquete</label>
+            <input id="pr-var" class="campo dato" type="number" min="1"
+              v-model.number="modal.f.varasPorPaquete">
+          </div>
+        </div>
+
+        <label class="interruptor">
+          <input type="checkbox" v-model="modal.f.predeterminada">
+          <span>Usar por defecto para este producto</span>
+        </label>
+
+        <div class="nota">
+          Equivale a <b class="dato">{{ (modal.f.paquetes || 0) * (modal.f.varasPorPaquete || 0) }}</b> varas.
+          <br>
+          <span class="mini">
+            La equivalencia depende de la especie —25 por paquete en rosas, 10 en
+            maule—, por eso vive en el producto y no como una constante del sistema.
+          </span>
+        </div>
+      </div>
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="volverACompra">Cancelar</button>
+        <button class="btn" @click="guardarPresentacion">Crear</button>
+      </div>
+    </div>
+
+    <!-- Confirmar recepción -->
+    <div v-else-if="modal.tipo === 'recibir'" class="modal">
+      <div class="modal-cab">
+        <h3>Recibir {{ modal.f.compra.folio }}</h3>
+        <p>{{ modal.f.compra.proveedor }}</p>
+      </div>
+      <div class="modal-cuerpo">
+        <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+
+        <p class="parrafo">
+          Entran <b>{{ modal.f.compra.varasTotales }}</b> varas en
+          {{ modal.f.compra.lineas }} lote(s), cada uno con su código QR, su
+          vencimiento y su costo por vara.
+        </p>
+
+        <div class="nota alerta">
+          <b>Esto no se deshace.</b> Una compra recibida no se anula: para
+          revertirla hay que registrar la merma de sus lotes indicando
+          devolución al proveedor.
+        </div>
+      </div>
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
+        <button class="btn" :disabled="guardando" @click="confirmarRecepcion">
+          <span v-if="guardando" class="spinner" aria-hidden="true"></span>
+          {{ guardando ? 'Recibiendo…' : 'Recibir e ingresar' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Resultado: etiquetas -->
+    <div v-else-if="modal.tipo === 'recibida'" class="modal">
+      <div class="modal-cab">
+        <h3>Mercadería ingresada</h3>
+        <p>{{ recepcion.lotesGenerados }} lote(s) · {{ recepcion.varasIngresadas }} varas</p>
+      </div>
+      <div class="modal-cuerpo">
+        <div class="chips">
+          <span v-for="l in recepcion.lotes" :key="l.id" class="chip">
+            <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
+            <span v-if="l.fechaVencimiento" class="suave">· vence {{ fecha(l.fechaVencimiento) }}</span>
+          </span>
+        </div>
+
+        <div class="nota">
+          El paso siguiente es imprimir las etiquetas y pegarlas
+          <b>antes</b> de meter los paquetes a la cámara. Un lote sin etiqueta
+          no se puede escanear al vender.
+        </div>
+      </div>
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="cerrarRecepcion">Después</button>
+        <button class="btn" @click="irAEtiquetas">Imprimir etiquetas</button>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
 </template>
 
 <script>
@@ -460,7 +448,7 @@ import { aDateOnly, hoy } from '@/core/utils/fechas'
 export default {
   name: 'ComprasView',
   components: {  },
-  
+
   setup () {
     const store = useStore()
     const router = useRouter()
@@ -529,10 +517,7 @@ export default {
       store.dispatch('compras/cargarDetalle', { id })
     }
 
-    /* ---------------- Costo anterior ----------------
-     * Lo que se pagó la vez pasada por vara, mostrado mientras se escribe el
-     * precio. Es la comparación que importa en el momento en que se toma la
-     * decisión, no después en un reporte. Cacheado por producto. */
+    /* ---------------- Costo anterior ---------------- */
     const anteriores = ref({})
 
     const anteriorDe = (productoId) => anteriores.value[productoId] ?? null
@@ -678,8 +663,6 @@ export default {
           predeterminada: f.predeterminada
         })
 
-        /* Se asigna a las líneas de ese producto que quedaron sin
-           presentación, que es justo por lo que se abrió este modal. */
         compraEnEspera.items
           .filter(l => l.productoId === f.productoId && !l.presentacionId)
           .forEach(l => { l.presentacionId = creada.id })
@@ -806,6 +789,10 @@ export default {
 </script>
 
 <style scoped>
+/* ═══════════════════════════════════════════════════
+   Compras — consume los tokens globales (tokens.css).
+   No define tokens: solo los usa.
+   ═══════════════════════════════════════════════════ */
 .cabecera,
 .cabecera *,
 .tabla-envoltura *,
@@ -834,8 +821,8 @@ export default {
 }
 
 @keyframes resalta {
-  0% { background: #d1fae5; }
-  70% { background: #ecfdf5; }
+  0% { background: var(--accent-soft); }
+  70% { background: var(--accent-soft-2); }
   100% { background: transparent; }
 }
 
@@ -853,8 +840,8 @@ export default {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid var(--spinner-track);
+  border-top-color: var(--spinner-head);
   border-radius: 50%;
   animation: girar 0.8s linear infinite;
 }
@@ -874,13 +861,13 @@ export default {
 .cabecera h2 {
   margin: 0;
   font-size: clamp(1.25rem, 4.5vw, 1.5rem);
-  color: #0f172a;
+  color: var(--text);
 }
 
 .pista {
   margin: 4px 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-soft);
   max-width: 62ch;
   line-height: 1.5;
 }
@@ -892,21 +879,21 @@ export default {
   gap: 11px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: var(--r-md);
   margin-bottom: 16px;
   font-size: 0.875rem;
 }
 
 .banda-aviso {
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  color: #78350f;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-border);
+  color: var(--warn-text);
 }
 
 .banda-error {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
 }
 
 .banda .btn { margin-left: auto; }
@@ -930,15 +917,15 @@ export default {
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
   border-radius: 9px;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .buscador:focus-within {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: var(--shadow-focus);
 }
 
 .buscador input {
@@ -947,6 +934,7 @@ export default {
   border: 0;
   outline: 0;
   background: none;
+  color: var(--text);
   font-family: inherit;
   font-size: max(0.9rem, 16px);
 }
@@ -955,19 +943,19 @@ export default {
   width: 100%;
   min-height: 44px;
   padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
   font-family: inherit;
   font-size: max(0.9rem, 16px);
-  color: #0f172a;
+  color: var(--text);
   outline: none;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .campo:focus {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: var(--shadow-focus);
 }
 
 .campo.chico { min-height: 38px; padding: 0.4rem 0.6rem; font-size: max(0.85rem, 16px); }
@@ -976,7 +964,7 @@ export default {
 
 .segmentado {
   display: inline-flex;
-  background: #f1f5f9;
+  background: var(--surface-3);
   border-radius: 9px;
   padding: 3px;
   gap: 3px;
@@ -990,18 +978,18 @@ export default {
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: #475569;
+  color: var(--text-muted);
   font-family: inherit;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.18s, color 0.18s, box-shadow 0.18s;
+  transition: background-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .segmentado button.on {
-  background: #fff;
-  color: #047857;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow: var(--shadow-seg);
 }
 
 .interruptor {
@@ -1013,7 +1001,7 @@ export default {
   letter-spacing: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -1021,15 +1009,15 @@ export default {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
 /* ---------- Tabla ---------- */
 .tabla-envoltura {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
   overflow: hidden;
   overflow-x: auto;
   transition: opacity 0.14s ease;
@@ -1042,34 +1030,35 @@ table { width: 100%; border-collapse: collapse; }
 th {
   text-align: left;
   padding: 11px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-soft);
   white-space: nowrap;
 }
 
 td {
   padding: 11px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--surface-3);
   font-size: 0.875rem;
   vertical-align: middle;
+  color: var(--text);
 }
 
 tbody tr:last-child td { border-bottom: 0; }
 tr.clic { cursor: pointer; }
 tr.anulada { opacity: 0.5; }
 .fila td { transition: background-color 0.16s ease; }
-tr.clic:hover td, tr.clic.abierta td { background: #f8fafc; }
+tr.clic:hover td, tr.clic.abierta td { background: var(--surface-2); }
 
 .der { text-align: right; }
-.suave { color: #64748b; }
+.suave { color: var(--text-soft); }
 .mini { font-size: 0.78rem; }
-.rojo { color: #dc2626; }
-.verde { color: #047857; }
+.rojo { color: var(--danger); }
+.verde { color: var(--accent-text); }
 
 .dato {
   font-variant-numeric: tabular-nums;
@@ -1082,14 +1071,14 @@ tr.clic:hover td, tr.clic.abierta td { background: #f8fafc; }
 
 .detalle-linea {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   margin-top: 2px;
 }
 
 .etiqueta {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1097,24 +1086,24 @@ tr.clic:hover td, tr.clic.abierta td { background: #f8fafc; }
   white-space: nowrap;
 }
 
-.et-verde { background: #d1fae5; color: #047857; }
-.et-ambar { background: #fef3c7; color: #92400e; }
-.et-gris { background: #f1f5f9; color: #64748b; }
+.et-verde { background: var(--accent-soft); color: var(--accent-text); }
+.et-ambar { background: var(--warn-soft); color: var(--warn-text-2); }
+.et-gris { background: var(--tag-gris-bg); color: var(--tag-gris-text); }
 
 /* ---------- Detalle ---------- */
-.fila-detalle td { background: #f8fafc; padding: 0; }
+.fila-detalle td { background: var(--surface-2); padding: 0; }
 
 .detalle { padding: 14px; }
 
 table.interna {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   overflow: hidden;
 }
 
 table.interna th {
-  background: #f8fafc;
+  background: var(--surface-2);
   font-size: 0.62rem;
 }
 
@@ -1126,13 +1115,13 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   gap: 22px;
   margin-top: 14px;
   padding: 12px 14px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
 }
 
 .totales div { display: flex; flex-direction: column; gap: 2px; }
-.totales span { color: #64748b; font-size: 0.72rem; }
+.totales span { color: var(--text-soft); font-size: 0.72rem; }
 
 .lotes { margin-top: 16px; }
 
@@ -1142,7 +1131,7 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-soft);
 }
 
 .chips {
@@ -1153,11 +1142,11 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
 
 .chip {
   padding: 6px 11px;
-  border-radius: 8px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
   font-size: 0.78rem;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .chip b { font-variant-numeric: tabular-nums; }
@@ -1165,11 +1154,11 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
 .notas {
   margin: 12px 0 0;
   padding: 9px 11px;
-  background: #fff;
-  border-left: 3px solid #6ee7b7;
+  background: var(--surface);
+  border-left: 3px solid var(--accent-border);
   border-radius: 0 7px 7px 0;
   font-size: 0.8rem;
-  color: #475569;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -1198,9 +1187,9 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   min-height: 44px;
   padding: 0.65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -1209,18 +1198,18 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
-.btn:disabled { background: #a7c9bb; cursor: not-allowed; }
+.btn:disabled { background: var(--accent-disabled); cursor: not-allowed; }
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
-.btn-linea:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
-.btn-linea:disabled { background: transparent; color: #cbd5e1; }
+.btn-linea:hover:not(:disabled) { background: var(--surface-2); border-color: var(--text-faint); }
+.btn-linea:disabled { background: transparent; color: var(--border-strong); }
 
 .btn-mini {
   min-height: 34px;
@@ -1235,15 +1224,15 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
-  color: #64748b;
+  background: var(--surface);
+  color: var(--text-soft);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
 
-.btn-icono:hover { border-color: #dc2626; color: #dc2626; }
+.btn-icono:hover { border-color: var(--danger); color: var(--danger); }
 .btn-icono.chico { width: 28px; height: 28px; }
 
 .enlace-boton {
@@ -1251,7 +1240,7 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   padding: 0;
   border: none;
   background: none;
-  color: #059669;
+  color: var(--accent);
   font-family: inherit;
   font-size: 0.72rem;
   font-weight: 600;
@@ -1266,7 +1255,7 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--overlay);
 }
 
 .modal {
@@ -1276,20 +1265,20 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-modal);
 }
 
 .modal.ancho { max-width: 760px; }
 
 .modal-cab {
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
-.modal-cab h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
-.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
+.modal-cab h3 { margin: 0; font-size: 1.15rem; color: var(--text); }
+.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: var(--text-soft); }
 
 .modal-cuerpo { padding: 18px 20px; overflow-y: auto; }
 
@@ -1299,7 +1288,7 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   justify-content: flex-end;
   flex-wrap: wrap;
   padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 label {
@@ -1309,7 +1298,7 @@ label {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .grupo { margin-bottom: 15px; }
@@ -1323,7 +1312,7 @@ label {
 .ayuda {
   margin: 5px 0 0;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   line-height: 1.5;
   text-transform: none;
   letter-spacing: 0;
@@ -1334,40 +1323,40 @@ label {
   margin: 0 0 14px;
   font-size: 0.875rem;
   line-height: 1.55;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .error {
   padding: 10px 13px;
   margin-bottom: 14px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger-text);
   font-size: 0.85rem;
 }
 
 .nota {
   padding: 11px 13px;
   margin-top: 14px;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  border-left: 3px solid var(--accent-strong);
+  background: var(--accent-soft-bg);
+  color: var(--text-muted);
   font-size: 0.83rem;
-  color: #475569;
   line-height: 1.6;
 }
 
 .nota.alerta {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--warn);
+  background: var(--warn-soft-bg);
+  color: var(--warn-text);
 }
 
 /* ---------- Constructor de líneas ---------- */
 .constructor {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   overflow: hidden;
   margin-bottom: 15px;
 }
@@ -1375,14 +1364,14 @@ label {
 .constructor-vacio {
   padding: 22px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-faint);
   font-size: 0.85rem;
 }
 
 .linea {
   padding: 12px 13px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fff;
+  border-bottom: 1px solid var(--surface-3);
+  background: var(--surface);
 }
 
 .linea:last-child { border-bottom: 0; }
@@ -1394,7 +1383,7 @@ label {
   margin-bottom: 9px;
 }
 
-.linea-cab .crece { flex: 1; min-width: 0; font-size: 0.9rem; color: #0f172a; }
+.linea-cab .crece { flex: 1; min-width: 0; font-size: 0.9rem; color: var(--text); }
 
 .linea-campos {
   display: grid;
@@ -1414,27 +1403,27 @@ label {
   flex-wrap: wrap;
   margin-top: 9px;
   padding-top: 9px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--border-dashed);
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-soft);
 }
 
-.linea-calculo .sep { color: #cbd5e1; }
-.linea-calculo .subtotal { margin-left: auto; color: #0f172a; }
+.linea-calculo .sep { color: var(--border-strong); }
+.linea-calculo .subtotal { margin-left: auto; color: var(--text); }
 
 /* ---------- Varios ---------- */
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
+  color: var(--text);
   font-size: 1.05rem;
   margin-bottom: 5px;
 }
@@ -1447,16 +1436,16 @@ label {
   z-index: 80;
   max-width: 90vw;
   padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
-  color: #fff;
+  border-radius: var(--r-md);
+  background: var(--toast-bg);
+  color: var(--toast-text);
   font-size: 0.875rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-toast);
   text-align: center;
 }
 
-.aviso.malo { background: #b91c1c; }
+.aviso.malo { background: var(--toast-malo); }
 
 /* ---------- Móvil ---------- */
 @media (max-width: 900px) {
@@ -1473,14 +1462,14 @@ label {
   thead { display: none; }
 
   tbody tr {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
     margin-bottom: 11px;
     padding: 12px;
   }
 
-  tbody tr.fila-detalle { background: #f8fafc; padding: 0; }
+  tbody tr.fila-detalle { background: var(--surface-2); padding: 0; }
 
   td {
     display: flex;
@@ -1498,7 +1487,7 @@ label {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: var(--text-faint);
     text-align: left;
     flex-shrink: 0;
   }

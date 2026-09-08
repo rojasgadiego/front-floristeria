@@ -3,10 +3,10 @@
     <button
       v-if="esCajon && conBotonPropio"
       class="sidebar-trigger"
-      :class="{ 'is-hidden': estaAbierto }"
+      :class="{ 'is-hidden': cajonAbierto }"
       type="button"
       aria-label="Abrir menú"
-      :aria-expanded="String(estaAbierto)"
+      :aria-expanded="String(cajonAbierto)"
       @click="abrirCajon"
     >
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
@@ -18,18 +18,19 @@
     <div
       v-if="esCajon"
       class="sidebar-backdrop"
-      :class="{ 'is-visible': estaAbierto }"
-      @click="closeMobileSidebar"
+      :class="{ 'is-visible': cajonAbierto }"
+      @click="cerrarCajon"
     ></div>
 
     <aside
       ref="raiz"
       class="sidebar"
-      :class="{ collapsed: estaColapsado, 'is-open': estaAbierto, 'is-cajon': esCajon }"
+      :class="{ collapsed: colapsadoVisual, 'is-open': cajonAbierto, 'is-cajon': esCajon }"
       :inert="estaFueraDePantalla || null"
       :aria-hidden="estaFueraDePantalla || null"
       @mouseenter="alEntrarMouse"
       @mouseleave="alSalirMouse"
+      @keydown="alPresionarTecla"
     >
       <!-- ---------- Cabecera / marca ---------- -->
       <div class="sidebar-header">
@@ -49,20 +50,19 @@
             </svg>
           </div>
 
-          <div v-if="!estaColapsado" class="logo-texto">
+          <div v-if="!colapsadoVisual" class="logo-texto">
             <span class="logo-nombre">Floristería Colibrí</span>
             <span class="logo-bajada">ERP &amp; Punto de Venta</span>
           </div>
         </div>
 
-        <!-- Sin esto, en móvil solo se cierra navegando a otra página -->
         <button
           v-if="esCajon"
           ref="btnCerrar"
           class="sidebar-close"
           type="button"
           aria-label="Cerrar menú"
-          @click="closeMobileSidebar"
+          @click="cerrarCajon"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -75,11 +75,7 @@
       <nav class="sidebar-nav" aria-label="Menú principal">
         <ul>
           <template v-for="seccion in secciones" :key="seccion.nombre">
-            <li
-              v-if="!estaColapsado"
-              class="seccion-titulo"
-              aria-hidden="true"
-            >
+            <li v-if="!colapsadoVisual" class="seccion-titulo" aria-hidden="true">
               {{ seccion.nombre }}
             </li>
             <li v-else class="seccion-separador" aria-hidden="true"></li>
@@ -88,12 +84,16 @@
               <router-link
                 :to="item.path"
                 :class="{ active: isActive(item.path) }"
-                :title="estaColapsado ? item.name : null"
+                :title="colapsadoVisual ? item.name : null"
                 :aria-current="isActive(item.path) ? 'page' : null"
                 @click="alNavegar"
               >
+                <!-- item.icon proviene de config local (menuColibri), NO del
+                     servidor. Si algún día el icono viniera del backend, esto
+                     habría que renderizarlo como <svg> con solo el path, nunca
+                     markup completo (riesgo XSS). -->
                 <span class="menu-icon" v-html="item.icon"></span>
-                <span v-if="!estaColapsado" class="menu-text">{{ item.name }}</span>
+                <span v-if="!colapsadoVisual" class="menu-text">{{ item.name }}</span>
               </router-link>
             </li>
           </template>
@@ -102,7 +102,7 @@
 
       <!-- ---------- Pie: usuario y salida ---------- -->
       <div class="sidebar-footer">
-        <div class="user-avatar-container" v-if="estaColapsado">
+        <div class="user-avatar-container" v-if="colapsadoVisual">
           <div class="user-avatar" :title="nombreUsuario">
             {{ userInitials }}
           </div>
@@ -114,245 +114,152 @@
         </div>
 
         <button
+          ref="btnLogout"
           class="logout-button"
           type="button"
           @click="$emit('logout')"
-          :title="estaColapsado ? 'Cerrar sesión' : null"
+          :title="colapsadoVisual ? 'Cerrar sesión' : null"
         >
           <svg class="logout-icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
           </svg>
-          <span v-if="!estaColapsado" class="logout-text">Cerrar sesión</span>
+          <span v-if="!colapsadoVisual" class="logout-text">Cerrar sesión</span>
         </button>
       </div>
     </aside>
   </Teleport>
 </template>
 
-<script>
-import MENU_COLIBRI, { filtrarMenuPorPermisos } from '@/config/menuColibri'
+<script setup>
+import { ref, computed, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+
+import { filtrarMenuPorPermisos } from '@/config/menuColibri'
 import { textoRol } from '@/core/constantes/roles'
+import { useLayout }from '@/shared/composables/useLayout.js'
 
-/*
- * Un único punto de verdad para el breakpoint. Antes el modo cajón lo decidía
- * la prop `isMobile` (JS) y el layout fijo lo decidía una media query (CSS): si
- * los dos números no coincidían, quedaba un rango de anchos donde el CSS ya
- * había sacado la barra de pantalla pero el JS seguía creyendo que era
- * escritorio, así que nadie ponía `isMobileOpen` en true y la barra no aparecía.
- */
-const BP_CAJON = '(max-width: 768px)'
-const BP_HOVER = '(hover: hover) and (pointer: fine)'
+const props = defineProps({
+  conBotonPropio: { type: Boolean, default: true },
+  currentUser: { type: Object, default: () => ({}) },
+  userRoles: { type: Array, default: () => [] },
+  filteredMenuItems: { type: Array, default: null },
+  userInitials: { type: String, default: '?' }
+})
 
-export default {
-  name: 'AppSidebar',
-  inheritAttrs: false,
+defineEmits(['logout'])
 
-  props: {
-    isSidebarCollapsed: { type: Boolean, required: true },
-    // Se mantiene por compatibilidad con el padre, pero ya no manda:
-    // el componente resuelve el modo cajón con su propia media query.
-    isMobile: { type: Boolean, required: false, default: false },
-    // El padre puede seguir controlándolo. Si nunca lo toca, el componente
-    // se abre con su propio estado interno y funciona igual.
-    isMobileOpen: { type: Boolean, default: false },
-    conBotonPropio: { type: Boolean, default: true },
-    currentUser: { type: Object, default: () => ({}) },
-    userRoles: { type: Array, default: () => [] },
-    filteredMenuItems: { type: Array, default: null },
-    userInitials: { type: String, default: '?' }
-  },
+const route = useRoute()
 
-  emits: [
-    'expand-sidebar',
-    'collapse-sidebar',
-    'open-mobile-sidebar',
-    'close-mobile-sidebar',
-    'handle-navigation',
-    'logout'
-  ],
+const {
+  esCajon,
+  permiteHover,
+  cajonAbierto,
+  colapsadoVisual,
+  expandir,
+  colapsar,
+  abrirCajon,
+  cerrarCajon,
+  alNavegar: alNavegarLayout
+} = useLayout()
 
-  data () {
-    const soportaMQ = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    return {
-      esCajon: soportaMQ ? window.matchMedia(BP_CAJON).matches : this.isMobile,
-      permiteHover: soportaMQ ? window.matchMedia(BP_HOVER).matches : true,
-      abiertoLocal: false,
-      mqCajon: null,
-      mqHover: null,
-      focoPrevio: null,
-      overflowPrevio: ''
+/* -------- Refs para foco -------- */
+const btnCerrar = ref(null)
+const btnLogout = ref(null)
+let focoPrevio = null
+
+/* -------- Derivados -------- */
+// Cajón cerrado => sus enlaces siguen en el DOM fuera de pantalla; inert evita
+// tabular a ciegas y que el lector los anuncie.
+const estaFueraDePantalla = computed(() => esCajon.value && !cajonAbierto.value)
+
+const itemsFinales = computed(() => {
+  if (props.filteredMenuItems) return props.filteredMenuItems
+  return filtrarMenuPorPermisos(props.currentUser?.permisos || [])
+})
+
+const nombreUsuario = computed(() =>
+  props.currentUser?.name || props.currentUser?.email || 'Usuario'
+)
+
+const rolUsuario = computed(() => {
+  const rol = props.currentUser?.role || props.userRoles[0]
+  return rol ? textoRol(rol) : 'Rol no asignado'
+})
+
+const secciones = computed(() => {
+  const orden = []
+  const mapa = {}
+  itemsFinales.value.forEach(item => {
+    const nombre = item.seccion || 'Menú'
+    if (!mapa[nombre]) {
+      mapa[nombre] = []
+      orden.push(nombre)
     }
-  },
+    mapa[nombre].push(item)
+  })
+  return orden.map(nombre => ({ nombre, items: mapa[nombre] }))
+})
 
-  computed: {
-    // En modo cajón hay 280 px de ancho: colapsar no significa nada ahí, y si
-    // se hereda la clase del escritorio el menú queda en puros iconos sin texto.
-    estaColapsado () {
-      return this.isSidebarCollapsed && !this.esCajon
-    },
+/* -------- Foco al abrir/cerrar el cajón -------- */
+watch(cajonAbierto, (abierto) => {
+  if (!esCajon.value) return
+  if (abierto) {
+    focoPrevio = document.activeElement
+    nextTick(() => btnCerrar.value?.focus())
+  } else if (focoPrevio?.isConnected) {
+    focoPrevio.focus()
+    focoPrevio = null
+  }
+})
 
-    // Verdad única del cajón: vale tanto si lo manda el padre como si lo
-    // abrió el botón propio.
-    estaAbierto () {
-      return this.isMobileOpen || this.abiertoLocal
-    },
+/* -------- Métodos -------- */
+function isActive (path) {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
 
-    // Cuando el cajón está cerrado sus enlaces siguen en el DOM, fuera de
-    // pantalla. Sin `inert` se pueden tabular a ciegas y el lector de pantalla
-    // los anuncia igual.
-    estaFueraDePantalla () {
-      return this.esCajon && !this.estaAbierto
-    },
+function alNavegar () {
+  alNavegarLayout()
+}
 
-    itemsFinales () {
-      if (this.filteredMenuItems) return this.filteredMenuItems
-      return filtrarMenuPorPermisos(this.currentUser?.permisos || [])
-    },
+// Hover solo con mouse real; en táctil mouseenter se dispara al tocar.
+function alEntrarMouse () {
+  if (esCajon.value || !permiteHover.value) return
+  expandir()
+}
 
-    nombreUsuario () {
-      return this.currentUser?.name || this.currentUser?.email || 'Usuario'
-    },
+function alSalirMouse () {
+  if (esCajon.value || !permiteHover.value) return
+  colapsar(300)
+}
 
-    rolUsuario () {
-      const rol = this.currentUser?.role || this.userRoles[0]
-      return rol ? textoRol(rol) : 'Rol no asignado'
-    },
+// Escape para cerrar + trap de foco básico (Tab cicla dentro del cajón).
+function alPresionarTecla (e) {
+  if (!esCajon.value || !cajonAbierto.value) return
 
-    secciones () {
-      const orden = []
-      const mapa = {}
+  if (e.key === 'Escape') {
+    cerrarCajon()
+    return
+  }
 
-      this.itemsFinales.forEach(item => {
-        const nombre = item.seccion || 'Menú'
-        if (!mapa[nombre]) {
-          mapa[nombre] = []
-          orden.push(nombre)
-        }
-        mapa[nombre].push(item)
-      })
+  if (e.key === 'Tab') {
+    const foco = [btnCerrar.value, btnLogout.value].filter(Boolean)
+    if (!foco.length) return
+    const primero = foco[0]
+    const ultimo = foco[foco.length - 1]
+    const activo = document.activeElement
 
-      return orden.map(nombre => ({ nombre, items: mapa[nombre] }))
-    }
-  },
-
-  watch: {
-    // El padre manda si habla; si no habla, gana el estado local.
-    isMobileOpen (v) { this.abiertoLocal = v },
-
-    estaAbierto (abierto) {
-      if (!this.esCajon) return
-      this.bloquearScroll(abierto)
-
-      if (abierto) {
-        this.focoPrevio = document.activeElement
-        this.$nextTick(() => this.$refs.btnCerrar?.focus())
-      } else if (this.focoPrevio?.isConnected) {
-        this.focoPrevio.focus()
-        this.focoPrevio = null
-      }
-    },
-
-    // Si la ventana crece con el cajón abierto, hay que soltar el scroll
-    // del body o el escritorio queda trabado.
-    esCajon (ahoraEsCajon) {
-      if (!ahoraEsCajon) {
-        this.bloquearScroll(false)
-        if (this.estaAbierto) this.closeMobileSidebar()
-      }
-    }
-  },
-
-  created () {
-    if (typeof window === 'undefined' || !window.matchMedia) return
-    this.mqCajon = window.matchMedia(BP_CAJON)
-    this.mqHover = window.matchMedia(BP_HOVER)
-    this.escucharMQ(this.mqCajon, this.alCambiarCajon)
-    this.escucharMQ(this.mqHover, this.alCambiarHover)
-  },
-
-  mounted () {
-    document.addEventListener('keydown', this.alPresionarTecla)
-  },
-
-  beforeUnmount () {
-    document.removeEventListener('keydown', this.alPresionarTecla)
-    this.dejarDeEscucharMQ(this.mqCajon, this.alCambiarCajon)
-    this.dejarDeEscucharMQ(this.mqHover, this.alCambiarHover)
-    this.bloquearScroll(false)
-  },
-
-  methods: {
-    isActive (path) {
-      return this.$route.path === path || this.$route.path.startsWith(`${path}/`)
-    },
-
-    abrirCajon () {
-      this.abiertoLocal = true
-      this.$emit('open-mobile-sidebar')
-    },
-
-    closeMobileSidebar () {
-      this.abiertoLocal = false
-      this.$emit('close-mobile-sidebar')
-    },
-
-    handleNavigation () {
-      this.$emit('handle-navigation')
-    },
-
-    alNavegar () {
-      if (this.esCajon) this.closeMobileSidebar()
-      else this.handleNavigation()
-    },
-
-    // Expandir por hover solo donde hay un mouse de verdad. En una tablet táctil
-    // `mouseenter` se dispara al tocar y la barra se expande sola.
-    alEntrarMouse () {
-      if (this.esCajon || !this.permiteHover) return
-      this.$emit('expand-sidebar')
-    },
-
-    alSalirMouse () {
-      if (this.esCajon || !this.permiteHover) return
-      this.$emit('collapse-sidebar')
-    },
-
-    alPresionarTecla (e) {
-      if (e.key === 'Escape' && this.esCajon && this.estaAbierto) {
-        this.closeMobileSidebar()
-      }
-    },
-
-    alCambiarCajon (e) { this.esCajon = e.matches },
-    alCambiarHover (e) { this.permiteHover = e.matches },
-
-    bloquearScroll (activar) {
-      if (typeof document === 'undefined') return
-      if (activar) {
-        this.overflowPrevio = document.body.style.overflow
-        document.body.style.overflow = 'hidden'
-      } else {
-        document.body.style.overflow = this.overflowPrevio || ''
-      }
-    },
-
-    // Safari < 14 no tiene addEventListener en MediaQueryList
-    escucharMQ (mq, fn) {
-      if (!mq) return
-      mq.addEventListener ? mq.addEventListener('change', fn) : mq.addListener(fn)
-    },
-
-    dejarDeEscucharMQ (mq, fn) {
-      if (!mq) return
-      mq.removeEventListener ? mq.removeEventListener('change', fn) : mq.removeListener(fn)
+    // Enlaces de navegación también son focusables; esto solo garantiza
+    // que no se escape del aside en los extremos.
+    if (e.shiftKey && activo === primero) {
+      e.preventDefault()
+      ultimo.focus()
+    } else if (!e.shiftKey && activo === ultimo) {
+      e.preventDefault()
+      primero.focus()
     }
   }
 }
-
-/* MENU_COLIBRI se mantiene importado para que el default export siga
-   disponible si algún día se necesita el menú sin filtrar. */
-void MENU_COLIBRI
 </script>
 
 <style scoped>
@@ -364,16 +271,18 @@ void MENU_COLIBRI
 }
 
 .sidebar {
-  /* ─── Tokens locales derivados del design system ─── */
-  --sb-bg:            #2b211d;
-  --sb-bg-hover:      #3a2d27;
-  --sb-bg-active:     var(--accent, #c2456e);
-  --sb-border:        rgba(255, 255, 255, 0.08);
-  --sb-text:          #e8ddd6;
-  --sb-text-dim:      rgba(232, 221, 214, 0.55);
-  --sb-text-strong:   #ffffff;
-  --sb-accent:        var(--accent, #c2456e);
-  --sb-accent-soft:   var(--accent-soft, #fbe9f0);
+  /* Mapeo local → tokens globales (única fuente de verdad).
+     Ahora TODO reacciona a [data-theme="dark"] automáticamente. */
+  --sb-bg:            var(--sidebar-bg);
+  --sb-bg-hover:      var(--sidebar-bg-hover);
+  --sb-bg-active:     var(--sidebar-item-active-bg);
+  --sb-border:        var(--sidebar-border);
+  --sb-text:          var(--sidebar-text);
+  --sb-text-dim:      var(--sidebar-text-dim);
+  --sb-text-strong:   var(--sidebar-text-strong);
+  --sb-active-txt:    var(--sidebar-item-active-txt);
+  --sb-accent:        var(--accent);
+  --sb-accent-soft:   var(--accent-soft);
 
   background-color: var(--sb-bg);
   color: var(--sb-text);
@@ -386,8 +295,11 @@ void MENU_COLIBRI
   height: 100vh;
   height: 100dvh;
 
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.08);
-  transition: width 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: var(--shadow-md);
+  transition: width 0.28s cubic-bezier(0.23, 1, 0.32, 1),
+              background-color var(--t-med),
+              color var(--t-med),
+              border-color var(--t-med);
 }
 
 .sidebar.collapsed { width: 76px; }
@@ -398,7 +310,7 @@ void MENU_COLIBRI
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 76px;
+  min-height: 5cap;
   padding: 16px 14px;
   border-bottom: 1px solid var(--sb-border);
 }
@@ -417,8 +329,8 @@ void MENU_COLIBRI
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 35px;
+  height: 35px;
   flex-shrink: 0;
   border-radius: 50%;
   background-color: var(--sb-accent-soft);
@@ -451,8 +363,8 @@ void MENU_COLIBRI
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 35px;
+  height: 35px;
   flex-shrink: 0;
   border: 0;
   border-radius: 10px;
@@ -470,17 +382,18 @@ void MENU_COLIBRI
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;   /* el scroll del menú no arrastra la página */
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding: 10px 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  /* usa border-strong para que el thumb sea visible en ambos temas */
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .sidebar-nav::-webkit-scrollbar { width: 4px; }
 .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
 .sidebar-nav::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: var(--border-strong);
   border-radius: 20px;
 }
 
@@ -502,7 +415,7 @@ void MENU_COLIBRI
   height: 1px;
   margin: 10px 14px !important;
   padding: 0 !important;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--sb-border);   /* antes: rgba(255,255,255,0.1) */
 }
 
 .seccion-separador:first-child,
@@ -526,14 +439,14 @@ void MENU_COLIBRI
 
 .sidebar-nav a.active {
   background-color: var(--sb-bg-active);
-  border-left-color: #ffffff;
-  color: #ffffff;
+  border-left-color: var(--sb-active-txt);   /* antes: #ffffff */
+  color: var(--sb-active-txt);               /* antes: #ffffff */
   font-weight: 600;
 }
 
 .sidebar.collapsed .sidebar-nav a.active {
   border-left-color: transparent;
-  box-shadow: inset 3px 0 0 #ffffff;
+  box-shadow: inset 3px 0 0 var(--sb-active-txt);   /* antes: #ffffff */
 }
 
 .menu-icon {
@@ -544,7 +457,14 @@ void MENU_COLIBRI
   height: 20px;
   flex-shrink: 0;
   margin-right: 14px;
-  color: inherit;
+  color: inherit;   /* ✔ hereda color → iconos correctos en ambos temas */
+}
+
+/* asegura que los SVG dentro del icono usen currentColor */
+.menu-icon svg,
+.logo-icon svg,
+.logout-icon svg {
+  stroke: currentColor;   /* si tus iconos son de RELLENO cambia a: fill: currentColor; */
 }
 
 .sidebar.collapsed .menu-icon { margin-right: 0; }
@@ -561,7 +481,7 @@ void MENU_COLIBRI
 /* ---------- Pie ---------- */
 .sidebar-footer {
   padding: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--sb-border);   /* antes: rgba(255,255,255,0.1) */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -573,7 +493,7 @@ void MENU_COLIBRI
   min-width: 0;
   margin-bottom: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.15);
+  border-bottom: 1px dashed var(--sb-border);   /* antes: rgba(255,255,255,0.15) */
 }
 
 .user-avatar-container { display: flex; justify-content: center; margin-bottom: 12px; }
@@ -583,7 +503,7 @@ void MENU_COLIBRI
   height: 36px;
   border-radius: 50%;
   background-color: var(--sb-accent);
-  color: #ffffff;
+  color: var(--accent-contrast);   /* antes: #ffffff */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -610,7 +530,7 @@ void MENU_COLIBRI
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid var(--sb-border);   /* antes: rgba(255,255,255,0.15) */
   border-radius: 8px;
   background-color: transparent;
   color: var(--sb-text);
@@ -623,16 +543,16 @@ void MENU_COLIBRI
 }
 
 .logout-button:hover {
-  background-color: rgba(239, 68, 68, 0.18);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fecaca;
+  background-color: var(--danger-soft);   /* antes: rgba(239,68,68,0.18) */
+  border-color: var(--danger-border);     /* antes: rgba(239,68,68,0.5)  */
+  color: var(--danger);                    /* antes: #fecaca */
 }
 
 .logout-button:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: 2px; }
 .logout-icon { flex-shrink: 0; }
 .logout-text { margin-left: 10px; }
 
-/* ---------- Botón propio ---------- */
+/* ---------- Botón propio (trigger) ---------- */
 .sidebar-trigger {
   position: fixed;
   top: calc(env(safe-area-inset-top, 0px) + 10px);
@@ -643,25 +563,28 @@ void MENU_COLIBRI
   justify-content: center;
   width: 44px;
   height: 44px;
-  border: 1px solid var(--border, #e9e0da);
+  border: 1px solid var(--border);      /* antes: fallback #e9e0da */
   border-radius: 12px;
-  background: var(--surface, #ffffff);
-  color: var(--text, #2b2320);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.10);
+  background: var(--surface);           /* antes: fallback #ffffff */
+  color: var(--text);                   /* antes: fallback #2b2320 */
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease,
+              background-color var(--t-med),
+              color var(--t-med),
+              border-color var(--t-med);
 }
 
 .sidebar-trigger.is-hidden { opacity: 0; pointer-events: none; }
-.sidebar-trigger:focus-visible { outline: 2px solid var(--accent, #c2456e); outline-offset: 2px; }
+.sidebar-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- Fondo del cajón ---------- */
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
   z-index: 1200;
-  background-color: rgba(24, 16, 13, 0.5);
+  background-color: rgba(24, 16, 13, 0.5);   /* backdrop: se deja fijo a propósito */
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -669,18 +592,16 @@ void MENU_COLIBRI
 
 .sidebar-backdrop.is-visible { opacity: 1; pointer-events: auto; }
 
-/* ---------- Modo cajón ----------
-   Se activa por clase (.is-cajon) y no solo por media query, para que el
-   estado de CSS y el de JS no puedan discrepar nunca.                      */
+/* ---------- Modo cajón ---------- */
 .sidebar.is-cajon {
   position: fixed;
   top: 0;
   left: 0;
   width: 280px;
   max-width: 85vw;
-  z-index: 1300;            /* por encima de cualquier topbar de la app */
+  z-index: 1300;
   transform: translateX(-100%);
-  box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-lg);
   transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -695,3 +616,4 @@ void MENU_COLIBRI
   .logout-button { transition: none; }
 }
 </style>
+
