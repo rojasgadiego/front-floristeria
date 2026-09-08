@@ -20,46 +20,37 @@
   </div>
 
   <!-- ---------- Filtros ---------- -->
-  <div class="barra-filtros al-entrar" style="--i: 2">
+  <!-- Cuatro controles apilados se comían la pantalla en móvil. Queda el
+       buscador y un botón; el resto vive en la hoja. -->
+  <div class="barra al-entrar" style="--i: 2">
     <div class="buscador">
       <span aria-hidden="true">🔎</span>
       <input v-model="busqueda" placeholder="Folio, documento o proveedor…" aria-label="Buscar compra">
       <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
     </div>
 
-    <select class="campo campo-corto" :value="filtro.estado ?? ''"
-      @change="filtrar({ estado: $event.target.value || null })" aria-label="Estado">
-      <option value="">Todos los estados</option>
-      <option value="borrador">Borradores</option>
-      <option value="recibida">Recibidas</option>
-      <option value="anulada">Anuladas</option>
-    </select>
+    <button class="btn btn-linea filtros-btn" :class="{ activo: nFiltros > 0 }" @click="filtrosAbiertos = true"
+      :aria-label="`Filtros${nFiltros ? `, ${nFiltros} activos` : ''}`">
+      Filtros
+      <span v-if="nFiltros" class="globo">{{ nFiltros }}</span>
+    </button>
+  </div>
 
-    <select class="campo campo-corto" :value="filtro.proveedorId ?? ''"
-      @change="filtrar({ proveedorId: $event.target.value ? Number($event.target.value) : null })"
-      aria-label="Proveedor">
-      <option value="">Todos los proveedores</option>
-      <option v-for="p in proveedores" :key="p.id" :value="p.id">{{ p.nombre }}</option>
-    </select>
-
-    <label class="rango">
-      <span class="mini suave">Desde</span>
-      <input class="campo campo-fecha" type="date" :value="filtro.desde"
-        @change="filtrar({ desde: $event.target.value || null })">
-    </label>
-    <label class="rango">
-      <span class="mini suave">Hasta</span>
-      <input class="campo campo-fecha" type="date" :value="filtro.hasta"
-        @change="filtrar({ hasta: $event.target.value || null })">
-    </label>
+  <div v-if="chips.length" class="chips-filtro">
+    <button v-for="c in chips" :key="c.clave" class="chip-filtro" @click="quitarChip(c)">
+      {{ c.texto }} <span aria-hidden="true">✕</span>
+    </button>
+    <button class="chip-limpiar" @click="limpiarFiltros">Limpiar todo</button>
   </div>
 
   <!-- ---------- Listado ---------- -->
   <div v-if="cargando && !compras.length" class="vacio">Cargando compras…</div>
 
   <div v-else-if="!compras.length" class="vacio">
-    <strong>Sin compras registradas</strong>
-    Crea la primera para que entre flor al inventario.
+    <strong>{{ nFiltros || busqueda ? 'Ninguna compra coincide' : 'Sin compras registradas' }}</strong>
+    {{ nFiltros || busqueda
+      ? 'Prueba con otro texto o quita los filtros.'
+      : 'Crea la primera para que entre flor al inventario.' }}
   </div>
 
   <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
@@ -77,22 +68,41 @@
         </tr>
       </thead>
       <tbody>
-        <template v-for="(c, ix) in compras" :key="c.id">
-          <tr class="fila clic" :style="{ '--i': Math.min(ix, 12) }"
-            :class="{ anulada: c.estado === 'anulada', abierta: abierta === c.id, resaltada: c.id === resalte.id }"
-            @click="alternarDetalle(c.id)">
+        <template v-for="c in compras" :key="c.id">
+          <tr class="fila" :class="{
+            clic: !esMovil,
+            anulada: c.estado === 'anulada',
+            abierta: abierta === c.id,
+            resaltada: c.id === resalte.id
+          }" @click="!esMovil && alternarDetalle(c.id)">
+
+            <!-- En escritorio es una celda más. Bajo el breakpoint es la
+                 cabecera del acordeón: folio, estado y total. -->
             <td data-label="Folio">
-              <b>{{ c.folio }}</b>
-              <div v-if="c.documento" class="detalle-linea">Doc. {{ c.documento }}</div>
+              <button v-if="esMovil" class="cab" :aria-expanded="abierta === c.id" @click="alternarDetalle(c.id)">
+                <span class="chevron" aria-hidden="true">›</span>
+                <span class="cab-folio">{{ c.folio }}</span>
+                <span class="etiqueta" :class="claseEstado(c.estado)">{{ textoEstado(c.estado) }}</span>
+                <span class="dato cab-total">{{ clp(c.total) }}</span>
+              </button>
+
+              <template v-else>
+                <b>{{ c.folio }}</b>
+                <div v-if="c.documento" class="detalle-linea">Doc. {{ c.documento }}</div>
+              </template>
             </td>
+
+            <!-- El documento sale de la cabecera mínima y se recupera acá -->
+            <td v-if="esMovil && c.documento" data-label="Documento" class="suave">{{ c.documento }}</td>
+
             <td data-label="Proveedor">{{ c.proveedor }}</td>
             <td data-label="Fecha" class="dato mini">{{ fecha(c.fecha) }}</td>
-            <td data-label="Estado">
+            <td data-label="Estado" class="col-estado">
               <span class="etiqueta" :class="claseEstado(c.estado)">{{ textoEstado(c.estado) }}</span>
             </td>
             <td data-label="Líneas" class="der dato">{{ c.lineas }}</td>
             <td data-label="Varas" class="der dato">{{ c.varasTotales }}</td>
-            <td data-label="Total" class="der dato">{{ clp(c.total) }}</td>
+            <td data-label="Total" class="der dato col-total">{{ clp(c.total) }}</td>
             <td class="der acciones-col">
               <span class="flecha" aria-hidden="true">▾</span>
             </td>
@@ -101,50 +111,49 @@
           <tr v-if="abierta === c.id" class="fila-detalle">
             <td colspan="8">
               <div class="detalle">
-                <div v-if="!detalleDe(c.id)" class="suave mini">Cargando detalle…</div>
+                <div v-if="!det" class="suave mini">Cargando detalle…</div>
 
                 <template v-else>
-                  <table class="interna">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>Presentación</th>
-                        <th class="der">Cant.</th>
-                        <th class="der">Costo unit.</th>
-                        <th class="der">Varas</th>
-                        <th class="der">Por vara</th>
-                        <th class="der">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="it in detalleDe(c.id).items" :key="it.id">
-                        <td data-label="Producto">{{ it.emoji }} {{ it.producto }}</td>
-                        <td data-label="Presentación" class="suave mini">{{ it.presentacion }}</td>
-                        <td data-label="Cant." class="der dato">{{ it.cantidad }}</td>
-                        <td data-label="Costo unit." class="der dato">{{ clp(it.costoUnitario) }}</td>
-                        <td data-label="Varas" class="der dato">{{ it.varasTotales }}</td>
-                        <td data-label="Por vara" class="der dato">
-                          {{ clp(it.costoPorVara) }}
-                          <div v-if="it.costoAnterior" class="mini"
-                            :class="it.costoPorVara > it.costoAnterior ? 'rojo' : 'verde'">
-                            antes {{ clp(it.costoAnterior) }}
-                          </div>
-                        </td>
-                        <td data-label="Subtotal" class="der dato">{{ clp(it.subtotal) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <!-- Antes era una <table> anidada dentro de un td con colspan.
+                       En móvil eso producía tarjetas dentro de tarjetas. -->
+                  <div class="items">
+                    <div class="items-cab" aria-hidden="true">
+                      <span>Producto</span>
+                      <span>Presentación</span>
+                      <span class="der">Cant.</span>
+                      <span class="der">Costo unit.</span>
+                      <span class="der">Varas</span>
+                      <span class="der">Por vara</span>
+                      <span class="der">Subtotal</span>
+                    </div>
 
-                  <div class="totales">
-                    <div><span>Neto</span><b class="dato">{{ clp(detalleDe(c.id).neto) }}</b></div>
-                    <div><span>IVA</span><b class="dato">{{ clp(detalleDe(c.id).iva) }}</b></div>
-                    <div><span>Total</span><b class="dato grande">{{ clp(detalleDe(c.id).total) }}</b></div>
+                    <div v-for="it in det.items" :key="it.id" class="item">
+                      <div class="i-prod">{{ it.emoji }} {{ it.producto }}</div>
+                      <div class="i-pres suave mini">{{ it.presentacion }}</div>
+                      <div class="i-cant der dato" data-rot="Cantidad">{{ it.cantidad }}</div>
+                      <div class="i-costo der dato" data-rot="Costo unit.">{{ clp(it.costoUnitario) }}</div>
+                      <div class="i-varas der dato" data-rot="Varas">{{ it.varasTotales }}</div>
+                      <div class="i-vara der dato" data-rot="Por vara">
+                        {{ clp(it.costoPorVara) }}
+                        <span v-if="it.costoAnterior" class="mini"
+                          :class="it.costoPorVara > it.costoAnterior ? 'rojo' : 'verde'">
+                          antes {{ clp(it.costoAnterior) }}
+                        </span>
+                      </div>
+                      <div class="i-sub der dato" data-rot="Subtotal">{{ clp(it.subtotal) }}</div>
+                    </div>
                   </div>
 
-                  <div v-if="detalleDe(c.id).lotes.length" class="lotes">
+                  <div class="totales">
+                    <div><span>Neto</span><b class="dato">{{ clp(det.neto) }}</b></div>
+                    <div><span>IVA</span><b class="dato">{{ clp(det.iva) }}</b></div>
+                    <div><span>Total</span><b class="dato grande">{{ clp(det.total) }}</b></div>
+                  </div>
+
+                  <div v-if="det.lotes.length" class="lotes">
                     <h4>Lotes generados</h4>
                     <div class="chips">
-                      <span v-for="l in detalleDe(c.id).lotes" :key="l.id" class="chip">
+                      <span v-for="l in det.lotes" :key="l.id" class="chip">
                         <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
                         <span v-if="l.fechaVencimiento" class="suave">
                           · vence {{ fecha(l.fechaVencimiento) }}
@@ -153,7 +162,7 @@
                     </div>
                   </div>
 
-                  <p v-if="detalleDe(c.id).notas" class="notas">“{{ detalleDe(c.id).notas }}”</p>
+                  <p v-if="det.notas" class="notas">“{{ det.notas }}”</p>
 
                   <div v-if="puedeEditar" class="acciones-detalle">
                     <template v-if="c.estado === 'borrador'">
@@ -169,7 +178,7 @@
                     </template>
                     <p v-else-if="c.estado === 'recibida'" class="mini suave">
                       Recibida el {{ fechaHora(c.recibidaEn) }}. Para revertirla hay que
-                      registrar la merma de sus lotes como devolución al proveedor.
+                      registrar la merma de sus lotes indicando devolución al proveedor.
                     </p>
                   </div>
                 </template>
@@ -189,8 +198,69 @@
       @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
   </p>
 
+  <!-- ---------- Hoja de filtros ---------- -->
+  <div v-if="filtrosAbiertos" class="fondo" @click.self="filtrosAbiertos = false">
+    <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-filtros">
+      <div class="modal-cab hoja-cab">
+        <span class="agarre" aria-hidden="true"></span>
+        <h3 id="titulo-filtros">Filtros</h3>
+        <button class="btn-icono neutro" @click="filtrosAbiertos = false" aria-label="Cerrar">✕</button>
+      </div>
+
+      <div class="modal-cuerpo">
+        <div class="grupo">
+          <label for="f-estado">Estado</label>
+          <select id="f-estado" class="campo" :value="filtro.estado ?? ''"
+            @change="filtrar({ estado: $event.target.value || null, pagina: 1 })">
+            <option value="">Todos los estados</option>
+            <option value="borrador">Borradores</option>
+            <option value="recibida">Recibidas</option>
+            <option value="anulada">Anuladas</option>
+          </select>
+        </div>
+
+        <div class="grupo">
+          <label for="f-prov">Proveedor</label>
+          <select id="f-prov" class="campo" :value="filtro.proveedorId ?? ''"
+            @change="filtrar({ proveedorId: $event.target.value ? Number($event.target.value) : null, pagina: 1 })">
+            <option value="">Todos los proveedores</option>
+            <option v-for="p in proveedores" :key="p.id" :value="p.id">{{ p.nombre }}</option>
+          </select>
+        </div>
+
+        <div class="grupo">
+          <label>Periodo</label>
+          <div class="presets">
+            <button v-for="p in PRESETS" :key="p.clave" class="preset" :class="{ on: presetActivo === p.clave }"
+              @click="aplicarPreset(p.clave)">{{ p.texto }}</button>
+          </div>
+        </div>
+
+        <div v-if="presetActivo === 'personalizado'" class="rejilla grupo">
+          <label class="rango">
+            <span class="mini suave">Desde</span>
+            <input class="campo" type="date" :value="filtro.desde ?? ''"
+              @change="filtrar({ desde: $event.target.value || null, pagina: 1 })">
+          </label>
+          <label class="rango">
+            <span class="mini suave">Hasta</span>
+            <input class="campo" type="date" :value="filtro.hasta ?? ''"
+              @change="filtrar({ hasta: $event.target.value || null, pagina: 1 })">
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="limpiarFiltros">Limpiar</button>
+        <button class="btn" @click="filtrosAbiertos = false">Ver resultados</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODALES ================= -->
-  <div v-if="modal" class="fondo" @click.self="cerrarModal">
+  <!-- El fondo ya no cierra a ciegas: un clic afuera con una compra a medio
+       escribir la borraba sin preguntar. -->
+  <div v-if="modal" class="fondo" @click.self="intentarCerrar">
 
     <!-- Crear / editar compra -->
     <div v-if="modal.tipo === 'compra'" class="modal ancho">
@@ -310,7 +380,7 @@
       </div>
 
       <div class="modal-pie">
-        <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
+        <button class="btn btn-linea" @click="intentarCerrar">Cancelar</button>
         <button class="btn" :disabled="guardando" @click="guardarCompra">
           <span v-if="guardando" class="spinner" aria-hidden="true"></span>
           {{ guardando ? 'Guardando…' : 'Guardar borrador' }}
@@ -433,6 +503,20 @@
     </div>
   </div>
 
+  <!-- Confirmación de descarte -->
+  <div v-if="confirmarDescarte" class="fondo z-alto" @click.self="confirmarDescarte = false">
+    <div class="modal angosto" role="dialog" aria-modal="true">
+      <div class="modal-cab">
+        <h3>¿Descartar la compra?</h3>
+        <p>Tiene líneas cargadas que se van a perder.</p>
+      </div>
+      <div class="modal-pie">
+        <button class="btn btn-linea" @click="confirmarDescarte = false">Seguir editando</button>
+        <button class="btn peligro" @click="descartar">Descartar</button>
+      </div>
+    </div>
+  </div>
+
   <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
 </template>
 
@@ -445,9 +529,33 @@ import { textoEstado, claseEstado } from '@/features/compras/store/compras.modul
 import { TIPOS_PRESENTACION } from '@/features/compras/store/presentaciones.module'
 import { aDateOnly, hoy } from '@/core/utils/fechas'
 
+/* El mismo valor que el @media de abajo. Si se cambia uno hay que cambiar el
+   otro: no hay forma de leer un breakpoint de CSS desde JS. */
+const MOVIL = '(max-width: 900px)'
+
+const PRESETS = [
+  { clave: 'todo', texto: 'Todo' },
+  { clave: 'hoy', texto: 'Hoy' },
+  { clave: '7d', texto: '7 días' },
+  { clave: 'mes', texto: 'Este mes' },
+  { clave: 'personalizado', texto: 'Otro rango' }
+]
+
+/* YYYY-MM-DD en hora local. toISOString() da UTC y en Chile adelanta el día
+   durante la tarde. */
+const iso = (d) => {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+const sumarDias = (d, n) => {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
+
 export default {
   name: 'ComprasView',
-  components: {  },
 
   setup () {
     const store = useStore()
@@ -490,9 +598,18 @@ export default {
       if (!store.getters['productos/productos'].length) {
         store.dispatch('productos/cargar', señal)
       }
+
+      mql = window.matchMedia(MOVIL)
+      esMovil.value = mql.matches
+      mql.addEventListener('change', alCambiarAncho)
+      document.addEventListener('keydown', alTeclado)
     })
 
-    onUnmounted(() => control?.abort())
+    onUnmounted(() => {
+      control?.abort()
+      mql?.removeEventListener('change', alCambiarAncho)
+      document.removeEventListener('keydown', alTeclado)
+    })
 
     const recargar = () => store.dispatch('compras/cargar')
     const filtrar = (cambios) => store.dispatch('compras/filtrar', cambios)
@@ -501,12 +618,88 @@ export default {
     let tmr = null
     watch(busqueda, (v) => {
       clearTimeout(tmr)
-      tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
+      tmr = setTimeout(() => filtrar({ buscar: v.trim(), pagina: 1 }), 350)
     })
     onUnmounted(() => clearTimeout(tmr))
 
+    /* ---------------- Ancho ---------------- */
+    /* Se decide en JS y no solo con CSS porque la cabecera del acordeón es un
+       <button> real: en escritorio sería un tab-stop de más por cada fila. */
+    const esMovil = ref(false)
+    let mql = null
+
+    const alCambiarAncho = (e) => { esMovil.value = e.matches }
+
+    /* ---------------- Filtros ---------------- */
+    const filtrosAbiertos = ref(false)
+    const rangoManual = ref(false)
+
+    const rangoPreset = (clave) => {
+      const h = new Date()
+      switch (clave) {
+        case 'hoy': return { desde: iso(h), hasta: iso(h) }
+        case '7d': return { desde: iso(sumarDias(h, -6)), hasta: iso(h) }
+        case 'mes': return { desde: iso(new Date(h.getFullYear(), h.getMonth(), 1)), hasta: iso(h) }
+        default: return { desde: null, hasta: null }
+      }
+    }
+
+    /* El preset se deduce del rango puesto en vez de guardarse aparte: así un
+       rango que llegue por URL o por el store se refleja solo. */
+    const presetActivo = computed(() => {
+      const { desde, hasta } = filtro.value
+      if (!desde && !hasta) return rangoManual.value ? 'personalizado' : 'todo'
+      for (const p of ['hoy', '7d', 'mes']) {
+        const r = rangoPreset(p)
+        if (r.desde === desde && r.hasta === hasta) return p
+      }
+      return 'personalizado'
+    })
+
+    const aplicarPreset = (clave) => {
+      rangoManual.value = clave === 'personalizado'
+      if (clave === 'personalizado') return
+      filtrar({ ...rangoPreset(clave), pagina: 1 })
+    }
+
+    const chips = computed(() => {
+      const f = filtro.value
+      const out = []
+      if (f.estado) {
+        out.push({ clave: 'estado', texto: textoEstado(f.estado), cambio: { estado: null } })
+      }
+      if (f.proveedorId) {
+        const p = proveedores.value.find(x => x.id === f.proveedorId)
+        out.push({ clave: 'proveedor', texto: p?.nombre || 'Proveedor', cambio: { proveedorId: null } })
+      }
+      if (f.desde || f.hasta) {
+        const texto = presetActivo.value === 'personalizado'
+          ? `${f.desde || '…'} a ${f.hasta || '…'}`
+          : PRESETS.find(x => x.clave === presetActivo.value)?.texto
+        out.push({ clave: 'fechas', texto, cambio: { desde: null, hasta: null } })
+      }
+      return out
+    })
+
+    const nFiltros = computed(() => chips.value.length)
+
+    const quitarChip = (c) => {
+      if (c.clave === 'fechas') rangoManual.value = false
+      filtrar({ ...c.cambio, pagina: 1 })
+    }
+
+    const limpiarFiltros = () => {
+      rangoManual.value = false
+      busqueda.value = ''
+      filtrar({ buscar: '', estado: null, proveedorId: null, desde: null, hasta: null, pagina: 1 })
+    }
+
     /* ---------------- Detalle ---------------- */
     const abierta = ref(null)
+
+    /* detalleDe() es un getter con parámetro: llamarlo quince veces en el
+       template lo recalculaba quince veces por render. Solo hay uno abierto. */
+    const det = computed(() => (abierta.value ? detalleDe(abierta.value) : null))
 
     const alternarDetalle = (id) => {
       if (abierta.value === id) {
@@ -516,6 +709,12 @@ export default {
       abierta.value = id
       store.dispatch('compras/cargarDetalle', { id })
     }
+
+    /* Lo abierto ya no está en pantalla al cambiar de página o de filtro. */
+    watch(
+      () => [filtro.value.pagina, filtro.value.buscar, filtro.value.estado, filtro.value.proveedorId],
+      () => { abierta.value = null }
+    )
 
     /* ---------------- Costo anterior ---------------- */
     const anteriores = ref({})
@@ -537,10 +736,44 @@ export default {
 
     /* ---------------- Modales ---------------- */
     const modal = ref(null)
+    const confirmarDescarte = ref(false)
     const resalte = usarResalte()
     const { aviso, avisar } = usarAviso()
 
     const cerrarModal = () => { modal.value = null }
+
+    /* Un clic al fondo borraba la compra a medio escribir sin preguntar. Con
+       líneas cargadas ahora pide confirmación; sin nada escrito, cierra. */
+    const hayTrabajo = () => {
+      const m = modal.value
+      if (!m) return false
+      if (m.tipo === 'compra') return !!(m.f.items.length || m.f.documento || m.f.notas)
+      if (m.tipo === 'presentacion') return !!m.f.nombre.trim()
+      return false
+    }
+
+    const intentarCerrar = () => {
+      if (modal.value?.tipo === 'presentacion') return volverACompra()
+      if (hayTrabajo()) {
+        confirmarDescarte.value = true
+        return
+      }
+      cerrarModal()
+    }
+
+    const descartar = () => {
+      confirmarDescarte.value = false
+      compraEnEspera = null
+      cerrarModal()
+    }
+
+    const alTeclado = (e) => {
+      if (e.key !== 'Escape') return
+      if (confirmarDescarte.value) confirmarDescarte.value = false
+      else if (modal.value) intentarCerrar()
+      else if (filtrosAbiertos.value) filtrosAbiertos.value = false
+      else if (abierta.value) abierta.value = null
+    }
 
     let contador = 0
     const nuevaLinea = (productoId, presentacionId) => ({
@@ -559,16 +792,25 @@ export default {
 
     const abrirEdicion = async (c) => {
       const d = await store.dispatch('compras/cargarDetalle', { id: c.id })
-      for (const it of d.items) {
-        store.dispatch('presentaciones/cargar', { productoId: it.productoId })
-        traerAnterior(it.productoId)
-      }
+
+      /* Con await: sin él los <select> de presentación se montaban contra una
+         lista todavía vacía y el v-model no encontraba su opción. */
+      await Promise.all(
+        [...new Set(d.items.map(it => it.productoId))].map(productoId => {
+          traerAnterior(productoId)
+          return store.dispatch('presentaciones/cargar', { productoId })
+        })
+      )
+
       modal.value = {
         tipo: 'compra',
         f: {
           id: d.id, folio: d.folio, proveedorId: d.proveedorId,
           fecha: aDateOnly(d.fecha), documento: d.documento || '',
-          notas: d.notas || '', ivaTasa: 19,
+          notas: d.notas || '',
+          /* La tasa guardada, no un 19 fijo: editar una compra con otra tasa
+             la cambiaba en silencio. */
+          ivaTasa: d.ivaTasa ?? 19,
           items: d.items.map(it => ({
             uid: ++contador,
             productoId: it.productoId,
@@ -639,8 +881,11 @@ export default {
       }
     }
 
+    /* Sin borrador guardado no hay a dónde volver: cerrar y ya. */
     const volverACompra = () => {
-      modal.value = { tipo: 'compra', f: compraEnEspera }
+      modal.value = compraEnEspera
+        ? { tipo: 'compra', f: compraEnEspera }
+        : null
     }
 
     const guardarPresentacion = async () => {
@@ -707,6 +952,7 @@ export default {
         const compra = f.id
           ? await store.dispatch('compras/actualizar', { id: f.id, ...peticion })
           : await store.dispatch('compras/crear', peticion)
+        compraEnEspera = null
         cerrarModal()
         avisar(`Compra ${compra.folio} guardada en borrador`)
         resalte.marcar(compra.id)
@@ -769,14 +1015,16 @@ export default {
     const fechaHora = (v) => (v ? fmtHora.format(new Date(v)) : '—')
 
     return {
-      TIPOS_PRESENTACION, Math, textoEstado, claseEstado,
-      puedeEditar,
+      TIPOS_PRESENTACION, PRESETS, textoEstado, claseEstado,
+      puedeEditar, esMovil,
       compras, filtro, totalPaginas, hayAnterior, haySiguiente,
-      cargando, guardando, error, borradores, recepcion, detalleDe,
+      cargando, guardando, error, borradores, recepcion,
       proveedores, proveedoresActivos, comprables, nombreProducto, presentacionesDe,
       recargar, filtrar, busqueda,
-      abierta, alternarDetalle, anteriorDe,
-      modal, cerrarModal, abrirNueva, abrirEdicion, agregarLinea,
+      filtrosAbiertos, presetActivo, aplicarPreset, chips, nFiltros, quitarChip, limpiarFiltros,
+      abierta, det, alternarDetalle, anteriorDe,
+      modal, cerrarModal, intentarCerrar, confirmarDescarte, descartar,
+      abrirNueva, abrirEdicion, agregarLinea,
       tipoDe, varasDe, costoPorVaraDe, subtotalDe,
       neto, iva, totalCompra, varasTotales,
       abrirPresentacion, volverACompra, guardarPresentacion,
@@ -810,15 +1058,8 @@ export default {
   animation-delay: calc(var(--i, 0) * 55ms);
 }
 
-@keyframes aparece {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-
-.fila {
-  animation: aparece 220ms ease-out backwards;
-  animation-delay: calc(var(--i, 0) * 25ms);
-}
+/* Las filas ya no entran escalonadas: el stagger se redisparaba con cada
+   tecleo del buscador y la lista se sentía lenta. */
 
 @keyframes resalta {
   0% { background: var(--accent-soft); }
@@ -864,14 +1105,6 @@ export default {
   color: var(--text);
 }
 
-.pista {
-  margin: 4px 0 0;
-  font-size: 0.875rem;
-  color: var(--text-soft);
-  max-width: 62ch;
-  line-height: 1.5;
-}
-
 /* ---------- Bandas ---------- */
 .banda {
   display: flex;
@@ -898,22 +1131,19 @@ export default {
 
 .banda .btn { margin-left: auto; }
 
-/* ---------- Filtros ---------- */
-.barra-filtros {
+/* ---------- Barra de filtros ---------- */
+.barra {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
   gap: 10px;
-  margin-bottom: 16px;
+  align-items: stretch;
+  margin-bottom: 12px;
 }
-
-.rango { display: flex; flex-direction: column; gap: 3px; }
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 220px;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
@@ -939,6 +1169,81 @@ export default {
   font-size: max(0.9rem, 16px);
 }
 
+.filtros-btn {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.filtros-btn.activo {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.globo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.chips-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.chip-filtro,
+.chip-limpiar {
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.chip-limpiar {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.preset {
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background-color var(--t-fast);
+}
+
+.preset.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
 .campo {
   width: 100%;
   min-height: 44px;
@@ -959,8 +1264,8 @@ export default {
 }
 
 .campo.chico { min-height: 38px; padding: 0.4rem 0.6rem; font-size: max(0.85rem, 16px); }
-.campo-corto { width: auto; flex: 0 1 190px; }
-.campo-fecha { width: auto; min-width: 150px; }
+
+.rango { display: flex; flex-direction: column; gap: 3px; }
 
 .segmentado {
   display: inline-flex;
@@ -1090,24 +1395,51 @@ tr.clic:hover td, tr.clic.abierta td { background: var(--surface-2); }
 .et-ambar { background: var(--warn-soft); color: var(--warn-text-2); }
 .et-gris { background: var(--tag-gris-bg); color: var(--tag-gris-text); }
 
+/* La cabecera del acordeón no existe en escritorio */
+.cab { display: none; }
+
 /* ---------- Detalle ---------- */
 .fila-detalle td { background: var(--surface-2); padding: 0; }
 
 .detalle { padding: 14px; }
 
-table.interna {
+/* Las líneas comparten una sola definición de grilla con sus rótulos: si se
+   agrega una columna, se agrega en un lugar. */
+.items {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   overflow: hidden;
 }
 
-table.interna th {
-  background: var(--surface-2);
-  font-size: 0.62rem;
+.items-cab,
+.item {
+  display: grid;
+  grid-template-columns: minmax(130px, 1.5fr) minmax(100px, 1fr) 58px 92px 64px 104px 92px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
 }
 
-table.interna td { font-size: 0.82rem; padding: 8px 12px; }
+.items-cab {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.item {
+  border-bottom: 1px solid var(--surface-3);
+  font-size: 0.82rem;
+}
+
+.item:last-child { border-bottom: 0; }
+
+.i-vara .mini { display: block; }
 
 .totales {
   display: flex;
@@ -1202,6 +1534,8 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn:disabled { background: var(--accent-disabled); cursor: not-allowed; }
 
+.btn.peligro { background: var(--danger); }
+
 .btn-linea {
   background: transparent;
   border: 1px solid var(--border-strong);
@@ -1233,6 +1567,10 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
 }
 
 .btn-icono:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Cerrar una hoja no es destructivo: no debe teñirse de rojo al pasar. */
+.btn-icono.neutro:hover { border-color: var(--border-strong); color: var(--text); }
+
 .btn-icono.chico { width: 28px; height: 28px; }
 
 .enlace-boton {
@@ -1258,10 +1596,12 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
   background: var(--overlay);
 }
 
-.modal {
+.fondo.z-alto { z-index: 70; }
+
+.modal,
+.hoja {
   width: 100%;
   max-width: 500px;
-  max-height: 90vh;
   max-height: 90dvh;
   display: flex;
   flex-direction: column;
@@ -1271,11 +1611,23 @@ table.interna td { font-size: 0.82rem; padding: 8px 12px; }
 }
 
 .modal.ancho { max-width: 760px; }
+.modal.angosto { max-width: 380px; }
 
 .modal-cab {
   padding: 18px 20px 14px;
   border-bottom: 1px solid var(--border);
 }
+
+.hoja-cab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hoja-cab h3 { flex: 1; }
+
+.agarre { display: none; }
 
 .modal-cab h3 { margin: 0; font-size: 1.15rem; color: var(--text); }
 .modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: var(--text-soft); }
@@ -1461,27 +1813,92 @@ label {
   table, thead, tbody, tr, td { display: block; width: 100%; }
   thead { display: none; }
 
-  tbody tr {
+  /* Cerrada, la fila es una línea. El relleno vive en la cabecera y en las
+     celdas del cuerpo, no en la fila, para que colapse sin dejar aire. */
+  tbody tr.fila {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
-    margin-bottom: 11px;
-    padding: 12px;
+    margin-bottom: 10px;
+    padding: 0;
+    overflow: hidden;
   }
 
-  tbody tr.fila-detalle { background: var(--surface-2); padding: 0; }
+  tr.clic:hover td, tr.clic.abierta td { background: transparent; }
 
-  td {
+  /* ── Cabecera: folio, estado y total ── */
+
+  td[data-label="Folio"] {
+    display: block;
+    padding: 0;
+    border: none;
+    text-align: left;
+  }
+
+  td[data-label="Folio"]::before { content: none; }
+
+  tr.fila.abierta td[data-label="Folio"] { border-bottom: 1px solid var(--border); }
+
+  .cab {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 54px;
+    padding: 0 14px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .cab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+
+  .cab-folio {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.92rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cab-total { flex-shrink: 0; font-size: 0.95rem; }
+
+  .chevron {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: transform 0.16s ease;
+  }
+
+  tr.fila.abierta .chevron { transform: rotate(90deg); }
+
+  /* Estado y total ya están en la cabecera: repetirlos abajo sería ruido. */
+  .col-estado, .col-total, .acciones-col { display: none; }
+
+  /* ── Cuerpo ── */
+
+  tbody tr.fila:not(.abierta) td:not([data-label="Folio"]) { display: none; }
+
+  tr.fila.abierta td:not([data-label="Folio"]) {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    padding: 6px 0;
+    padding: 8px 14px;
     border: none;
     text-align: right;
   }
 
-  td::before {
+  tr.fila.abierta td:not([data-label="Folio"])::before {
     content: attr(data-label);
     font-size: 0.66rem;
     font-weight: 700;
@@ -1492,22 +1909,104 @@ label {
     flex-shrink: 0;
   }
 
-  td:not([data-label]) { justify-content: flex-end; }
-  td:not([data-label])::before { content: none; }
+  tr.fila.abierta td:last-of-type { padding-bottom: 12px; }
+
+  /* El detalle es continuación de la tarjeta de arriba, no una suelta */
+  tbody tr.fila.abierta {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  tbody tr.fila-detalle {
+    display: block;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
+    margin-bottom: 10px;
+    padding: 0;
+    overflow: hidden;
+  }
 
   .fila-detalle td { display: block; padding: 0; border: none; }
+  .fila-detalle td::before { content: none; }
+
   .fila.resaltada { animation: resalta 1400ms ease-out; }
   .fila.resaltada td { animation: none; }
-  tr.clic:hover td, tr.clic.abierta td { background: transparent; }
 
-  .campo-corto, .campo-fecha { flex: 1 1 100%; width: 100%; }
+  /* ── Líneas del detalle: dos columnas con rótulo ── */
+
+  .items-cab { display: none; }
+
+  .item {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 12px;
+    padding: 10px 12px;
+  }
+
+  .i-prod, .i-pres { grid-column: 1 / -1; }
+  .i-prod { font-weight: 600; }
+
+  .i-cant, .i-costo, .i-varas, .i-vara, .i-sub {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    text-align: right;
+  }
+
+  .i-cant::before, .i-costo::before, .i-varas::before,
+  .i-vara::before, .i-sub::before {
+    content: attr(data-rot);
+    font-size: 0.66rem;
+    font-weight: 400;
+    color: var(--text-faint);
+  }
+
+  .i-sub {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--surface-3);
+  }
+
+  /* ── Hojas: suben desde abajo ── */
+
+  .fondo { place-items: end center; padding: 0; }
+
+  .modal, .hoja {
+    max-width: none;
+    max-height: 92dvh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .modal.angosto { max-width: none; }
+
+  .hoja-cab { padding-top: 22px; }
+
+  .agarre {
+    display: block;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 4px;
+    border-radius: var(--r-pill);
+    background: var(--border-strong);
+  }
+
+  .modal-pie { flex-direction: column-reverse; }
+  .modal-pie .btn { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .btn-icono, .campo, .buscador, .flecha,
+  .btn, .btn-icono, .campo, .buscador, .flecha, .chevron,
   .segmentado button, .tabla-envoltura, .fila td { transition: none; }
 
-  .al-entrar, .fila, .fila.resaltada, .fila.resaltada td, .spinner { animation: none; }
+  .al-entrar, .fila.resaltada, .fila.resaltada td, .spinner { animation: none; }
 
   .tabla-envoltura.atenuada { opacity: 1; }
 }
