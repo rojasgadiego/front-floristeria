@@ -3,10 +3,10 @@
     <header class="cabecera">
       <div class="min0">
         <h1>Proveedores</h1>
-        <p class="ayuda">
+        <!-- <p class="ayuda">
           A quién le compras la flor. Lo que ves acá es con lo que se negocia:
           cuánto le has comprado y cuándo fue el último pedido.
-        </p>
+        </p> -->
       </div>
       <button v-if="puedeEditar" class="btn" @click="abrirNuevo">
         <span aria-hidden="true">＋</span> Nuevo proveedor
@@ -32,100 +32,123 @@
         <span>Ver desactivados</span>
       </label>
 
-      <span class="conteo">{{ proveedores.length }} proveedor(es)</span>
+      <span class="conteo">{{ lista.length }} proveedor(es)</span>
     </div>
 
-    <div v-if="cargando && !proveedores.length" class="vacio">Cargando proveedores…</div>
+    <div v-if="cargando && !lista.length" class="vacio">Cargando proveedores…</div>
 
-    <div v-else-if="!proveedores.length" class="vacio">
+    <div v-else-if="!lista.length" class="vacio">
       <strong>{{ busqueda ? 'Ninguno coincide' : 'Sin proveedores' }}</strong>
       {{ busqueda
         ? 'Prueba con otro texto.'
         : 'Agrega el primero para poder registrar compras.' }}
     </div>
 
-    <!-- ─── Tarjetas ─── -->
-    <div v-else class="tarjetas" :class="{ atenuada: cargando }">
-      <article v-for="p in proveedores" :key="p.id" class="tarjeta"
-        :class="{ inactivo: !p.activo, resaltada: p.id === resalte.id }">
+    <!-- ─── Lista ─── -->
+    <!-- Era una grilla de tarjetas altas: con veinte proveedores había que
+         scrollear un muro para encontrar uno. Cerradas son una línea. -->
+    <div v-else class="lista" :class="{ atenuada: cargando }">
 
-        <header class="t-cab">
-          <!-- Las iniciales dan un ancla visual: en una grilla de veinte
-               tarjetas de texto, el ojo necesita dónde apoyarse. -->
-          <div class="avatar" :class="{ frio: diasSin(p) > 90 }" aria-hidden="true">
-            {{ iniciales(p.nombre) }}
-          </div>
+      <!-- Los rótulos comparten la grilla con las cabeceras: una sola
+           definición de columnas para los dos. -->
+      <div class="lista-cab" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span>Proveedor</span>
+        <span>RUT</span>
+        <span>Contacto</span>
+        <span class="der">Compras</span>
+        <span class="der">Total comprado</span>
+        <span class="der">Último pedido</span>
+      </div>
 
-          <div class="min0">
-            <h2>{{ p.nombre }}</h2>
-            <div class="sub">
-              <span v-if="p.rut" class="mono">{{ p.rut }}</span>
-              <span v-else class="tenue">sin RUT</span>
-              <span v-if="!p.activo" class="etiqueta">desactivado</span>
+      <article v-for="p in lista" :key="p.id" class="prov"
+        :class="{ inactivo: !p.activo, resaltada: p.id === resalte.id, abierta: abiertaId === p.id }">
+
+        <button class="cab" :aria-expanded="abiertaId === p.id" @click="alternar(p.id)">
+          <span class="chevron" aria-hidden="true">›</span>
+
+          <!-- Las iniciales dan un ancla visual, y el ámbar dice que la
+               relación se enfrió antes de leer ninguna fecha. -->
+          <span class="avatar" :class="{ frio: p.frio }" aria-hidden="true">{{ p.iniciales }}</span>
+
+          <span class="c-nombre">
+            <span class="nombre">{{ p.nombre }}</span>
+            <span v-if="!p.activo" class="etiqueta">desactivado</span>
+          </span>
+
+          <span class="c-rut">
+            <span v-if="p.rut" class="mono">{{ p.rut }}</span>
+            <span v-else class="tenue">sin RUT</span>
+          </span>
+
+          <span class="c-contacto">
+            <span v-if="p.contacto">{{ p.contacto }}</span>
+            <span v-else class="tenue">—</span>
+          </span>
+
+          <span class="c-compras der dato">{{ p.compras }}</span>
+          <span class="c-total der dato">{{ clp(p.totalComprado) }}</span>
+          <span class="c-ultima der dato" :class="{ frio: p.frio }">
+            {{ p.ultimaCompra ? fecha(p.ultimaCompra) : 'nunca' }}
+          </span>
+        </button>
+
+        <div v-if="abiertaId === p.id" class="cuerpo">
+          <!-- En móvil la cabecera solo lleva nombre y total: el resto se
+               recupera acá en una línea. -->
+          <p class="meta-movil">
+            <span v-if="p.rut" class="mono">{{ p.rut }}</span>
+            <span v-else class="tenue">sin RUT</span>
+            · {{ p.compras }} compra(s)
+            · último {{ p.ultimaCompra ? fecha(p.ultimaCompra) : 'nunca' }}
+          </p>
+
+          <p v-if="p.frio" class="aviso-frio">
+            Sin comprarle hace {{ p.dias }} días.
+          </p>
+
+          <dl v-if="p.tieneContacto" class="ficha">
+            <div v-if="p.contacto">
+              <dt>Contacto</dt>
+              <dd>{{ p.contacto }}</dd>
             </div>
-          </div>
-        </header>
+            <div v-if="p.telefono">
+              <dt>Teléfono</dt>
+              <dd><a :href="`tel:${p.telefono}`" class="enlace">{{ p.telefono }}</a></dd>
+            </div>
+            <div v-if="p.correo">
+              <dt>Correo</dt>
+              <dd class="corta"><a :href="`mailto:${p.correo}`" class="enlace">{{ p.correo }}</a></dd>
+            </div>
+            <div v-if="p.direccion">
+              <dt>Dirección</dt>
+              <dd>{{ p.direccion }}</dd>
+            </div>
+          </dl>
 
-        <!-- El historial es lo que hace útil esta pantalla: sin él es una
-             agenda de teléfonos. Con él, se sabe a quién se le compra en
-             serio antes de pedir un precio. -->
-        <div class="historial">
-          <div class="cifra">
-            <span class="rot">Compras</span>
-            <b class="dato">{{ p.compras }}</b>
-          </div>
-          <div class="cifra">
-            <span class="rot">Total comprado</span>
-            <b class="dato">{{ clp(p.totalComprado) }}</b>
-          </div>
-          <div class="cifra">
-            <span class="rot">Último pedido</span>
-            <b class="dato" :class="{ frio: diasSin(p) > 90 }">
-              {{ p.ultimaCompra ? fecha(p.ultimaCompra) : 'nunca' }}
-            </b>
-          </div>
-        </div>
+          <p v-else class="tenue mini">Sin datos de contacto cargados.</p>
 
-        <p v-if="p.ultimaCompra && diasSin(p) > 90" class="aviso-frio">
-          Sin comprarle hace {{ diasSin(p) }} días.
-        </p>
+          <p v-if="p.notas" class="notas">{{ p.notas }}</p>
 
-        <dl v-if="tieneContacto(p)" class="ficha">
-          <div v-if="p.contacto">
-            <dt>Contacto</dt>
-            <dd>{{ p.contacto }}</dd>
+          <div v-if="puedeEditar" class="acciones">
+            <button class="btn btn-linea btn-mini" @click="abrirEdicion(p)">Editar</button>
+            <button v-if="p.activo" class="btn btn-linea btn-mini" @click="cambiarEstado(p, false)">
+              Desactivar
+            </button>
+            <button v-else class="btn btn-mini" @click="cambiarEstado(p, true)">Reactivar</button>
           </div>
-          <div v-if="p.telefono">
-            <dt>Teléfono</dt>
-            <dd><a :href="`tel:${p.telefono}`" class="enlace">{{ p.telefono }}</a></dd>
-          </div>
-          <div v-if="p.correo">
-            <dt>Correo</dt>
-            <dd class="corta"><a :href="`mailto:${p.correo}`" class="enlace">{{ p.correo }}</a></dd>
-          </div>
-          <div v-if="p.direccion">
-            <dt>Dirección</dt>
-            <dd>{{ p.direccion }}</dd>
-          </div>
-        </dl>
-
-        <p v-if="p.notas" class="notas">{{ p.notas }}</p>
-
-        <div v-if="puedeEditar" class="acciones">
-          <button class="btn btn-linea btn-mini" @click="abrirEdicion(p)">Editar</button>
-          <button v-if="p.activo" class="btn btn-linea btn-mini" @click="cambiarEstado(p, false)">
-            Desactivar
-          </button>
-          <button v-else class="btn btn-mini" @click="cambiarEstado(p, true)">Reactivar</button>
         </div>
       </article>
     </div>
 
     <!-- ═══════════════ MODAL ═══════════════ -->
-    <div v-if="modal" class="fondo" @click.self="cerrarModal">
-      <div class="modal" role="dialog" aria-modal="true">
+    <!-- El fondo ya no cierra a ciegas: siete campos escritos se perdían con
+         un clic afuera, sin preguntar. -->
+    <div v-if="modal" class="fondo" @click.self="intentarCerrar">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-prov">
         <div class="modal-cab">
-          <h3>{{ modal.f.id ? 'Editar proveedor' : 'Nuevo proveedor' }}</h3>
+          <h3 id="titulo-prov">{{ modal.f.id ? 'Editar proveedor' : 'Nuevo proveedor' }}</h3>
           <p>Solo el nombre es obligatorio; el resto ayuda al hacer el pedido.</p>
         </div>
 
@@ -135,7 +158,7 @@
           <div class="rejilla">
             <div class="grupo">
               <label for="p-nombre">Nombre</label>
-              <input id="p-nombre" class="campo" v-model="modal.f.nombre" maxlength="160"
+              <input id="p-nombre" ref="campoNombre" class="campo" v-model="modal.f.nombre" maxlength="160"
                 placeholder="Flores del Maipo">
             </div>
 
@@ -189,10 +212,24 @@
         </div>
 
         <div class="modal-pie">
-          <button class="btn btn-linea" :disabled="guardando" @click="cerrarModal">Cancelar</button>
+          <button class="btn btn-linea" :disabled="guardando" @click="intentarCerrar">Cancelar</button>
           <button class="btn" :disabled="guardando" @click="guardar">
             {{ guardando ? 'Guardando…' : 'Guardar' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmación de descarte -->
+    <div v-if="confirmarDescarte" class="fondo z-alto" @click.self="confirmarDescarte = false">
+      <div class="modal angosto" role="dialog" aria-modal="true">
+        <div class="modal-cab">
+          <h3>¿Descartar los cambios?</h3>
+          <p>Lo que escribiste en la ficha se va a perder.</p>
+        </div>
+        <div class="modal-pie">
+          <button class="btn btn-linea" @click="confirmarDescarte = false">Seguir editando</button>
+          <button class="btn peligro" @click="descartar">Descartar</button>
         </div>
       </div>
     </div>
@@ -202,10 +239,20 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { rutValido, formatearRut, limpiarRut, digitoVerificador } from '@/core/utils/rut'
+
+const DIAS_FRIO = 90
+
+/* Primera letra de las dos primeras palabras: "Vivero Los Aromos" → VL */
+const iniciales = (nombre) => {
+  if (!nombre) return '?'
+  const partes = nombre.trim().split(/\s+/).filter(Boolean)
+  if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase()
+  return (partes[0][0] + partes[1][0]).toUpperCase()
+}
 
 export default {
   name: 'ProveedoresView',
@@ -223,6 +270,21 @@ export default {
     const guardando = computed(() => store.getters['proveedores/guardando'])
     const error = computed(() => store.getters['proveedores/error'])
 
+    /* Todo lo derivado se calcula una vez por proveedor, no cuatro veces por
+       render como cuando diasSin() se llamaba desde el template. */
+    const lista = computed(() => proveedores.value.map(p => {
+      const dias = p.ultimaCompra
+        ? Math.floor((Date.now() - new Date(p.ultimaCompra).getTime()) / 86400000)
+        : null
+      return {
+        ...p,
+        dias,
+        frio: dias !== null && dias > DIAS_FRIO,
+        iniciales: iniciales(p.nombre),
+        tieneContacto: !!(p.contacto || p.telefono || p.correo || p.direccion)
+      }
+    }))
+
     let control = null
 
     onMounted(() => {
@@ -230,9 +292,13 @@ export default {
       /* Forzar: el módulo cachea para el select de compras, pero acá la
          lista es el contenido de la pantalla y tiene que venir fresca. */
       store.dispatch('proveedores/cargar', { signal: control.signal, forzar: true })
+      document.addEventListener('keydown', alTeclado)
     })
 
-    onUnmounted(() => control?.abort())
+    onUnmounted(() => {
+      control?.abort()
+      document.removeEventListener('keydown', alTeclado)
+    })
 
     const recargar = () => store.dispatch('proveedores/cargar', { forzar: true })
     const filtrar = (cambios) => store.dispatch('proveedores/filtrar', cambios)
@@ -245,34 +311,75 @@ export default {
     })
     onUnmounted(() => clearTimeout(tmr))
 
+    /* ---------------- Acordeón ---------------- */
+    /* Uno abierto a la vez. Con varios vuelve el muro de tarjetas que la
+       lista viene a resolver. */
+    const abiertaId = ref(null)
+
+    const alternar = (id) => {
+      abiertaId.value = abiertaId.value === id ? null : id
+    }
+
+    /* Lo abierto puede dejar de existir al filtrar */
+    watch(() => [filtro.value.buscar, filtro.value.activo], () => { abiertaId.value = null })
+
     /* ---------------- Modal ---------------- */
     const modal = ref(null)
+    const confirmarDescarte = ref(false)
+    const campoNombre = ref(null)
     const resalte = usarResalte()
     const { aviso, avisar } = usarAviso()
 
-    const cerrarModal = () => { modal.value = null }
+    const cerrarModal = () => {
+      modal.value = null
+      confirmarDescarte.value = false
+    }
 
     const fichaVacia = () => ({
       id: null, nombre: '', rut: '', contacto: '', telefono: '',
       correo: '', direccion: '', notas: '', error: ''
     })
 
-    const abrirNuevo = () => { modal.value = { f: fichaVacia() } }
+    /* El sello es la ficha tal como se abrió. Comparar contra él evita
+       preguntar "¿descartar?" cuando no se tocó nada. */
+    const sellar = (f) => JSON.stringify({ ...f, error: '' })
 
-    const abrirEdicion = (p) => {
-      modal.value = {
-        f: {
-          ...fichaVacia(),
-          id: p.id,
-          nombre: p.nombre || '',
-          rut: p.rut || '',
-          contacto: p.contacto || '',
-          telefono: p.telefono || '',
-          correo: p.correo || '',
-          direccion: p.direccion || '',
-          notas: p.notas || ''
-        }
+    const abrir = (f) => {
+      modal.value = { f, sello: sellar(f) }
+      nextTick(() => campoNombre.value?.focus())
+    }
+
+    const abrirNuevo = () => abrir(fichaVacia())
+
+    const abrirEdicion = (p) => abrir({
+      ...fichaVacia(),
+      id: p.id,
+      nombre: p.nombre || '',
+      rut: p.rut || '',
+      contacto: p.contacto || '',
+      telefono: p.telefono || '',
+      correo: p.correo || '',
+      direccion: p.direccion || '',
+      notas: p.notas || ''
+    })
+
+    const sucio = () => !!modal.value && sellar(modal.value.f) !== modal.value.sello
+
+    const intentarCerrar = () => {
+      if (sucio()) {
+        confirmarDescarte.value = true
+        return
       }
+      cerrarModal()
+    }
+
+    const descartar = () => cerrarModal()
+
+    const alTeclado = (e) => {
+      if (e.key !== 'Escape') return
+      if (confirmarDescarte.value) confirmarDescarte.value = false
+      else if (modal.value) intentarCerrar()
+      else if (abiertaId.value) abiertaId.value = null
     }
 
     /* ---------------- RUT ----------------
@@ -348,30 +455,15 @@ export default {
     })
     const fecha = (v) => (v ? fmtFecha.format(new Date(v)) : '—')
 
-    const diasSin = (p) => {
-      if (!p.ultimaCompra) return 0
-      const ms = Date.now() - new Date(p.ultimaCompra).getTime()
-      return Math.floor(ms / 86400000)
-    }
-
-    /* Primera letra de las dos primeras palabras: "Vivero Los Aromos" → VL */
-    const iniciales = (nombre) => {
-      if (!nombre) return '?'
-      const partes = nombre.trim().split(/\s+/).filter(Boolean)
-      if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase()
-      return (partes[0][0] + partes[1][0]).toUpperCase()
-    }
-
-    /* La ficha de contacto se esconde entera si no hay nada que mostrar: un
-       bloque vacío con su borde se ve como un error de carga. */
-    const tieneContacto = (p) => !!(p.contacto || p.telefono || p.correo || p.direccion)
-
     return {
-      puedeEditar, proveedores, filtro, cargando, guardando, error,
+      puedeEditar, lista, filtro, cargando, guardando, error,
       recargar, filtrar, busqueda,
-      modal, cerrarModal, abrirNuevo, abrirEdicion, guardar, cambiarEstado,
+      abiertaId, alternar,
+      modal, confirmarDescarte, campoNombre,
+      cerrarModal, intentarCerrar, descartar,
+      abrirNuevo, abrirEdicion, guardar, cambiarEstado,
       rutMalo, dvSugerido, normalizarRut,
-      resalte, aviso, clp, fecha, diasSin, iniciales, tieneContacto
+      resalte, aviso, clp, fecha
     }
   }
 }
@@ -385,21 +477,15 @@ export default {
 }
 
 .min0 { min-width: 0; }
+.der { text-align: right; }
 .mono { font-family: var(--font-mono); font-size: .95em; }
 .tenue { color: var(--text-faint); }
+.mini { font-size: .8rem; }
 .mala { color: var(--danger); }
 
 .dato {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-}
-
-.rot {
-  font-size: .64rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
 }
 
 /* ─── Cabecera ─── */
@@ -487,63 +573,97 @@ h1 {
   white-space: nowrap;
 }
 
-/* ─── Tarjetas ─── */
+/* ─── Lista ─── */
 
-.tarjetas {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
-  transition: opacity .14s ease;
-}
-
-.tarjetas.atenuada { opacity: .45; }
-
-.tarjeta {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
+.lista {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-sm);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  overflow: hidden;
+  transition: opacity .14s ease;
 }
 
-.tarjeta:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-md);
-}
+.lista.atenuada { opacity: .45; }
 
-/* Un proveedor desactivado se atenúa pero sigue visible: las compras
-   históricas lo referencian y su ficha tiene que poder consultarse. */
-.tarjeta.inactivo { opacity: .58; }
-
-.tarjeta.resaltada {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.t-cab {
-  display: flex;
+/* Una sola definición de columnas para rótulos y cabeceras */
+.lista-cab,
+.cab {
+  display: grid;
+  grid-template-columns: 16px 40px minmax(150px, 1.5fr) 118px minmax(110px, 1fr) 74px 118px 96px;
   align-items: center;
   gap: 12px;
 }
 
-/* Las iniciales dan un ancla visual: en una grilla de veinte tarjetas de
-   texto, el ojo necesita dónde apoyarse. */
+.lista-cab {
+  padding: 9px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.prov {
+  display: block;
+  border-bottom: 1px solid var(--border);
+}
+
+.prov:last-child { border-bottom: 0; }
+
+/* Un proveedor desactivado se atenúa pero sigue visible: las compras
+   históricas lo referencian y su ficha tiene que poder consultarse. */
+.prov.inactivo { opacity: .58; }
+
+.prov.resaltada {
+  background: var(--accent-soft);
+}
+
+.prov.abierta { background: var(--surface-2); }
+
+.cab {
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cab:hover { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+
+.cab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.chevron {
+  color: var(--text-faint);
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform .16s ease;
+}
+
+.prov.abierta .chevron { transform: rotate(90deg); }
+
+/* Las iniciales dan un ancla visual: en una lista larga el ojo necesita
+   dónde apoyarse. */
 .avatar {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
   border-radius: var(--r-sm);
   background: var(--accent-soft);
   color: var(--accent-text);
-  font-size: .95rem;
+  font-size: .82rem;
   font-weight: 700;
-  letter-spacing: .02em;
 }
 
 /* Ámbar en el que lleva meses sin pedidos: la relación se enfrió y eso se
@@ -553,25 +673,41 @@ h1 {
   color: var(--warn);
 }
 
-.tarjeta h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.3;
+.c-nombre {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.nombre {
+  font-size: .94rem;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.sub {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-  font-size: .76rem;
-  color: var(--text-faint);
+.c-rut,
+.c-contacto {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .82rem;
+  color: var(--text-muted);
 }
 
+.c-compras,
+.c-total { font-size: .88rem; }
+
+.c-ultima {
+  font-size: .82rem;
+  color: var(--text-muted);
+}
+
+.c-ultima.frio { color: var(--warn); }
+
 .etiqueta {
+  flex-shrink: 0;
   padding: 1px 8px;
   border-radius: var(--r-full);
   background: var(--surface-2);
@@ -582,41 +718,28 @@ h1 {
   letter-spacing: .04em;
 }
 
-/* ─── Historial ─── */
+/* ─── Cuerpo ─── */
 
-.historial {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border-radius: var(--r-sm);
-}
-
-.cifra {
+.cuerpo {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  gap: 12px;
+  padding: 4px 16px 16px 72px;
 }
 
-.cifra .dato { font-size: .92rem; }
-.cifra .dato.frio { color: var(--warn); }
+.meta-movil { display: none; }
 
 .aviso-frio {
-  font-size: .78rem;
+  font-size: .8rem;
   color: var(--warn);
-  margin-top: -6px;
 }
-
-/* ─── Ficha de contacto ─── */
 
 .ficha {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin: 0;
-  font-size: .82rem;
+  font-size: .84rem;
 }
 
 .ficha > div {
@@ -625,7 +748,7 @@ h1 {
 }
 
 .ficha dt {
-  min-width: 74px;
+  min-width: 78px;
   flex-shrink: 0;
   color: var(--text-faint);
 }
@@ -653,10 +776,10 @@ h1 {
 
 .notas {
   padding: 10px 12px;
-  background: var(--surface-2);
+  background: var(--surface);
   border-left: 3px solid var(--secondary);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  font-size: .8rem;
+  font-size: .82rem;
   line-height: 1.55;
   color: var(--text-muted);
   font-style: italic;
@@ -666,9 +789,6 @@ h1 {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
 }
 
 /* ─── Modal ─── */
@@ -684,6 +804,8 @@ h1 {
   background: var(--overlay);
 }
 
+.fondo.z-alto { z-index: 110; }
+
 .modal {
   width: 100%;
   max-width: 520px;
@@ -696,6 +818,8 @@ h1 {
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+
+.modal.angosto { max-width: 380px; }
 
 .modal-cab {
   padding: 20px 22px 14px;
@@ -799,6 +923,8 @@ textarea.campo {
 .btn:hover:not(:disabled) { background: var(--accent-hover); }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 
+.btn.peligro { background: var(--danger); }
+
 .btn-linea {
   background: transparent;
   border: 1px solid var(--border-strong);
@@ -898,6 +1024,20 @@ textarea.campo {
 
 .aviso.malo { background: var(--danger); }
 
+/* ─── Anchos intermedios ─── */
+/* El RUT es lo primero que sobra: está en el cuerpo y casi nunca se busca
+   con la vista. */
+
+@media (max-width: 1080px) {
+  .lista-cab,
+  .cab {
+    grid-template-columns: 16px 40px minmax(150px, 1.5fr) minmax(110px, 1fr) 74px 118px 96px;
+  }
+
+  .c-rut,
+  .lista-cab > span:nth-child(4) { display: none; }
+}
+
 /* ─── Móvil ─── */
 
 @media (max-width: 640px) {
@@ -905,19 +1045,34 @@ textarea.campo {
 
   .conteo { margin-left: 0; }
 
-  .tarjetas { grid-template-columns: 1fr; }
+  .lista-cab { display: none; }
 
-  .tarjeta { padding: 15px; }
-
-  /* Los tres números en una línea con scroll: apilados ocupan media
-     pantalla y son el dato secundario, no el principal. */
-  .historial {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    gap: 20px;
+  /* Cabecera mínima: nombre y total comprado */
+  .cab {
+    grid-template-columns: 16px 36px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 8px 12px;
   }
 
-  .cifra { flex-shrink: 0; }
+  .c-rut,
+  .c-contacto,
+  .c-compras,
+  .c-ultima { display: none; }
+
+  .avatar { width: 32px; height: 32px; font-size: .76rem; }
+
+  .cuerpo { padding: 0 12px 14px 12px; }
+
+  /* Lo que salió de la cabecera vuelve acá, en una línea */
+  .meta-movil {
+    display: block;
+    font-size: .78rem;
+    color: var(--text-faint);
+  }
+
+  .ficha dt { min-width: 68px; }
+
+  .acciones .btn { flex: 1; min-height: 42px; }
 
   /* El modal sube desde abajo a pantalla completa: un diálogo flotante con
      márgenes desperdicia el alto que el formulario necesita. */
@@ -931,10 +1086,18 @@ textarea.campo {
     border-radius: 0;
   }
 
+  .modal.angosto {
+    height: auto;
+    max-height: 90dvh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+  }
+
   .modal-pie {
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
   }
+}
 
-  .acciones .btn { flex: 1; min-height: 42px; }
+@media (prefers-reduced-motion: reduce) {
+  .chevron, .campo, .buscador, .btn, .lista { transition: none; }
 }
 </style>
