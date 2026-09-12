@@ -3,6 +3,11 @@
     <header class="cabecera">
       <div class="min0">
         <h1>Mermas</h1>
+        <!-- <p class="ayuda">
+          La flor que sale sin venderse. Registrarla mantiene el inventario
+          honesto: sin esto quedan varas fantasma y el valorizado deja de
+          servir para decidir cuánto comprar.
+        </p> -->
       </div>
       <button v-if="puedeEditar" class="btn" @click="registrando = true">
         <span aria-hidden="true">＋</span> Registrar merma
@@ -67,40 +72,27 @@
         </span>
       </div>
 
-      <div class="buscador">
-        <span aria-hidden="true">🔎</span>
-        <input v-model="busqueda" placeholder="Producto, motivo o código…" aria-label="Buscar merma">
-        <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
-      </div>
-
-      <div class="filtros">
-        <select class="campo corto" :value="filtro.destino ?? ''"
-          @change="filtrar({ destino: $event.target.value || null })" aria-label="Destino">
-          <option value="">Todos los destinos</option>
-          <option v-for="d in DESTINOS" :key="d.valor" :value="d.valor">{{ d.texto }}</option>
-        </select>
-
-        <select class="campo corto" :value="filtro.motivo ?? ''"
-          @change="filtrar({ motivo: $event.target.value || null })" aria-label="Motivo">
-          <option value="">Todos los motivos</option>
-          <option v-for="m in nombresMotivo" :key="m" :value="m">{{ m }}</option>
-        </select>
-
-        <div class="rango">
-          <input type="date" :value="filtro.desde ?? ''" aria-label="Desde"
-            @change="filtrar({ desde: $event.target.value || null })">
-          <span class="guion" aria-hidden="true">→</span>
-          <input type="date" :value="filtro.hasta ?? ''" aria-label="Hasta"
-            @change="filtrar({ hasta: $event.target.value || null })">
-          <button v-if="filtro.desde || filtro.hasta" class="btn-icono chico"
-            @click="filtrar({ desde: null, hasta: null })" aria-label="Quitar fechas">✕</button>
+      <!-- Cuatro controles apilados ocupaban media pantalla en móvil. Queda
+           el buscador y un botón; el resto vive en la hoja. -->
+      <div class="barra">
+        <div class="buscador">
+          <span aria-hidden="true">🔎</span>
+          <input v-model="busqueda" placeholder="Producto, motivo o código…" aria-label="Buscar merma">
+          <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
         </div>
 
-        <label class="check">
-          <input type="checkbox" :checked="filtro.revertida === null"
-            @change="filtrar({ revertida: $event.target.checked ? null : false })">
-          <span>Ver revertidas</span>
-        </label>
+        <button class="btn btn-linea filtros-btn" :class="{ activo: nFiltros > 0 }" @click="filtrosAbiertos = true"
+          :aria-label="`Filtros${nFiltros ? `, ${nFiltros} activos` : ''}`">
+          Filtros
+          <span v-if="nFiltros" class="globo">{{ nFiltros }}</span>
+        </button>
+      </div>
+
+      <div v-if="chips.length" class="chips-filtro">
+        <button v-for="c in chips" :key="c.clave" class="chip-filtro" @click="quitarChip(c)">
+          {{ c.texto }} <span aria-hidden="true">✕</span>
+        </button>
+        <button class="chip-limpiar" @click="limpiarFiltros">Limpiar todo</button>
       </div>
 
       <div v-if="cargando && !mermas.length" class="vacio">Cargando…</div>
@@ -113,7 +105,9 @@
       </div>
 
       <!-- ═══ Escritorio ═══ -->
-      <div v-else class="tabla-envoltura solo-escritorio" :class="{ atenuada: cargando }">
+      <!-- Antes la tabla y las tarjetas se montaban las dos y se alternaban
+           con display:none: cada merma se renderizaba dos veces. -->
+      <div v-else-if="!esMovil" class="tabla-envoltura" :class="{ atenuada: cargando }">
         <table>
           <thead>
             <tr>
@@ -183,7 +177,8 @@
 
               <td class="acciones-col der">
                 <span v-if="m.revertida" class="etiqueta">revertida</span>
-                <button v-else-if="esAdmin" class="btn-icono" title="Revertir" @click="abrirReversa(m)">↩</button>
+                <button v-else-if="esAdmin" class="btn-icono" title="Revertir"
+                  @click="abrirReversa(m)">↩</button>
               </td>
             </tr>
           </tbody>
@@ -191,7 +186,7 @@
       </div>
 
       <!-- ═══ Móvil ═══ -->
-      <div v-if="mermas.length" class="tarjetas solo-movil" :class="{ atenuada: cargando }">
+      <div v-else class="tarjetas" :class="{ atenuada: cargando }">
         <article v-for="m in mermas" :key="m.id" class="tarjeta" :class="{ revertida: m.revertida }">
           <div class="t-fila-1">
             <div class="prod min0">
@@ -299,11 +294,12 @@
           </p>
 
           <!-- Un gráfico de barras con divs: son 24 valores y una librería
-               entera para esto sería peso sin motivo. -->
-          <div class="horas">
+               entera para esto sería peso sin motivo. El role y la etiqueta
+               son para quien no puede ver las barras. -->
+          <div class="horas" role="img" :aria-label="resumenHoras">
             <div v-for="h in horasCompletas" :key="h.hora" class="hora">
               <div class="barra-caja">
-                <div class="barra" :style="{ height: alturaBarra(h) }" :class="{ vacia: !h.registros }"
+                <div class="barra-hora" :style="{ height: alturaBarra(h) }" :class="{ vacia: !h.registros }"
                   :title="`${h.hora}:00 · ${h.registros} registro(s) · ${clp(h.costoPerdido)}`"></div>
               </div>
               <span class="hora-num">{{ h.hora }}</span>
@@ -342,13 +338,78 @@
       </template>
     </template>
 
+    <!-- ═══ Hoja de filtros ═══ -->
+    <div v-if="filtrosAbiertos" class="fondo" @click.self="filtrosAbiertos = false">
+      <div class="modal hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-filtros">
+        <div class="modal-cab hoja-cab">
+          <span class="agarre" aria-hidden="true"></span>
+          <h3 id="titulo-filtros">Filtros</h3>
+          <button class="btn-icono" @click="filtrosAbiertos = false" aria-label="Cerrar">✕</button>
+        </div>
+
+        <div class="modal-cuerpo">
+          <div class="grupo">
+            <label>Destino</label>
+            <div class="pastillas">
+              <button class="pastilla" :class="{ on: !filtro.destino }"
+                @click="filtrar({ destino: null, pagina: 1 })">Todos</button>
+              <button v-for="d in DESTINOS" :key="d.valor" class="pastilla"
+                :class="{ on: filtro.destino === d.valor }"
+                @click="filtrar({ destino: d.valor, pagina: 1 })">{{ d.texto }}</button>
+            </div>
+          </div>
+
+          <div class="grupo">
+            <label for="f-motivo">Motivo</label>
+            <select id="f-motivo" class="campo" :value="filtro.motivo ?? ''"
+              @change="filtrar({ motivo: $event.target.value || null, pagina: 1 })">
+              <option value="">Todos los motivos</option>
+              <option v-for="m in nombresMotivo" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+
+          <div class="grupo">
+            <label>Periodo</label>
+            <div class="pastillas">
+              <button v-for="p in PRESETS" :key="p.clave" class="pastilla"
+                :class="{ on: presetActivo === p.clave }" @click="aplicarPreset(p.clave)">{{ p.texto }}</button>
+            </div>
+          </div>
+
+          <div v-if="presetActivo === 'personalizado'" class="grupo par">
+            <label class="campo-fecha">
+              <span>Desde</span>
+              <input type="date" :value="filtro.desde ?? ''"
+                @change="filtrar({ desde: $event.target.value || null, pagina: 1 })">
+            </label>
+            <label class="campo-fecha">
+              <span>Hasta</span>
+              <input type="date" :value="filtro.hasta ?? ''"
+                @change="filtrar({ hasta: $event.target.value || null, pagina: 1 })">
+            </label>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" :checked="filtro.revertida === null"
+              @change="filtrar({ revertida: $event.target.checked ? null : false, pagina: 1 })">
+            <span>Ver mermas revertidas</span>
+          </label>
+        </div>
+
+        <div class="modal-pie">
+          <button class="btn btn-linea" @click="limpiarFiltros">Limpiar</button>
+          <button class="btn" @click="filtrosAbiertos = false">Ver {{ total }} registro(s)</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ Modales ═══ -->
     <ModalMerma v-if="registrando" @cerrar="registrando = false" @registrada="alRegistrar" />
 
-    <div v-if="rev" class="fondo" @click.self="rev = null">
-      <div class="modal angosto" role="dialog" aria-modal="true">
+    <div v-if="rev" class="fondo" @click.self="intentarCerrarReversa">
+      <div class="modal angosto" role="dialog" aria-modal="true" aria-labelledby="titulo-reversa">
         <div class="modal-cab">
-          <h3>Revertir merma</h3>
+          <h3 id="titulo-reversa">Revertir merma</h3>
           <p>{{ rev.cantidad }} × {{ rev.producto }} · {{ fecha(rev.creadoEn) }}</p>
         </div>
 
@@ -380,7 +441,7 @@
         </div>
 
         <div class="modal-pie">
-          <button class="btn btn-linea" :disabled="guardando" @click="rev = null">Cancelar</button>
+          <button class="btn btn-linea" :disabled="guardando" @click="intentarCerrarReversa">Cancelar</button>
           <button class="btn peligro" :disabled="guardando" @click="revertir">
             {{ guardando ? 'Revirtiendo…' : 'Revertir' }}
           </button>
@@ -395,17 +456,40 @@
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import {
-  DESTINOS, CALIDADES, textoDestino, textoCalidad
-} from '@/features/mermas/store/mermas.module'
+import { DESTINOS, textoDestino, textoCalidad } from '@/features/mermas/store/mermas.module'
 import ModalMerma from '@/features/mermas/components/ModalMerma.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
+
+/* El mismo valor que el @media de abajo. Si se cambia uno hay que cambiar el
+   otro: no hay forma de leer un breakpoint de CSS desde JS. */
+const MOVIL = '(max-width: 860px)'
+
+const PRESETS = [
+  { clave: 'todo', texto: 'Todo' },
+  { clave: 'hoy', texto: 'Hoy' },
+  { clave: '7d', texto: '7 días' },
+  { clave: 'mes', texto: 'Este mes' },
+  { clave: 'personalizado', texto: 'Otro rango' }
+]
+
+/* YYYY-MM-DD en hora local. toISOString() da UTC y en Chile adelanta el día
+   durante la tarde. */
+const isoLocal = (d) => {
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+const sumarDias = (d, n) => {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
 
 export default {
   name: 'MermasView',
   components: { ModalMerma },
 
-  setup() {
+  setup () {
     const store = useStore()
     const { usarAviso } = useTemporizadores()
     const { aviso, avisar } = usarAviso()
@@ -436,21 +520,116 @@ export default {
     const mermaAlta = computed(() => store.getters['mermas/mermaAlta'])
     const nombresMotivo = computed(() => store.getters['mermas/nombresMotivo'])
 
-    const hayFiltro = computed(() => {
-      const f = filtro.value
-      return !!(f.buscar || f.destino || f.motivo || f.desde || f.hasta || f.revertida === null)
-    })
-
-    const busqueda = ref(filtro.value.buscar || '')
-    let tmr = null
-    watch(busqueda, (v) => {
-      clearTimeout(tmr)
-      tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
-    })
-
     const filtrar = (cambios) => store.dispatch('mermas/filtrar', cambios)
     const recargar = () => store.dispatch('mermas/cargar')
 
+    const busqueda = ref(filtro.value.buscar || '')
+    let tmr = null
+
+    /* Escribir en el campo desde el código no debe despachar un filtro: pasa
+       al limpiar y al sincronizar con el store, y sin esto cada limpieza
+       mandaba una petición de más 350ms después. */
+    let silencio = false
+    const ponerBusqueda = (v) => {
+      if (busqueda.value === v) return
+      silencio = true
+      busqueda.value = v
+    }
+
+    watch(busqueda, (v) => {
+      clearTimeout(tmr)
+      if (silencio) {
+        silencio = false
+        return
+      }
+      tmr = setTimeout(() => filtrar({ buscar: v.trim(), pagina: 1 }), 350)
+    })
+
+    /* Si el filtro se resetea desde otro lado, el campo se quedaba con el
+       texto viejo mostrando resultados que no correspondían. */
+    watch(() => filtro.value.buscar, (v) => ponerBusqueda(v || ''))
+
+    /* ---------------- Ancho ---------------- */
+    const esMovil = ref(false)
+    let mql = null
+    const alCambiarAncho = (e) => { esMovil.value = e.matches }
+
+    /* ---------------- Filtros ---------------- */
+    const filtrosAbiertos = ref(false)
+    const rangoManual = ref(false)
+
+    const rangoPreset = (clave) => {
+      const h = new Date()
+      switch (clave) {
+        case 'hoy': return { desde: isoLocal(h), hasta: isoLocal(h) }
+        case '7d': return { desde: isoLocal(sumarDias(h, -6)), hasta: isoLocal(h) }
+        case 'mes': return { desde: isoLocal(new Date(h.getFullYear(), h.getMonth(), 1)), hasta: isoLocal(h) }
+        default: return { desde: null, hasta: null }
+      }
+    }
+
+    /* El preset se deduce del rango puesto, pero la elección explícita manda:
+       si se deduce solo del rango, tocar "Otro rango" viniendo de "Hoy" deja
+       el rango calzando con hoy y los campos de fecha no aparecen nunca. */
+    const presetActivo = computed(() => {
+      if (rangoManual.value) return 'personalizado'
+
+      const { desde, hasta } = filtro.value
+      if (!desde && !hasta) return 'todo'
+
+      for (const p of ['hoy', '7d', 'mes']) {
+        const r = rangoPreset(p)
+        if (r.desde === desde && r.hasta === hasta) return p
+      }
+      return 'personalizado'
+    })
+
+    const aplicarPreset = (clave) => {
+      rangoManual.value = clave === 'personalizado'
+      if (clave === 'personalizado') return
+      filtrar({ ...rangoPreset(clave), pagina: 1 })
+    }
+
+    const chips = computed(() => {
+      const f = filtro.value
+      const out = []
+      if (f.destino) {
+        out.push({ clave: 'destino', texto: textoDestino(f.destino), cambio: { destino: null } })
+      }
+      if (f.motivo) {
+        out.push({ clave: 'motivo', texto: f.motivo, cambio: { motivo: null } })
+      }
+      if (f.desde || f.hasta) {
+        const texto = presetActivo.value === 'personalizado'
+          ? `${f.desde || '…'} a ${f.hasta || '…'}`
+          : PRESETS.find(p => p.clave === presetActivo.value)?.texto
+        out.push({ clave: 'fechas', texto, cambio: { desde: null, hasta: null } })
+      }
+      if (f.revertida === null) {
+        out.push({ clave: 'revertidas', texto: 'Con revertidas', cambio: { revertida: false } })
+      }
+      return out
+    })
+
+    const nFiltros = computed(() => chips.value.length)
+    const hayFiltro = computed(() => nFiltros.value > 0 || !!filtro.value.buscar)
+
+    const quitarChip = (c) => {
+      if (c.clave === 'fechas') rangoManual.value = false
+      filtrar({ ...c.cambio, pagina: 1 })
+    }
+
+    const limpiarFiltros = () => {
+      rangoManual.value = false
+      clearTimeout(tmr)
+      ponerBusqueda('')
+      filtrar({
+        buscar: '', destino: null, motivo: null,
+        desde: null, hasta: null, revertida: false, pagina: 1
+      })
+    }
+
+    /* ---------------- Registrar ---------------- */
     const registrando = ref(false)
 
     const alRegistrar = (m) => {
@@ -497,6 +676,15 @@ export default {
     const alturaBarra = (h) =>
       h.registros ? `${Math.max(8, (h.registros / maxHora.value) * 100)}%` : '3px'
 
+    /* Un gráfico de barras es invisible para un lector de pantalla. La
+       etiqueta dice lo que se viene a buscar: dónde está el pico. */
+    const resumenHoras = computed(() => {
+      const conDatos = horasCompletas.value.filter(h => h.registros)
+      if (!conDatos.length) return 'Sin registros de mermas por hora.'
+      const pico = conDatos.reduce((a, b) => (b.registros > a.registros ? b : a))
+      return `Mermas por hora del día. El máximo es a las ${pico.hora}:00, con ${pico.registros} registro(s).`
+    })
+
     /* ---------------- Revertir ---------------- */
     const rev = ref(null)
     const campoMotivo = ref(null)
@@ -516,18 +704,42 @@ export default {
       campoMotivo.value?.focus()
     }
 
+    /* Un clic al fondo borraba el motivo escrito sin preguntar */
+    const intentarCerrarReversa = () => {
+      if (guardando.value) return
+      if (rev.value?.motivo.trim()) {
+        rev.value.error = 'Toca Cancelar de nuevo para descartar, o completa el motivo.'
+        rev.value.motivo = ''
+        return
+      }
+      rev.value = null
+    }
+
     const revertir = async () => {
       const r = rev.value
       r.error = ''
 
+      /* La ayuda decía "mínimo 5 caracteres" y nada lo comprobaba: la
+         validación quedaba entera en el SP. */
+      if (r.motivo.trim().length < 5) {
+        return (r.error = 'Explica el motivo, con al menos 5 caracteres.')
+      }
+
       try {
-        await store.dispatch('mermas/revertir', { id: r.id, motivo: r.motivo })
+        await store.dispatch('mermas/revertir', { id: r.id, motivo: r.motivo.trim() })
         rev.value = null
         avisar(`${r.cantidad} de ${r.producto} volvieron al inventario`)
         store.dispatch('productos/cargar')
       } catch (e) {
         r.error = e.message
       }
+    }
+
+    /* ---------------- Teclado ---------------- */
+    const alTeclado = (e) => {
+      if (e.key !== 'Escape') return
+      if (rev.value) intentarCerrarReversa()
+      else if (filtrosAbiertos.value) filtrosAbiertos.value = false
     }
 
     /* ---------------- Carga ---------------- */
@@ -540,13 +752,20 @@ export default {
       store.dispatch('mermas/cargar', señal)
       store.dispatch('mermas/cargarResumen', señal)
       store.dispatch('mermas/cargarMotivos', señal)
-      store.dispatch('mermas/cargarUmbral')
+      store.dispatch('mermas/cargarUmbral', señal)
       store.dispatch('productos/cargar', señal)
+
+      mql = window.matchMedia(MOVIL)
+      esMovil.value = mql.matches
+      mql.addEventListener('change', alCambiarAncho)
+      document.addEventListener('keydown', alTeclado)
     })
 
     onUnmounted(() => {
       control?.abort()
       clearTimeout(tmr)
+      mql?.removeEventListener('change', alCambiarAncho)
+      document.removeEventListener('keydown', alTeclado)
     })
 
     /* ---------------- Utilidades ---------------- */
@@ -555,26 +774,27 @@ export default {
     })
     const clp = (n) => fmt.format(Math.round(n || 0))
 
-    const fecha = (iso) => (iso
-      ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+    const fecha = (v) => (v
+      ? new Date(v).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
       : '—')
 
-    const hora = (iso) => (iso
-      ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+    const hora = (v) => (v
+      ? new Date(v).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
       : '')
 
     return {
-      Number, DESTINOS, CALIDADES, textoDestino, textoCalidad,
-      esAdmin, puedeEditar, pestana, irAControl,
+      Number, DESTINOS, PRESETS, textoDestino, textoCalidad,
+      esAdmin, puedeEditar, esMovil, pestana, irAControl,
       mermas, total, totalPaginas, filtro, cargando, guardando, error, hayFiltro,
       resumen, costoPerdido, costoBotado, costoDesvalorizado, costoRecuperado,
       unidadesPerdidas, unidadesRecuperadas, porcentajeSobreVentas,
       motivoPrincipal, mermaAlta, nombresMotivo,
       busqueda, filtrar, recargar,
+      filtrosAbiertos, presetActivo, aplicarPreset, chips, nFiltros, quitarChip, limpiarFiltros,
       registrando, alRegistrar,
       patrones, cargandoPatrones, alertasControl, claseEscaneo,
-      horasCompletas, alturaBarra,
-      rev, campoMotivo, abrirReversa, revertir,
+      horasCompletas, alturaBarra, resumenHoras,
+      rev, campoMotivo, abrirReversa, intentarCerrarReversa, revertir,
       aviso, clp, fecha, hora
     }
   }
@@ -588,38 +808,14 @@ export default {
   gap: 14px;
 }
 
-.min0 {
-  min-width: 0;
-}
-
-.izq {
-  text-align: left;
-}
-
-.der {
-  text-align: right;
-}
-
-.suave {
-  color: var(--text-muted);
-}
-
-.tenue {
-  color: var(--text-faint);
-}
-
-.mini {
-  font-size: .78rem;
-}
-
-.verde {
-  color: var(--success);
-}
-
-.mono {
-  font-family: var(--font-mono);
-  font-size: .95em;
-}
+.min0 { min-width: 0; }
+.izq { text-align: left; }
+.der { text-align: right; }
+.suave { color: var(--text-muted); }
+.tenue { color: var(--text-faint); }
+.mini { font-size: .78rem; }
+.verde { color: var(--success); }
+.mono { font-family: var(--font-mono); font-size: .95em; }
 
 .dato {
   font-variant-numeric: tabular-nums;
@@ -652,10 +848,6 @@ export default {
   line-height: 1.55;
   margin-top: 4px;
   max-width: 62ch;
-}
-
-.solo-movil {
-  display: none;
 }
 
 /* ─── Cabecera ─── */
@@ -697,13 +889,17 @@ h1 {
   transition: color var(--t-fast), border-color var(--t-fast);
 }
 
-.pestanas button:hover {
-  color: var(--text);
-}
+.pestanas button:hover { color: var(--text); }
 
 .pestanas button.on {
   color: var(--accent-text);
   border-bottom-color: var(--accent);
+}
+
+.pestanas button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
 }
 
 /* Un punto cuando hay algo que mirar. No dice qué: eso lo decide quien
@@ -764,16 +960,22 @@ h1 {
   opacity: .85;
 }
 
-.kpi.bueno .val {
-  color: var(--success);
-}
+.kpi.bueno .val { color: var(--success); }
 
-/* ─── Filtros ─── */
+/* ─── Barra de filtros ─── */
+
+.barra {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 46px;
   padding: 0 14px;
   background: var(--surface);
@@ -782,9 +984,7 @@ h1 {
   transition: border-color var(--t-fast);
 }
 
-.buscador:focus-within {
-  border-color: var(--accent);
-}
+.buscador:focus-within { border-color: var(--accent); }
 
 .buscador input {
   flex: 1;
@@ -798,20 +998,88 @@ h1 {
   font-size: max(.9rem, 16px);
 }
 
-.filtros {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 10px;
+.filtros-btn {
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
-.filtros .campo,
-.rango {
-  min-height: 44px;
+.filtros-btn.activo {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.globo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.chips-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-filtro,
+.chip-limpiar {
+  border: 1px solid var(--accent-soft);
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: .76rem;
+  font-weight: 600;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.chip-limpiar {
+  background: transparent;
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+.pastillas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pastilla {
+  padding: 8px 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--t-fast), color var(--t-fast), background-color var(--t-fast);
+}
+
+.pastilla.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.pastilla:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .campo {
   width: 100%;
+  min-height: 44px;
   padding: .6rem .75rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
@@ -827,52 +1095,42 @@ h1 {
   border-color: var(--accent);
 }
 
-.filtros .campo.corto {
-  width: auto;
-  flex: 0 1 180px;
+.campo-fecha {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
 }
 
-.rango {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  background: var(--surface);
+.campo-fecha > span {
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.campo-fecha input {
+  height: 44px;
+  width: 100%;
+  padding: 0 .6rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
-  transition: border-color var(--t-fast);
-}
-
-.rango:focus-within {
-  border-color: var(--accent);
-}
-
-.rango input {
-  border: 0;
-  outline: 0;
-  background: none;
+  background: var(--surface);
   color: var(--text);
   font: inherit;
   font-size: max(.85rem, 16px);
-  /* Sin ancho fijo, Chrome le da casi 200px a cada input de fecha. */
-  width: 8.4em;
-  padding: 0;
-}
-
-.guion {
-  color: var(--text-faint);
-  flex-shrink: 0;
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
-  font-size: .85rem;
+  gap: 9px;
+  min-height: 44px;
+  font-size: .88rem;
   color: var(--text-muted);
   cursor: pointer;
-  white-space: nowrap;
 }
 
 .check input {
@@ -893,9 +1151,7 @@ h1 {
 }
 
 .tabla-envoltura.atenuada,
-.tarjetas.atenuada {
-  opacity: .45;
-}
+.tarjetas.atenuada { opacity: .45; }
 
 table {
   width: 100%;
@@ -904,9 +1160,7 @@ table {
   border-spacing: 0;
 }
 
-table.compacta {
-  min-width: 620px;
-}
+table.compacta { min-width: 620px; }
 
 th {
   position: sticky;
@@ -924,9 +1178,7 @@ th {
   white-space: nowrap;
 }
 
-th.izq {
-  text-align: left;
-}
+th.izq { text-align: left; }
 
 td {
   padding: 11px 12px;
@@ -936,15 +1188,11 @@ td {
   white-space: nowrap;
 }
 
-tbody tr:last-child td {
-  border-bottom: 0;
-}
+tbody tr:last-child td { border-bottom: 0; }
 
 /* Una merma revertida se atenúa pero no se esconde: dejó de ser pérdida,
    pero el registro de que ocurrió tiene que poder consultarse. */
-.fila.revertida {
-  opacity: .5;
-}
+.fila.revertida { opacity: .5; }
 
 .prod {
   display: flex;
@@ -964,9 +1212,7 @@ tbody tr:last-child td {
   text-overflow: ellipsis;
 }
 
-.acciones-col {
-  width: 1%;
-}
+.acciones-col { width: 1%; }
 
 /* La marca de "a mano" no es una acusación: es un dato. Va en el color de
    aviso, no en el de error. */
@@ -1006,9 +1252,7 @@ tbody tr:last-child td {
   border-radius: var(--r-md);
 }
 
-.tarjeta.revertida {
-  opacity: .55;
-}
+.tarjeta.revertida { opacity: .55; }
 
 .t-fila-1 {
   display: flex;
@@ -1078,7 +1322,10 @@ tbody tr:last-child td {
   align-items: flex-end;
 }
 
-.barra {
+/* barra-hora, no barra: `.barra` ya es el contenedor de la barra de filtros
+   de la otra pestaña, y al declararse después ganaba, pintando de acento el
+   fondo de los filtros y atenuándolos al pasar el mouse. */
+.barra-hora {
   width: 100%;
   min-height: 3px;
   background: var(--accent);
@@ -1086,15 +1333,11 @@ tbody tr:last-child td {
   transition: opacity var(--t-fast);
 }
 
-.barra:hover {
-  opacity: .75;
-}
+.barra-hora:hover { opacity: .75; }
 
 /* Las horas sin registros dejan una marca tenue en vez de nada: el hueco
    de la madrugada es tan informativo como el pico de la mañana. */
-.barra.vacia {
-  background: var(--border);
-}
+.barra-hora.vacia { background: var(--border); }
 
 .hora-num {
   font-size: .6rem;
@@ -1118,18 +1361,14 @@ tbody tr:last-child td {
   font-size: .85rem;
 }
 
-.item-manual:last-child {
-  border-bottom: 0;
-}
+.item-manual:last-child { border-bottom: 0; }
 
 .item-manual .emoji {
   font-size: 1.1rem;
   flex-shrink: 0;
 }
 
-.item-manual .min0 {
-  flex: 1;
-}
+.item-manual .min0 { flex: 1; }
 
 .nota-pie {
   padding: 14px 16px;
@@ -1227,14 +1466,23 @@ tbody tr:last-child td {
   overflow: hidden;
 }
 
-.modal.angosto {
-  max-width: 400px;
-}
+.modal.angosto { max-width: 400px; }
 
 .modal-cab {
   padding: 20px 22px 14px;
   border-bottom: 1px solid var(--border);
 }
+
+.hoja-cab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hoja-cab h3 { flex: 1; }
+
+.agarre { display: none; }
 
 .modal-cab h3 {
   font-size: 1.1rem;
@@ -1261,13 +1509,11 @@ tbody tr:last-child td {
   background: var(--surface-2);
 }
 
-.modal-pie .btn {
-  flex: 1;
-}
+.modal-pie .btn { flex: 1; }
 
-.grupo {
-  margin-bottom: 16px;
-}
+.grupo { margin-bottom: 16px; }
+.grupo:last-child { margin-bottom: 0; }
+.grupo.par { display: flex; gap: 12px; }
 
 label {
   display: block;
@@ -1315,9 +1561,7 @@ label {
   transition: background-color var(--t-fast);
 }
 
-.btn:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn:disabled {
   opacity: .55;
@@ -1325,13 +1569,8 @@ label {
 }
 
 /* Revertir deshace un registro de pérdida y mueve el resultado del mes. */
-.btn.peligro {
-  background: var(--danger);
-}
-
-.btn.peligro:hover:not(:disabled) {
-  filter: brightness(.92);
-}
+.btn.peligro { background: var(--danger); }
+.btn.peligro:hover:not(:disabled) { filter: brightness(.92); }
 
 .btn-linea {
   background: transparent;
@@ -1407,9 +1646,7 @@ label {
   color: var(--info);
 }
 
-.banda .btn {
-  margin-left: auto;
-}
+.banda .btn { margin-left: auto; }
 
 .error {
   padding: 11px 13px;
@@ -1465,65 +1702,27 @@ label {
   box-shadow: var(--shadow-lg);
 }
 
-.aviso.malo {
-  background: var(--danger);
-}
+.aviso.malo { background: var(--danger); }
 
 /* ─── Móvil ─── */
 
 @media (max-width: 860px) {
-  .solo-escritorio {
-    display: none;
-  }
+  .cabecera .btn { width: 100%; }
 
-  .solo-movil {
-    display: flex;
-  }
+  .resumen { grid-template-columns: repeat(2, 1fr); }
 
-  .cabecera .btn {
-    width: 100%;
-  }
+  .panel { padding: 15px; }
 
-  .resumen {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .filtros {
-    gap: 8px;
-  }
-
-  .filtros .campo.corto,
-  .rango {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-
-  .rango input {
-    flex: 1;
-    width: auto;
-  }
-
-  /* Área táctil completa: un checkbox de 18px es difícil de acertar con el
-     pulgar. */
-  .check {
-    min-height: 44px;
-    padding: 6px 2px;
-  }
-
-  .panel {
-    padding: 15px;
-  }
-
-  /* Cada tercera hora en el eje: 24 números de 10px no se leen en un
-     teléfono. */
+  /* Una de cada tres horas en el eje: 24 números de 10px no se leen en un
+     teléfono. El selector decía even, que escondía una de cada dos. */
   .hora-num {
     font-size: .55rem;
-  }
-
-  .hora:nth-child(even) .hora-num {
     visibility: hidden;
   }
 
+  .hora:nth-child(3n + 1) .hora-num { visibility: visible; }
+
+  /* Las hojas suben desde abajo */
   .fondo {
     padding: 0;
     align-items: flex-end;
@@ -1531,13 +1730,29 @@ label {
 
   .modal {
     max-width: none;
-    max-height: 100dvh;
-    height: 100dvh;
-    border: none;
-    border-radius: 0;
+    max-height: 92dvh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    border-bottom: 0;
+  }
+
+  .modal.angosto { max-width: none; }
+
+  .hoja-cab { padding-top: 24px; }
+
+  .agarre {
+    display: block;
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 4px;
+    border-radius: var(--r-full);
+    background: var(--border-strong);
   }
 
   .modal-pie {
+    flex-direction: column-reverse;
     padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
   }
 
@@ -1545,5 +1760,12 @@ label {
     width: 100%;
     margin-top: 4px;
   }
+
+  .paginador .btn { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .btn-icono, .pastilla, .campo, .buscador,
+  .barra-hora, .tabla-envoltura, .tarjetas { transition: none; }
 }
 </style>

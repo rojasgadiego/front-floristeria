@@ -202,7 +202,7 @@ const alertas = computed(() =>
       id: a.tipo,
       tono: MAPA_TONO[a.urgencia] || 'neutro',
       texto: a.mensaje,
-      cta: ruta ? 'Resolver' : null,
+      cta: ruta ? 'Revisar' : null,
       accion: () => ruta && router.push(ruta),
     }
   })

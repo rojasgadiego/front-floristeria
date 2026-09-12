@@ -95,133 +95,234 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="(p, idx) in productosVista" :key="p.id" class="fila"
-                        :style="{ '--i': Math.min(idx, 12) }"
-                        :class="{ inactiva: !p.activo, resaltada: p.id === resalte?.id, abierta: abiertoId === p.id }">
+                    <template v-for="(p, idx) in productosVista" :key="p.id">
+                        <tr class="fila" :style="{ '--i': Math.min(idx, 12) }"
+                            :class="{ inactiva: !p.activo, resaltada: p.id === resalte?.id, abierta: abiertoId === p.id }">
 
-                        <!-- En escritorio esta celda es una línea más de la tabla.
-                             Bajo el breakpoint se convierte en la cabecera del
-                             acordeón: nombre y cantidad, nada más. Lo que hoy es
-                             la tarjeta pasa a ser el cuerpo desplegado. -->
-                        <td data-label="Producto" class="col-producto">
-                            <button v-if="esMovil" class="cab" :aria-expanded="abiertoId === p.id"
-                                @click="alternar(p.id)">
-                                <span class="chevron" aria-hidden="true">›</span>
-                                <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
-                                <span class="nombre">{{ p.nombre }}</span>
-                                <span v-if="!p.activo" class="etiqueta et-gris">off</span>
-                                <span class="cantidad dato" :class="foco === 'bodega' ? claseBodega(p) : ''">
-                                    {{ (foco === 'bodega' ? p.enBodega : p.enVenta) ?? 0 }}
-                                </span>
-                            </button>
+                            <td class="col-producto">
+                                <!-- Misma acción en los dos anchos; cambia el reparto,
+                                     no lo que hace el botón. -->
+                                <button class="cab" :class="esMovil ? 'cab-movil' : 'cab-tabla'"
+                                    :aria-expanded="abiertoId === p.id" @click="alternar(p.id)">
+                                    <span class="chevron" :class="{ girado: abiertoId === p.id }"
+                                        aria-hidden="true">›</span>
+                                    <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
+                                    <span class="nombre">{{ p.nombre }}</span>
 
-                            <!-- Nombre y código en una línea: el código va detrás, en
-                                 tenue, y no obliga a una segunda fila. -->
-                            <div v-else class="celda-producto">
-                                <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
-                                <span class="nombre">{{ p.nombre }}</span>
-                                <span class="cod">{{ p.codigo }}</span>
-                                <!-- El tipo como punto de color: "SIMPLE" repetido
-                                     quince veces es ruido. El title lo dice cuando
-                                     hace falta. -->
-                                <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"
-                                    :title="p.tipo"></span>
-                                <span v-if="!p.activo" class="etiqueta et-gris">off</span>
-                            </div>
-                        </td>
+                                    <!-- En escritorio el código y el tipo caben en la
+                                         celda; en móvil la cabecera queda mínima y esos
+                                         datos viven en la ficha del cuerpo. -->
+                                    <template v-if="!esMovil">
+                                        <span class="cod">{{ p.codigo }}</span>
+                                        <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"
+                                            :title="p.tipo"></span>
+                                    </template>
 
-                        <!-- El código y el tipo salen de la cabecera mínima, así que
-                             en móvil se recuperan acá dentro. -->
-                        <td v-if="esMovil" data-label="Código" class="suave">
-                            <span class="cod">{{ p.codigo }}</span>
-                            <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"
-                                :title="p.tipo"></span>
-                        </td>
+                                    <span v-if="!p.activo" class="etiqueta et-gris">off</span>
 
-                        <td v-if="foco === 'bodega'" data-label="Categoría" class="suave col-categoria">
-                            {{ p.categoria || '—' }}
-                        </td>
+                                    <span v-if="esMovil" class="cantidad dato"
+                                        :class="foco === 'bodega' ? claseBodega(p) : ''">
+                                        {{ (foco === 'bodega' ? p.enBodega : p.enVenta) ?? 0 }}
+                                    </span>
+                                </button>
+                            </td>
 
-                        <!-- costoEfectivo lo resuelve el SP: costo en un simple,
-                             costoArmado en un armado. -->
-                        <td v-if="foco === 'bodega' && esAdmin" data-label="Costo" class="der dato suave col-dinero">
-                            <span v-if="p.costoEfectivo">{{ clp(p.costoEfectivo) }}</span>
-                            <span v-else class="tenue">—</span>
-                        </td>
+                            <!-- Bajo el breakpoint estas celdas no se renderizan: su
+                                 contenido pasa a la ficha del detalle, para que los dos
+                                 anchos muestren lo mismo al abrir. -->
+                            <template v-if="!esMovil">
+                                <td v-if="foco === 'bodega'" class="suave col-categoria">
+                                    {{ p.categoria || '—' }}
+                                </td>
 
-                        <td data-label="Unidad" class="der dato">{{ clp(p.precio) }}</td>
+                                <!-- costoEfectivo lo resuelve el SP: costo en un simple,
+                                     costoArmado en un armado. -->
+                                <td v-if="foco === 'bodega' && esAdmin" class="der dato suave col-dinero">
+                                    <span v-if="p.costoEfectivo">{{ clp(p.costoEfectivo) }}</span>
+                                    <span v-else class="tenue">—</span>
+                                </td>
 
-                        <!-- Ramo y liquidación en columna propia: solo siete de
-                             diecisiete los tienen, así que la mayoría muestra un
-                             guion tenue en vez de dejar el hueco en blanco. -->
-                        <td v-if="foco === 'bodega'" data-label="Ramo" class="der dato suave">
-                            <span v-if="p.precioRamo">{{ clp(p.precioRamo) }}</span>
-                            <span v-else class="tenue">—</span>
-                        </td>
+                                <td class="der dato">{{ clp(p.precio) }}</td>
 
-                        <td v-if="foco === 'bodega'" data-label="Liquid." class="der dato suave">
-                            <span v-if="p.precioLiquidacion">{{ clp(p.precioLiquidacion) }}</span>
-                            <span v-else class="tenue">—</span>
-                        </td>
+                                <td v-if="foco === 'bodega'" class="der dato suave">
+                                    <span v-if="p.precioRamo">{{ clp(p.precioRamo) }}</span>
+                                    <span v-else class="tenue">—</span>
+                                </td>
 
-                        <td v-if="foco === 'bodega' && esAdmin" data-label="Margen" class="der">
-                            <span v-if="p.margen" class="chip-margen"
-                                :class="p.margen < 25 ? 'margen-bajo' : 'margen-ok'">
-                                {{ Number(p.margen).toFixed(0) }}%
-                            </span>
-                            <!-- Sin costo cargado no hay margen. Un 0% acá sería peor
-                                 que un guion: parecería que se vende a pérdida cuando
-                                 lo que falta es un dato. -->
-                            <span v-else class="tenue">—</span>
-                        </td>
+                                <td v-if="foco === 'bodega'" class="der dato suave">
+                                    <span v-if="p.precioLiquidacion">{{ clp(p.precioLiquidacion) }}</span>
+                                    <span v-else class="tenue">—</span>
+                                </td>
 
-                        <!-- El mínimo pasa a title: se consulta cuando importa, no
-                             ocupa una línea permanente bajo cada número. -->
-                        <td v-if="foco === 'bodega'" data-label="Bodega" class="der col-bodega">
-                            <span class="dato" :class="claseBodega(p)"
-                                :title="p.tipo === 'armado' ? 'unidades armadas' : `mínimo ${p.minimo}`">
-                                {{ p.enBodega ?? 0 }}
-                            </span>
-                        </td>
+                                <td v-if="foco === 'bodega' && esAdmin" class="der">
+                                    <span v-if="p.margen" class="chip-margen"
+                                        :class="p.margen < 25 ? 'margen-bajo' : 'margen-ok'">
+                                        {{ Number(p.margen).toFixed(0) }}%
+                                    </span>
+                                    <!-- Sin costo cargado no hay margen. Un 0% acá sería
+                                         peor que un guion: parecería que se vende a
+                                         pérdida cuando lo que falta es un dato. -->
+                                    <span v-else class="tenue">—</span>
+                                </td>
 
-                        <td data-label="Venta" class="der col-venta">
-                            <span class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</span>
-                            <span v-if="avisarSinBajar(p)" class="pin-bajar" title="Hay en bodega sin bajar">↓</span>
-                        </td>
+                                <td v-if="foco === 'bodega'" class="der col-bodega">
+                                    <span class="dato" :class="claseBodega(p)"
+                                        :title="p.tipo === 'armado' ? 'unidades armadas' : `mínimo ${p.minimo}`">
+                                        {{ p.enBodega ?? 0 }}
+                                    </span>
+                                </td>
 
-                        <td data-label="Acciones" class="acciones-col">
-                            <div class="acciones">
-                                <template v-if="foco === 'bodega' && puedeEditar">
-                                    <!-- Traspaso y retorno llevan color: son las dos
-                                         acciones que mueven stock, y conviene que se
-                                         distingan de editar o dar de baja. -->
-                                    <button v-if="p.enBodega > 0" class="btn-icono acc-bajar" title="Bajar al mostrador"
-                                        @click="$emit('traspasar', p)">
+                                <td class="der col-venta">
+                                    <span class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</span>
+                                    <span v-if="avisarSinBajar(p)" class="pin-bajar"
+                                        title="Hay en bodega sin bajar">↓</span>
+                                </td>
+
+                                <td class="acciones-col">
+                                    <div class="acciones">
+                                        <template v-if="foco === 'bodega' && puedeEditar">
+                                            <!-- Traspaso y retorno llevan color: son las
+                                                 dos acciones que mueven stock, y conviene
+                                                 que se distingan de editar o dar de baja. -->
+                                            <button v-if="p.enBodega > 0" class="btn-icono acc-bajar"
+                                                title="Bajar al mostrador" @click.stop="$emit('traspasar', p)">
+                                                <span aria-hidden="true">↓</span>
+                                            </button>
+                                            <button v-if="p.enVenta > 0" class="btn-icono acc-subir"
+                                                title="Devolver a bodega" @click.stop="$emit('retornar', p)">
+                                                <span aria-hidden="true">↑</span>
+                                            </button>
+                                            <span class="sep" aria-hidden="true"></span>
+
+                                            <button class="btn-icono" title="Editar" @click.stop="abrirEdicion(p)">
+                                                <span aria-hidden="true">✎</span>
+                                            </button>
+                                            <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
+                                                @click.stop="abrirBaja(p)">
+                                                <span aria-hidden="true">✕</span>
+                                            </button>
+                                            <button v-else class="btn btn-linea btn-mini"
+                                                @click.stop="cambiarEstado(p, true)">Reactivar</button>
+                                        </template>
+                                        <span v-else-if="foco === 'venta'" class="suave mini">
+                                            {{ p.enVenta ? 'disponible' : 'sin stock' }}
+                                        </span>
+                                        <span v-else class="suave mini">solo lectura</span>
+                                    </div>
+                                </td>
+                            </template>
+                        </tr>
+
+                        <!-- El detalle carga bajo demanda: pedir la receta y los
+                             lotes de diecisiete productos que nadie va a expandir
+                             sería trabajo perdido. -->
+                        <tr v-if="abiertoId === p.id" class="fila-detalle">
+                            <td :colspan="columnas">
+
+                                <!-- La ficha existe solo en móvil, y no es información
+                                     nueva: es lo que en escritorio se lee en las
+                                     columnas de la fila. -->
+                                <dl v-if="esMovil" class="ficha">
+                                    <div>
+                                        <dt>Código</dt>
+                                        <dd>
+                                            <span class="cod">{{ p.codigo }}</span>
+                                            <span class="punto"
+                                                :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"></span>
+                                            <span class="tipo-texto">{{ p.tipo }}</span>
+                                        </dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega'">
+                                        <dt>Categoría</dt>
+                                        <dd>{{ p.categoria || '—' }}</dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega'">
+                                        <dt>En bodega</dt>
+                                        <dd>
+                                            <b class="dato" :class="claseBodega(p)">{{ p.enBodega ?? 0 }}</b>
+                                            <span v-if="p.tipo === 'armado'" class="tenue"> · unidades armadas</span>
+                                            <span v-else-if="p.minimo" class="tenue"> · mínimo {{ p.minimo }}</span>
+                                        </dd>
+                                    </div>
+
+                                    <div>
+                                        <dt>En mostrador</dt>
+                                        <dd>
+                                            <b class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</b>
+                                            <span v-if="avisarSinBajar(p)" class="pin-bajar">
+                                                ↓ hay en bodega sin bajar
+                                            </span>
+                                        </dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega' && esAdmin">
+                                        <dt>Costo</dt>
+                                        <dd>
+                                            <span v-if="p.costoEfectivo" class="dato">{{ clp(p.costoEfectivo) }}</span>
+                                            <span v-else class="tenue">sin costo cargado</span>
+                                        </dd>
+                                    </div>
+
+                                    <div>
+                                        <dt>Precio unidad</dt>
+                                        <dd><b class="dato">{{ clp(p.precio) }}</b></dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega' && p.precioRamo">
+                                        <dt>Precio ramo</dt>
+                                        <dd class="dato">{{ clp(p.precioRamo) }}</dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega' && p.precioLiquidacion">
+                                        <dt>Liquidación</dt>
+                                        <dd class="dato">{{ clp(p.precioLiquidacion) }}</dd>
+                                    </div>
+
+                                    <div v-if="foco === 'bodega' && esAdmin">
+                                        <dt>Margen</dt>
+                                        <dd>
+                                            <span v-if="p.margen" class="chip-margen"
+                                                :class="p.margen < 25 ? 'margen-bajo' : 'margen-ok'">
+                                                {{ Number(p.margen).toFixed(0) }}%
+                                            </span>
+                                            <span v-else class="tenue">—</span>
+                                        </dd>
+                                    </div>
+                                </dl>
+
+                                <!-- El mismo componente en los dos anchos: la receta de
+                                     un armado y los lotes de un simple se ven igual en
+                                     el teléfono que en el escritorio. -->
+                                <DetalleProducto :producto="p" :puede-editar="puedeEditar" @editar="abrirEdicion"
+                                    @armar="$emit('armar', $event)" @traspasar="$emit('traspasar', $event)" />
+
+                                <!-- En escritorio las acciones están en su columna; acá
+                                     no hay columna donde ponerlas. -->
+                                <div v-if="esMovil && foco === 'bodega' && puedeEditar"
+                                    class="acciones acciones-movil">
+                                    <button v-if="p.enBodega > 0" class="btn-icono acc-bajar"
+                                        title="Bajar al mostrador" @click.stop="$emit('traspasar', p)">
                                         <span aria-hidden="true">↓</span>
                                     </button>
-                                    <button v-if="p.enVenta > 0" class="btn-icono acc-subir" title="Devolver a bodega"
-                                        @click="$emit('retornar', p)">
+                                    <button v-if="p.enVenta > 0" class="btn-icono acc-subir"
+                                        title="Devolver a bodega" @click.stop="$emit('retornar', p)">
                                         <span aria-hidden="true">↑</span>
                                     </button>
-                                    <span class="sep" aria-hidden="true"></span>
-
-                                    <button class="btn-icono" title="Editar" @click="abrirEdicion(p)">
+                                    <button class="btn-icono" title="Editar" @click.stop="abrirEdicion(p)">
                                         <span aria-hidden="true">✎</span>
                                     </button>
                                     <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
-                                        @click="abrirBaja(p)">
+                                        @click.stop="abrirBaja(p)">
                                         <span aria-hidden="true">✕</span>
                                     </button>
                                     <button v-else class="btn btn-linea btn-mini"
-                                        @click="cambiarEstado(p, true)">Reactivar</button>
-                                </template>
-                                <span v-else-if="foco === 'venta'" class="suave mini">
-                                    {{ p.enVenta ? 'disponible' : 'sin stock' }}
-                                </span>
-                                <span v-else class="suave mini">solo lectura</span>
-                            </div>
-                        </td>
-                    </tr>
+                                        @click.stop="cambiarEstado(p, true)">Reactivar</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
                 </tbody>
             </table>
         </div>
@@ -240,6 +341,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
+import DetalleProducto from './DetalleProducto.vue'
 
 const FILTRO_TIPOS = [
     { valor: null, texto: 'Todos' },
@@ -253,14 +355,15 @@ const MOVIL = '(max-width: 860px)'
 
 export default {
     name: 'TablaProductos',
+    components: { DetalleProducto },
     props: {
         // 'bodega': catálogo completo con costos, traspasos y edición.
         // 'venta': solo lo que hay en el mostrador, sin acciones.
         foco: { type: String, required: true, validator: (v) => ['bodega', 'venta'].includes(v) }
     },
-    emits: ['traspasar', 'retornar'],
+    emits: ['traspasar', 'retornar', 'armar'],
 
-    setup(props) {
+    setup (props) {
         const store = useStore()
         const { usarResalte, usarAviso } = useTemporizadores()
 
@@ -279,23 +382,20 @@ export default {
         const bajoMinimo = computed(() => store.getters['inventario/bajoMinimo'])
 
         /* ---------------- Acordeón ---------------- */
-        /* Se decide en JS y no solo con CSS porque la cabecera es un <button>
-           real, y en escritorio ese botón sería un tab-stop de más por cada
-           fila: veinte paradas para llegar a la primera acción. */
         const esMovil = ref(false)
         const abiertoId = ref(null)
         let mql = null
 
-        /* Una abierta a la vez. Con varias vuelve la muralla de tarjetas, que
+        /* Uno abierto a la vez. Con varios vuelve la muralla de tarjetas, que
            es justo lo que el acordeón viene a resolver. */
         const alternar = (id) => {
             abiertoId.value = abiertoId.value === id ? null : id
         }
 
-        const alCambiarAncho = (e) => {
-            esMovil.value = e.matches
-            if (!e.matches) abiertoId.value = null
-        }
+        /* Lo abierto se conserva al cruzar el breakpoint: los dos anchos
+           muestran el mismo detalle, así que cerrarlo sería perder el lugar
+           sin ninguna razón. */
+        const alCambiarAncho = (e) => { esMovil.value = e.matches }
 
         /* Al cambiar de página o de filtro, lo que estaba abierto ya no está en
            pantalla: dejarlo marcado abriría otra fila al volver. */
@@ -345,6 +445,16 @@ export default {
             return soloConStock.value
                 ? productos.value.filter(p => p.enVenta > 0)
                 : productos.value
+        })
+
+        /* El colspan tiene que contar las celdas que de verdad se renderizaron.
+           En móvil la fila tiene una sola: el resto no existe. */
+        const columnas = computed(() => {
+            if (esMovil.value) return 1
+            let n = 3                                                 // producto, unidad, venta
+            if (props.foco === 'bodega') n += 4                       // categoría, ramo, liquidación, bodega
+            if (props.foco === 'bodega' && esAdmin.value) n += 2      // costo, margen
+            return n + 1                                              // acciones
         })
 
         /* Fuera del template: una cadena larga entre comillas dentro de una
@@ -402,7 +512,7 @@ export default {
             productos, productosVista, total, totalPaginas, filtro, cargando, error, hayFiltro,
             categorias, bajoMinimo, mensajeVacio,
             recargar, filtrar, busqueda, soloConStock,
-            esMovil, abiertoId, alternar,
+            esMovil, abiertoId, alternar, columnas,
             cambiarEstado, abrirEdicion, abrirBaja,
             resalte, claseBodega, avisarSinBajar, clp
         }
@@ -752,6 +862,11 @@ tr.inactiva {
     background: color-mix(in srgb, var(--accent) 4%, var(--surface));
 }
 
+.fila.abierta td {
+    background: var(--surface-2);
+    border-bottom-color: transparent;
+}
+
 /* Separador entre el bloque de dinero y el de existencias: agrupa sin
    agregar encabezados de grupo, que en una tabla larga estorban. */
 .col-dinero {
@@ -802,16 +917,32 @@ tr.inactiva {
     font-weight: 600;
 }
 
-/* ─── Celda de producto ─── */
+/* ─── Cabecera del acordeón ─── */
+/* Es un <button> en los dos anchos. En escritorio se disfraza de celda: el
+   chevron es lo único que delata que abre. */
 
-.celda-producto {
+.cab {
     display: flex;
     align-items: center;
     gap: 8px;
+    width: 100%;
     min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
-.celda-producto .emoji {
+.cab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--r-sm, 8px);
+}
+
+.cab .emoji {
     font-size: 1.1rem;
     line-height: 1;
     flex-shrink: 0;
@@ -831,6 +962,18 @@ tr.inactiva {
     color: var(--text-faint);
     font-variant-numeric: tabular-nums;
     flex-shrink: 0;
+}
+
+.chevron {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: .95rem;
+    line-height: 1;
+    transition: transform var(--t-fast, .16s ease);
+}
+
+.chevron.girado {
+    transform: rotate(90deg);
 }
 
 /* El tipo como punto de color en vez de etiqueta de texto. */
@@ -906,6 +1049,62 @@ tr.inactiva {
 .et-gris {
     background: var(--surface-2);
     color: var(--text-muted);
+}
+
+/* ─── Detalle ─── */
+
+.fila-detalle td {
+    padding: 0;
+    height: auto;
+    background: var(--surface-2);
+    border-bottom: 2px solid var(--accent-soft);
+    white-space: normal;
+}
+
+/* La ficha: lo que en escritorio se lee en las columnas de la fila */
+.ficha {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0 18px;
+    margin: 0;
+    padding: 12px 14px 2px;
+}
+
+.ficha > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: .86rem;
+}
+
+.ficha dt {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.ficha dd {
+    margin: 0;
+    text-align: right;
+    min-width: 0;
+}
+
+.ficha .punto {
+    margin: 0 4px;
+}
+
+.tipo-texto {
+    font-size: .74rem;
+    color: var(--text-faint);
+}
+
+.ficha .pin-bajar {
+    display: block;
+    margin: 2px 0 0;
+    font-size: .74rem;
+    font-weight: 600;
 }
 
 /* ─── Acciones ─── */
@@ -1033,12 +1232,10 @@ tr.inactiva {
     margin-bottom: 5px;
 }
 
-/* La cabecera del acordeón no existe en escritorio */
-.cab {
-    display: none;
-}
-
-/* ─── Móvil: la tabla se vuelve acordeón ─── */
+/* ─── Móvil ───
+   Las celdas de datos ya no se renderizan bajo el breakpoint, así que no
+   queda nada que disfrazar con data-label: la fila es la cabecera y el
+   detalle es el mismo componente que en escritorio. */
 
 @media (max-width: 860px) {
     .tabla-envoltura {
@@ -1062,9 +1259,9 @@ tr.inactiva {
         display: none;
     }
 
-    /* Cerrada, la fila es una línea. El relleno vive en la cabecera y en las
-       celdas del cuerpo, no en la fila, para que colapse sin dejar aire. */
-    tbody tr {
+    /* Cerrada, la fila es una línea. El relleno vive en la cabecera, no en la
+       fila, para que colapse sin dejar aire. */
+    tbody tr.fila {
         background: var(--surface);
         border: 1px solid var(--border);
         border-radius: var(--r-md, 12px);
@@ -1073,162 +1270,89 @@ tr.inactiva {
         overflow: hidden;
     }
 
-    tbody tr.abierta {
-        border-color: var(--border-strong);
-        box-shadow: var(--shadow-sm);
-    }
-
     /* El hover de escritorio pinta el fondo de cada td; en móvil eso deja la
-       fila abierta con manchas al arrastrar el dedo. */
-    .fila:hover td {
+       fila con manchas al arrastrar el dedo. */
+    .fila:hover td,
+    .fila.abierta td {
         background: transparent;
     }
 
-    /* ── Cabecera: nombre y cantidad, nada más ── */
-
-    td[data-label="Producto"] {
+    .col-producto {
         display: block;
+        height: auto;
         padding: 0;
-        margin: 0;
         border: none;
-        text-align: left;
         max-width: none;
+        min-width: 0;
     }
 
-    td[data-label="Producto"]::before {
-        content: none;
-    }
-
-    tr.abierta td[data-label="Producto"] {
-        border-bottom: 1px solid var(--border);
-    }
-
-    .cab {
-        display: flex;
-        align-items: center;
+    .cab-movil {
         gap: 10px;
-        width: 100%;
         min-height: 54px;
         padding: 0 14px;
-        border: 0;
-        background: none;
-        color: inherit;
-        font: inherit;
-        text-align: left;
-        cursor: pointer;
     }
 
-    .cab:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: -2px;
-        border-radius: var(--r-md, 12px);
-    }
-
-    .cab .emoji {
+    .cab-movil .emoji {
         font-size: 1.25rem;
-        line-height: 1;
-        flex-shrink: 0;
     }
 
-    .cab .nombre {
+    .cab-movil .nombre {
         flex: 1;
         min-width: 0;
         font-size: .95rem;
-        font-weight: 600;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 
     /* La cantidad es lo único que compite con el nombre por atención, y por
        eso es lo único más a la derecha. */
-    .cab .cantidad {
+    .cab-movil .cantidad {
         font-size: 1.05rem;
         flex-shrink: 0;
     }
 
-    .chevron {
-        flex-shrink: 0;
-        color: var(--text-faint);
+    .cab-movil .chevron {
         font-size: 1.15rem;
-        line-height: 1;
-        transition: transform .16s ease;
     }
 
-    tr.abierta .chevron {
-        transform: rotate(90deg);
+    /* La fila abierta se une visualmente con su detalle en vez de quedar
+       como dos tarjetas sueltas. */
+    tbody tr.fila.abierta {
+        margin-bottom: 0;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
     }
 
-    /* ── Cuerpo: la tarjeta de antes ── */
-
-    tbody tr:not(.abierta) td:not([data-label="Producto"]) {
-        display: none;
+    tbody tr.fila-detalle {
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-top: none;
+        border-radius: 0 0 var(--r-md, 12px) var(--r-md, 12px);
+        margin-bottom: 8px;
+        padding: 0;
+        overflow: hidden;
     }
 
-    tr.abierta td:not([data-label="Producto"]) {
-        display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        gap: 14px;
-        height: auto;
-        padding: 9px 14px;
-        border: none;
-        border-bottom: 1px solid var(--border);
-        text-align: right;
-        white-space: normal;
-    }
-
-    tr.abierta td:last-child {
-        border-bottom: none;
-    }
-
-    td::before {
-        content: attr(data-label) ":";
-        font-size: .8rem;
-        font-weight: 500;
-        color: var(--text-muted);
-        text-align: left;
-        flex-shrink: 0;
-        white-space: nowrap;
-    }
-
-    td[data-label="Acciones"]::before {
-        content: none;
-    }
-
-    .col-dinero,
-    .col-bodega,
-    .col-venta {
-        border: none;
-        background: transparent;
-    }
-
-    /* El separador no aporta cuando los botones son una grilla de dos, y
-       además al no ser un <button> tampoco descuadra el nth-of-type. */
-    .sep {
-        display: none;
-    }
-
-    .acciones-col {
-        width: 100%;
-        white-space: normal;
-    }
-
-    tr.abierta td[data-label="Acciones"] {
+    .fila-detalle td {
         display: block;
-        padding-top: 4px;
-        padding-bottom: 14px;
+        height: auto;
+        padding: 0;
+        border: none;
     }
 
-    .acciones {
+    /* Una columna: a 360px, dos rótulos con su valor no entran sin cortarse */
+    .ficha {
+        grid-template-columns: 1fr;
+        padding: 10px 14px 2px;
+    }
+
+    .acciones-movil {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
-        padding-top: 8px;
-        width: 100%;
+        padding: 12px 14px 14px;
     }
 
-    .acciones>* {
+    .acciones-movil > * {
         width: 100%;
         min-width: 0;
     }
@@ -1236,18 +1360,11 @@ tr.inactiva {
     /* El botón que queda solo en su fila se estira a lo ancho. Se ancla a
        button, no a .btn-icono, para que Editar, Dar de baja o Reactivar
        entren todos en la misma regla sin casos especiales. */
-    .acciones>button:last-child:nth-of-type(odd) {
+    .acciones-movil > button:last-child:nth-of-type(odd) {
         grid-column: 1 / -1;
     }
 
-    .segmentado {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-        gap: 6px;
-        width: 100%;
-    }
-
-    .btn-icono {
+    .acciones-movil .btn-icono {
         /* La separación real entre el glifo (span) y la etiqueta (::after):
            en escritorio el botón es solo ícono, acá lleva ícono + texto. */
         gap: 8px;
@@ -1260,10 +1377,17 @@ tr.inactiva {
         transform: none;
     }
 
-    .btn-icono[title]::after {
+    .acciones-movil .btn-icono[title]::after {
         content: attr(title);
         font-size: .85rem;
         font-weight: 600;
+    }
+
+    .segmentado {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+        gap: 6px;
+        width: 100%;
     }
 
     .campo-corto {

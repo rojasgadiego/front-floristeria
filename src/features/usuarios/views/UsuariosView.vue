@@ -1,346 +1,444 @@
 <template>
-    
-        <div class="cabecera al-entrar">
-            <div class="titulo">
-                <h2>Equipo y accesos</h2>
-                <p class="pista">Quién entra al sistema y qué puede tocar.</p>
-            </div>
-            <button class="btn btn-crear" @click="abrirNuevo">
-                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M12 5v14M5 12h14" />
-                </svg>
-                Crear cuenta
-            </button>
+
+    <div class="cabecera al-entrar">
+        <div class="titulo">
+            <h2>Equipo y accesos</h2>
+            <p class="pista">Quién entra al sistema y qué puede tocar.</p>
+        </div>
+        <button class="btn btn-crear" @click="abrirNuevo">
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+            </svg>
+            Crear cuenta
+        </button>
+    </div>
+
+    <!-- ================= ESQUELETO ================= -->
+    <div v-if="esqueleto.visible" aria-hidden="true">
+        <div class="roles">
+            <article v-for="n in 3" :key="'r' + n" class="rol-tarjeta esq-rol">
+                <EsqueletoBloque alto="14px" ancho="54%" />
+                <EsqueletoBloque alto="10px" ancho="88%" class="sep-9" />
+                <EsqueletoBloque alto="22px" ancho="66%" radio="999px" class="sep-9" />
+            </article>
         </div>
 
-        <!-- ================= ESQUELETO ================= -->
-        <div v-if="esqueleto.visible" aria-hidden="true">
-            <div class="roles">
-                <article v-for="n in 3" :key="'r' + n" class="rol-tarjeta esq-rol">
-                    <EsqueletoBloque alto="14px" ancho="54%" />
-                    <EsqueletoBloque alto="10px" ancho="88%" class="sep-9" />
-                    <EsqueletoBloque alto="22px" ancho="66%" radio="999px" class="sep-9" />
-                </article>
-            </div>
-
-            <div class="esq-barra">
-                <EsqueletoBloque alto="46px" ancho="100%" radio="10px" />
-            </div>
-
-            <div v-for="n in 4" :key="'f' + n" class="esq-fila">
-                <EsqueletoBloque alto="44px" ancho="44px" radio="999px" />
-                <div class="esq-col">
-                    <EsqueletoBloque alto="14px" ancho="150px" />
-                    <EsqueletoBloque alto="10px" ancho="92px" class="sep-6" />
-                </div>
-                <EsqueletoBloque alto="22px" ancho="82px" radio="999px" />
-            </div>
+        <div class="esq-barra">
+            <EsqueletoBloque alto="46px" ancho="100%" radio="10px" />
         </div>
 
-        <template v-else>
+        <div v-for="n in 4" :key="'f' + n" class="esq-fila">
+            <EsqueletoBloque alto="44px" ancho="44px" radio="999px" />
+            <div class="esq-col">
+                <EsqueletoBloque alto="14px" ancho="150px" />
+                <EsqueletoBloque alto="10px" ancho="92px" class="sep-6" />
+            </div>
+            <EsqueletoBloque alto="22px" ancho="82px" radio="999px" />
+        </div>
+    </div>
 
-            <!-- ---------- Roles ----------
-                 En móvil es un carrusel con scroll-snap: tres tarjetas apiladas
-                 empujaban la lista de cuentas fuera de la primera pantalla. -->
-            <section class="roles" aria-label="Roles del sistema">
-                <article v-for="(r, i) in ROLES" :key="r.valor" class="rol-tarjeta al-entrar"
-                    :style="{ ...tono(r.valor), '--i': i + 1 }">
-                    <header>
-                        <h3>{{ r.texto }}</h3>
-                        <span class="contador" :class="{ destella: dRol[r.valor]?.activo }">
-                            {{ conteos[r.valor] }}
-                        </span>
-                    </header>
-                    <p>{{ r.descripcion }}</p>
-                    <ul class="modulos">
-                        <li v-for="m in modulosCorto(r.valor)" :key="m">{{ m }}</li>
-                        <li v-if="modulosResto(r.valor)" class="mas">+{{ modulosResto(r.valor) }}</li>
-                    </ul>
-                </article>
-            </section>
+    <template v-else>
 
-            <!-- ---------- Panel de cuentas ---------- -->
-            <div class="panel al-entrar" style="--i: 4">
+        <!-- ---------- Roles ----------
+             En móvil es un carrusel con scroll-snap: tres tarjetas apiladas
+             empujaban la lista de cuentas fuera de la primera pantalla. -->
+        <section class="roles" aria-label="Roles del sistema">
+            <article v-for="(r, i) in ROLES" :key="r.valor" class="rol-tarjeta al-entrar"
+                :style="{ ...tono(r.valor), '--i': i + 1 }">
+                <header>
+                    <h3>{{ r.texto }}</h3>
+                    <span class="contador" :class="{ destella: dRol[r.valor]?.activo }">
+                        {{ conteos[r.valor] }}
+                    </span>
+                </header>
+                <p>{{ r.descripcion }}</p>
+                <ul class="modulos">
+                    <li v-for="m in modulosCorto(r.valor)" :key="m">{{ m }}</li>
+                    <li v-if="modulosResto(r.valor)" class="mas">+{{ modulosResto(r.valor) }}</li>
+                </ul>
+            </article>
+        </section>
 
-                <div class="barra">
-                    <div class="buscador">
-                        <svg class="ico lupa" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle cx="11" cy="11" r="7" />
-                            <path d="M20 20l-3.5-3.5" />
-                        </svg>
-                        <input class="campo" v-model="busqueda" type="search"
-                            placeholder="Buscar por nombre o correo…" aria-label="Buscar cuentas">
-                    </div>
+        <!-- ---------- Panel de cuentas ---------- -->
+        <div class="panel al-entrar" style="--i: 4">
 
-                    <div class="filtros">
-                        <select class="campo" :value="filtro.rol" @change="filtrarPor('rol', $event.target.value)"
-                            aria-label="Filtrar por rol">
-                            <option value="">Todos los roles</option>
-                            <option v-for="r in ROLES" :key="r.valor" :value="r.valor">{{ r.texto }}</option>
-                        </select>
-
-                        <select class="campo" :value="estadoSel"
-                            @change="filtrarPor('activo', $event.target.value)" aria-label="Filtrar por estado">
-                            <option value="">Todos los estados</option>
-                            <option value="true">Solo activas</option>
-                            <option value="false">Solo bloqueadas</option>
-                        </select>
-                    </div>
-
-                    <span class="conteo mini suave">{{ visibles.length }} de {{ total }}</span>
+            <div class="barra">
+                <div class="buscador">
+                    <svg class="ico lupa" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="M20 20l-3.5-3.5" />
+                    </svg>
+                    <input class="campo" v-model="busqueda" type="search"
+                        placeholder="Buscar por nombre o correo…" aria-label="Buscar cuentas">
                 </div>
 
-                <Transition name="cambio" mode="out-in">
-                    <div v-if="errorCarga" key="error" class="error error-panel">
-                        {{ errorCarga }}
-                        <button class="btn btn-linea btn-mini reintentar" @click="cargar">Reintentar</button>
-                    </div>
+                <div class="filtros">
+                    <select class="campo" :value="filtro.rol" @change="filtrarPor('rol', $event.target.value)"
+                        aria-label="Filtrar por rol">
+                        <option value="">Todos los roles</option>
+                        <option v-for="r in ROLES" :key="r.valor" :value="r.valor">{{ r.texto }}</option>
+                    </select>
 
-                    <div v-else-if="visibles.length === 0" key="vacio" class="vacio">
-                        {{ busqueda ? 'Ninguna cuenta coincide con la búsqueda.' : 'Todavía no hay cuentas.' }}
-                    </div>
+                    <select class="campo" :value="estadoSel"
+                        @change="filtrarPor('activo', $event.target.value)" aria-label="Filtrar por estado">
+                        <option value="">Todos los estados</option>
+                        <option value="true">Solo activas</option>
+                        <option value="false">Solo bloqueadas</option>
+                    </select>
+                </div>
 
-                    <div v-else key="tabla" class="tabla-envoltura" :class="{ atenuada: cargando }">
-                        <table>
-                            <!-- El reparto de columnas se declara acá y no se deja
-                                 al algoritmo de tabla: con `auto` toda la holgura
-                                 cae en la primera columna y abre un hueco enorme
-                                 entre el correo y el resto de la fila. -->
-                            <colgroup>
-                                <col class="c-cuenta">
-                                <col class="c-rol">
-                                <col class="c-estado">
-                                <col class="c-acceso">
-                                <col class="c-boletas">
-                                <col class="c-vendido">
-                                <col class="c-acciones">
-                            </colgroup>
-                            <thead>
-                                <tr>
-                                    <th>Cuenta</th>
-                                    <th>Rol</th>
-                                    <th>Estado</th>
-                                    <th>Último acceso</th>
-                                    <th>Boletas</th>
-                                    <th>Vendido</th>
-                                    <th class="acciones-col">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody :class="{ escalonada: escalonar }">
-                                <tr v-for="(u, idx) in visibles" :key="u.id" class="fila"
-                                    :style="{ ...tono(u.role), '--i': Math.min(idx, 12) }"
-                                    :class="{ inactiva: !u.activo, resaltada: u.id === resalte.id }">
-                                    <td data-label="Cuenta" class="celda-cuenta">
-                                        <div class="persona">
-                                            <span class="avatar" aria-hidden="true">{{ iniciales(u.name) }}</span>
-                                            <span class="identidad">
-                                                <b>{{ u.name }}<span v-if="u.id === yoId"
-                                                        class="etiqueta et-verde marca">tú</span></b>
-                                                <span class="correo">{{ u.email }}</span>
-                                            </span>
-                                        </div>
-                                    </td>
+                <!-- <span class="conteo mini suave">{{ visibles.length }} de {{ total }}</span> -->
+            </div>
 
-                                    <td data-label="Rol">
-                                        <span class="rol-envoltura" :class="{ fijo: u.id === yoId }">
-                                            <select class="select-rol" :value="u.role"
-                                                :disabled="u.id === yoId || ocupado === u.id"
-                                                @change="cambiarRol(u, $event.target.value)">
-                                                <option v-for="r in ROLES" :key="r.valor" :value="r.valor">
-                                                    {{ r.texto }}
-                                                </option>
-                                            </select>
+            <Transition name="cambio" mode="out-in">
+                <div v-if="errorCarga" key="error" class="error error-panel">
+                    {{ errorCarga }}
+                    <button class="btn btn-linea btn-mini reintentar" @click="cargar">Reintentar</button>
+                </div>
+
+                <div v-else-if="visibles.length === 0" key="vacio" class="vacio">
+                    {{ busqueda ? 'Ninguna cuenta coincide con la búsqueda.' : 'Todavía no hay cuentas.' }}
+                </div>
+
+                <!-- ═══ Escritorio: tabla real ═══ -->
+                <!-- La tabla ya no se desarma en tarjetas con CSS. Pasar de
+                     `table` a `block` y volver obliga al navegador a rearmar
+                     cajas anónimas, y en ese viaje thead y tbody pueden quedar
+                     en tablas distintas. Bajo el breakpoint se monta otro
+                     marcado, no la misma tabla disfrazada. -->
+                <div v-else-if="!esMovil" key="tabla" class="tabla-envoltura" :class="{ atenuada: cargando }">
+                    <table>
+                        <!-- El reparto de columnas se declara acá y no se deja
+                             al algoritmo de tabla: con `auto` toda la holgura
+                             cae en la primera columna y abre un hueco enorme
+                             entre el correo y el resto de la fila. -->
+                        <colgroup>
+                            <col class="c-cuenta">
+                            <col class="c-rol">
+                            <col class="c-estado">
+                            <col class="c-acceso">
+                            <col class="c-boletas">
+                            <col class="c-vendido">
+                            <col class="c-acciones">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Cuenta</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Último acceso</th>
+                                <th>Boletas</th>
+                                <th>Vendido</th>
+                                <th class="acciones-col">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody :class="{ escalonada: escalonar }">
+                            <tr v-for="(u, idx) in visibles" :key="u.id" class="fila"
+                                :style="{ ...tono(u.role), '--i': Math.min(idx, 12) }"
+                                :class="{ inactiva: !u.activo, resaltada: u.id === resalte.id }">
+                                <td class="celda-cuenta">
+                                    <div class="persona">
+                                        <span class="avatar" aria-hidden="true">{{ iniciales(u.name) }}</span>
+                                        <span class="identidad">
+                                            <b>{{ u.name }}<span v-if="u.id === yoId"
+                                                    class="etiqueta marca">tú</span></b>
+                                            <span class="correo">{{ u.email }}</span>
                                         </span>
-                                    </td>
+                                    </div>
+                                </td>
 
-                                    <td data-label="Estado">
-                                        <Transition name="cambio" mode="out-in">
-                                            <span :key="u.activo" class="estado"
-                                                :class="u.activo ? 'es-activa' : 'es-bloqueada'">
-                                                <svg v-if="u.activo" class="ico" viewBox="0 0 24 24"
-                                                    aria-hidden="true">
-                                                    <circle cx="12" cy="12" r="9" />
-                                                    <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
-                                                </svg>
-                                                <svg v-else class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <rect x="5" y="11" width="14" height="9" rx="2" />
-                                                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                                                </svg>
-                                                {{ u.activo ? 'Activa' : 'Bloqueada' }}
-                                            </span>
-                                        </Transition>
-                                    </td>
+                                <td>
+                                    <span class="rol-envoltura" :class="{ fijo: u.id === yoId }">
+                                        <select class="select-rol" :value="u.role"
+                                            :disabled="u.id === yoId || ocupado === u.id"
+                                            @change="pedirCambioRol(u, $event)">
+                                            <option v-for="r in ROLES" :key="r.valor" :value="r.valor">
+                                                {{ r.texto }}
+                                            </option>
+                                        </select>
+                                    </span>
+                                </td>
 
-                                    <td data-label="Último acceso">
-                                        <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                                            <circle cx="12" cy="12" r="9" />
-                                            <path d="M12 7.2v5l3 1.8" />
-                                        </svg>
-                                        <span class="valor">{{ fecha(u.ultimoAcceso) }}</span>
-                                    </td>
-                                    <td data-label="Boletas">
-                                        <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
-                                            <path d="M9.5 8.5h5M9.5 12.5h5" />
-                                        </svg>
-                                        <span class="valor dato">{{ u.boletas }}</span>
-                                    </td>
-                                    <td data-label="Vendido">
-                                        <svg class="ico ico-dato" viewBox="0 0 24 24" aria-hidden="true">
-                                            <rect x="3" y="6" width="18" height="12" rx="2" />
-                                            <circle cx="12" cy="12" r="2.6" />
-                                        </svg>
-                                        <span class="valor dato">{{ clp(u.vendido) }}</span>
-                                    </td>
+                                <td>
+                                    <Transition name="cambio" mode="out-in">
+                                        <span :key="u.activo" class="estado"
+                                            :class="u.activo ? 'es-activa' : 'es-bloqueada'">
+                                            <svg v-if="u.activo" class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="12" cy="12" r="9" />
+                                                <path d="M8.4 12.4l2.4 2.4 4.8-5.2" />
+                                            </svg>
+                                            <svg v-else class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <rect x="5" y="11" width="14" height="9" rx="2" />
+                                                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                                            </svg>
+                                            {{ u.activo ? 'Activa' : 'Bloqueada' }}
+                                        </span>
+                                    </Transition>
+                                </td>
 
-                                    <td class="acciones-col">
-                                        <div class="acciones">
-                                            <button class="btn-icono" title="Editar datos" aria-label="Editar datos"
-                                                @click="abrirEdicion(u)">
-                                                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z" />
-                                                </svg>
-                                                <span class="rotulo">Editar</span>
-                                            </button>
-                                            <button class="btn-icono" title="Restablecer contraseña"
-                                                aria-label="Restablecer contraseña" @click="abrirClave(u)">
-                                                <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <circle cx="8" cy="12" r="4" />
-                                                    <path d="M12 12h9M18 12v3" />
-                                                </svg>
-                                                <span class="rotulo">Clave</span>
-                                            </button>
-                                            <button v-if="u.id !== yoId" class="btn-icono btn-bloqueo"
-                                                :class="{ reactivar: !u.activo, ocupado: ocupado === u.id }"
-                                                :disabled="ocupado === u.id"
-                                                :title="u.activo ? 'Bloquear cuenta' : 'Reactivar cuenta'"
-                                                :aria-label="u.activo ? 'Bloquear cuenta' : 'Reactivar cuenta'"
-                                                @click="alternarEstado(u)">
-                                                <svg v-if="u.activo" class="ico" viewBox="0 0 24 24"
-                                                    aria-hidden="true">
-                                                    <rect x="5" y="11" width="14" height="9" rx="2" />
-                                                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                                                </svg>
-                                                <svg v-else class="ico" viewBox="0 0 24 24" aria-hidden="true">
-                                                    <rect x="5" y="11" width="14" height="9" rx="2" />
-                                                    <path d="M8 11V8a4 4 0 0 1 7.7-1.4" />
-                                                </svg>
-                                                <span class="texto-accion">
-                                                    {{ u.activo ? 'Bloquear' : 'Reactivar' }} cuenta
-                                                </span>
-                                            </button>
-                                            <span v-else class="propia">
-                                                <span class="texto-accion">Es tu cuenta</span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                <td class="col-acceso">{{ fecha(u.ultimoAcceso) }}</td>
+                                <td class="dato">{{ u.boletas }}</td>
+                                <td class="dato">{{ clp(u.vendido) }}</td>
+
+                                <td class="acciones-col">
+                                    <div class="acciones">
+                                        <button class="btn-icono" title="Editar datos" aria-label="Editar datos"
+                                            @click="abrirEdicion(u)">
+                                            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z" />
+                                            </svg>
+                                        </button>
+                                        <button class="btn-icono" title="Restablecer contraseña"
+                                            aria-label="Restablecer contraseña" @click="abrirClave(u)">
+                                            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <circle cx="8" cy="12" r="4" />
+                                                <path d="M12 12h9M18 12v3" />
+                                            </svg>
+                                        </button>
+                                        <button v-if="u.id !== yoId" class="btn-icono btn-bloqueo"
+                                            :class="{ reactivar: !u.activo, ocupado: ocupado === u.id }"
+                                            :disabled="ocupado === u.id"
+                                            :title="u.activo ? 'Bloquear cuenta' : 'Reactivar cuenta'"
+                                            :aria-label="u.activo ? 'Bloquear cuenta' : 'Reactivar cuenta'"
+                                            @click="alternarEstado(u)">
+                                            <svg v-if="u.activo" class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <rect x="5" y="11" width="14" height="9" rx="2" />
+                                                <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                                            </svg>
+                                            <svg v-else class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                                <rect x="5" y="11" width="14" height="9" rx="2" />
+                                                <path d="M8 11V8a4 4 0 0 1 7.7-1.4" />
+                                            </svg>
+                                        </button>
+                                        <span v-else class="propia" aria-hidden="true"></span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- ═══ Móvil: acordeón ═══ -->
+                <div v-else key="lista" class="lista" :class="{ atenuada: cargando }">
+                    <article v-for="u in visibles" :key="u.id" class="cuenta" :style="tono(u.role)"
+                        :class="{ inactiva: !u.activo, resaltada: u.id === resalte.id, abierta: abiertaId === u.id }">
+
+                        <!-- Cabecera mínima: quién es y qué puede tocar -->
+                        <button class="cab" :aria-expanded="abiertaId === u.id" @click="alternar(u.id)">
+                            <span class="chevron" aria-hidden="true">›</span>
+                            <span class="avatar" aria-hidden="true">{{ iniciales(u.name) }}</span>
+                            <span class="cab-nombre">
+                                {{ u.name }}
+                                <span v-if="u.id === yoId" class="etiqueta marca">tú</span>
+                            </span>
+                            <span class="rol-chip">{{ textoRol(u.role) }}</span>
+                        </button>
+
+                        <div v-if="abiertaId === u.id" class="cuerpo">
+                            <p class="correo-movil">{{ u.email }}</p>
+
+                            <div class="fila-dato">
+                                <span>Estado</span>
+                                <span class="estado" :class="u.activo ? 'es-activa' : 'es-bloqueada'">
+                                    {{ u.activo ? 'Activa' : 'Bloqueada' }}
+                                </span>
+                            </div>
+                            <div class="fila-dato">
+                                <span>Último acceso</span>
+                                <b>{{ fecha(u.ultimoAcceso) || '—' }}</b>
+                            </div>
+                            <div class="fila-dato">
+                                <span>Boletas</span>
+                                <b class="dato">{{ u.boletas }}</b>
+                            </div>
+                            <div class="fila-dato">
+                                <span>Vendido</span>
+                                <b class="dato">{{ clp(u.vendido) }}</b>
+                            </div>
+
+                            <div v-if="u.id !== yoId" class="grupo-rol">
+                                <label :for="`rol-${u.id}`">Rol</label>
+                                <span class="rol-envoltura">
+                                    <select :id="`rol-${u.id}`" class="select-rol" :value="u.role"
+                                        :disabled="ocupado === u.id" @change="pedirCambioRol(u, $event)">
+                                        <option v-for="r in ROLES" :key="r.valor" :value="r.valor">
+                                            {{ r.texto }}
+                                        </option>
+                                    </select>
+                                </span>
+                            </div>
+
+                            <div class="acciones">
+                                <button class="btn-icono" @click="abrirEdicion(u)">
+                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z" />
+                                    </svg>
+                                    Editar
+                                </button>
+                                <button class="btn-icono" @click="abrirClave(u)">
+                                    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+                                        <circle cx="8" cy="12" r="4" />
+                                        <path d="M12 12h9M18 12v3" />
+                                    </svg>
+                                    Clave
+                                </button>
+                                <button v-if="u.id !== yoId" class="btn-icono btn-bloqueo"
+                                    :class="{ reactivar: !u.activo, ocupado: ocupado === u.id }"
+                                    :disabled="ocupado === u.id" @click="alternarEstado(u)">
+                                    {{ u.activo ? 'Bloquear' : 'Reactivar' }} cuenta
+                                </button>
+                                <span v-else class="propia">Es tu cuenta</span>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+            </Transition>
+        </div>
+    </template>
+
+    <!-- ================= MODALES ================= -->
+    <Transition name="modal">
+        <div v-if="modal" class="fondo" @click.self="intentarCerrar">
+            <Transition name="cambio" mode="out-in">
+
+                <!-- Crear / editar -->
+                <div v-if="modal.tipo === 'cuenta'" key="cuenta" class="modal" role="dialog" aria-modal="true"
+                    aria-labelledby="titulo-cuenta">
+                    <div class="modal-cab">
+                        <span class="agarre" aria-hidden="true"></span>
+                        <h3 id="titulo-cuenta">{{ modal.f.id ? 'Editar cuenta' : 'Crear cuenta' }}</h3>
+                        <p>El correo es el usuario con el que se inicia sesión.</p>
                     </div>
-                </Transition>
+                    <div class="modal-cuerpo">
+                        <Transition name="desliza">
+                            <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+                        </Transition>
+
+                        <div class="grupo">
+                            <label for="f-nombre">Nombre</label>
+                            <input id="f-nombre" ref="campoNombre" class="campo" v-model="modal.f.name"
+                                placeholder="Camila Rojas" maxlength="120" autocomplete="name">
+                        </div>
+
+                        <div class="grupo">
+                            <label for="f-email">Correo</label>
+                            <input id="f-email" class="campo" type="email" v-model="modal.f.email"
+                                placeholder="camila@colibri.cl" autocomplete="email" autocapitalize="off"
+                                autocorrect="off" inputmode="email">
+                        </div>
+
+                        <div v-if="!modal.f.id" class="grupo">
+                            <label for="f-pass">Contraseña</label>
+                            <input id="f-pass" class="campo" type="password" v-model="modal.f.password"
+                                :placeholder="`Mínimo ${MINIMO} caracteres`" autocomplete="new-password">
+                        </div>
+
+                        <div class="grupo">
+                            <label>Rol</label>
+                            <div class="opciones-rol">
+                                <button v-for="r in ROLES" :key="r.valor" type="button" class="opcion-rol"
+                                    :style="tono(r.valor)" :class="{ on: modal.f.role === r.valor }"
+                                    @click="modal.f.role = r.valor">
+                                    <b>{{ r.texto }}</b>
+                                    <span>{{ r.descripcion }}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-pie">
+                        <button class="btn btn-linea" @click="intentarCerrar">Cancelar</button>
+                        <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
+                            @click="guardar">
+                            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
+                            {{ guardando ? 'Guardando…' : 'Guardar' }}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Contraseña -->
+                <div v-else-if="modal.tipo === 'clave'" key="clave" class="modal" role="dialog" aria-modal="true"
+                    aria-labelledby="titulo-clave">
+                    <div class="modal-cab">
+                        <span class="agarre" aria-hidden="true"></span>
+                        <h3 id="titulo-clave">Contraseña de {{ modal.f.name }}</h3>
+                        <p>Se aplica de inmediato en el próximo inicio de sesión.</p>
+                    </div>
+                    <div class="modal-cuerpo">
+                        <Transition name="desliza">
+                            <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
+                        </Transition>
+                        <label for="f-clave">Nueva contraseña</label>
+                        <input id="f-clave" ref="campoClave" class="campo" type="password"
+                            v-model="modal.f.password" :placeholder="`Mínimo ${MINIMO} caracteres`"
+                            autocomplete="new-password" @keyup.enter="guardarClave">
+                        <div class="nota">
+                            Restablecer no pide la contraseña anterior. Avisale a la persona
+                            por un canal aparte y pedile que la cambie desde su perfil.
+                        </div>
+                    </div>
+                    <div class="modal-pie">
+                        <button class="btn btn-linea" @click="intentarCerrar">Cancelar</button>
+                        <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
+                            @click="guardarClave">
+                            <span v-if="guardando" class="spinner" aria-hidden="true"></span>
+                            {{ guardando ? 'Guardando…' : 'Guardar' }}
+                        </button>
+                    </div>
+                </div>
+
+            </Transition>
+        </div>
+    </Transition>
+
+    <!-- Conceder administración ================================
+         Anular una boleta pide motivo y revertir una merma también.
+         Dar permisos totales no pedía nada: un toque en un select. -->
+    <Transition name="modal">
+        <div v-if="confirmRol" class="fondo z-alto" @click.self="cancelarCambioRol">
+            <div class="modal angosto" role="dialog" aria-modal="true" aria-labelledby="titulo-rol">
+                <div class="modal-cab">
+                    <span class="agarre" aria-hidden="true"></span>
+                    <h3 id="titulo-rol">¿{{ confirmRol.nombre }} como administrador?</h3>
+                    <p>Pasa de {{ textoRol(confirmRol.previo) }} a {{ textoRol(confirmRol.nuevo) }}.</p>
+                </div>
+                <div class="modal-cuerpo">
+                    <div class="nota alerta">
+                        Un administrador ve los costos y los márgenes, anula boletas,
+                        revierte mermas y puede crear o bloquear cuentas — incluida la tuya.
+                    </div>
+                </div>
+                <div class="modal-pie">
+                    <button class="btn btn-linea" @click="cancelarCambioRol">Cancelar</button>
+                    <button class="btn" @click="confirmarCambioRol">Conceder</button>
+                </div>
             </div>
-        </template>
+        </div>
+    </Transition>
 
-        <!-- ================= MODALES ================= -->
-        <Transition name="modal">
-            <div v-if="modal" class="fondo" @click.self="cerrarModal">
-                <Transition name="cambio" mode="out-in">
-
-                    <!-- Crear / editar -->
-                    <div v-if="modal.tipo === 'cuenta'" key="cuenta" class="modal">
-                        <div class="modal-cab">
-                            <span class="agarre" aria-hidden="true"></span>
-                            <h3>{{ modal.f.id ? 'Editar cuenta' : 'Crear cuenta' }}</h3>
-                            <p>El correo es el usuario con el que se inicia sesión.</p>
-                        </div>
-                        <div class="modal-cuerpo">
-                            <Transition name="desliza">
-                                <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-                            </Transition>
-
-                            <div class="grupo">
-                                <label for="f-nombre">Nombre</label>
-                                <input id="f-nombre" class="campo" v-model="modal.f.name" placeholder="Camila Rojas"
-                                    maxlength="120" autocomplete="name">
-                            </div>
-
-                            <div class="grupo">
-                                <label for="f-email">Correo</label>
-                                <input id="f-email" class="campo" type="email" v-model="modal.f.email"
-                                    placeholder="camila@colibri.cl" autocomplete="email" autocapitalize="off"
-                                    autocorrect="off" inputmode="email">
-                            </div>
-
-                            <div v-if="!modal.f.id" class="grupo">
-                                <label for="f-pass">Contraseña</label>
-                                <input id="f-pass" class="campo" type="password" v-model="modal.f.password"
-                                    :placeholder="`Mínimo ${MINIMO} caracteres`" autocomplete="new-password">
-                            </div>
-
-                            <div class="grupo">
-                                <label>Rol</label>
-                                <div class="opciones-rol">
-                                    <button v-for="r in ROLES" :key="r.valor" type="button" class="opcion-rol"
-                                        :style="tono(r.valor)" :class="{ on: modal.f.role === r.valor }"
-                                        @click="modal.f.role = r.valor">
-                                        <b>{{ r.texto }}</b>
-                                        <span>{{ r.descripcion }}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="modal-pie">
-                            <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-                            <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
-                                @click="guardar">
-                                <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-                                {{ guardando ? 'Guardando…' : 'Guardar' }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Contraseña -->
-                    <div v-else-if="modal.tipo === 'clave'" key="clave" class="modal">
-                        <div class="modal-cab">
-                            <span class="agarre" aria-hidden="true"></span>
-                            <h3>Contraseña de {{ modal.f.name }}</h3>
-                            <p>Se aplica de inmediato en el próximo inicio de sesión.</p>
-                        </div>
-                        <div class="modal-cuerpo">
-                            <Transition name="desliza">
-                                <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
-                            </Transition>
-                            <label for="f-clave">Nueva contraseña</label>
-                            <input id="f-clave" class="campo" type="password" v-model="modal.f.password"
-                                :placeholder="`Mínimo ${MINIMO} caracteres`" autocomplete="new-password"
-                                @keyup.enter="guardarClave">
-                            <div class="nota">
-                                Restablecer no pide la contraseña anterior. Avisale a la persona
-                                por un canal aparte y pedile que la cambie desde su perfil.
-                            </div>
-                        </div>
-                        <div class="modal-pie">
-                            <button class="btn btn-linea" @click="cerrarModal">Cancelar</button>
-                            <button class="btn" :class="{ 'btn-ocupado': guardando }" :disabled="guardando"
-                                @click="guardarClave">
-                                <span v-if="guardando" class="spinner" aria-hidden="true"></span>
-                                {{ guardando ? 'Guardando…' : 'Guardar' }}
-                            </button>
-                        </div>
-                    </div>
-
-                </Transition>
+    <!-- Descartar formulario -->
+    <Transition name="modal">
+        <div v-if="confirmarDescarte" class="fondo z-alto" @click.self="confirmarDescarte = false">
+            <div class="modal angosto" role="dialog" aria-modal="true">
+                <div class="modal-cab">
+                    <span class="agarre" aria-hidden="true"></span>
+                    <h3>¿Descartar los cambios?</h3>
+                    <p>Lo que escribiste se va a perder.</p>
+                </div>
+                <div class="modal-pie">
+                    <button class="btn btn-linea" @click="confirmarDescarte = false">Seguir editando</button>
+                    <button class="btn peligro" @click="descartar">Descartar</button>
+                </div>
             </div>
-        </Transition>
+        </div>
+    </Transition>
 
-        <Transition name="aviso">
-            <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
-        </Transition>
+    <Transition name="aviso">
+        <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+    </Transition>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { ROLES, textoRol } from '@/core/constantes/roles'
 import { modulosPorRol } from '@/config/menuColibri'
@@ -349,29 +447,38 @@ import EsqueletoBloque from '@/shared/components/EsqueletoBloque.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 /*
- * Paleta por rol. Vive acá por ahora, pero el lugar natural es
- * @/core/constantes/roles junto a `valor`, `texto` y `descripcion`:
- * si otra pantalla muestra un rol, tiene que pintarlo igual.
- * Las claves se comparan en minúscula para no depender de cómo
- * venga el rol desde el backend.
+ * Un hex por rol y nada más. El fondo y el texto se derivan con color-mix
+ * contra los tokens del tema, así los mismos tres colores funcionan en claro
+ * y en oscuro: antes el fondo era un #EEEDFE fijo que solo servía sobre
+ * blanco. El lugar natural de esto sigue siendo @/core/constantes/roles,
+ * junto a `valor`, `texto` y `descripcion`.
  */
-const ADMIN = { linea: '#534AB7', fondo: '#EEEDFE', texto: '#3C3489', oscuro: '#26215C' }
-const TONOS = {
-    admin: ADMIN,
-    administrador: ADMIN,
-    administradora: ADMIN,
-    vendedor: { linea: '#185FA5', fondo: '#E6F1FB', texto: '#0C447C', oscuro: '#042C53' },
-    bodega: { linea: '#BA7517', fondo: '#FAEEDA', texto: '#633806', oscuro: '#412402' }
+const LINEA_ADMIN = '#6C62D6'
+const LINEAS = {
+    admin: LINEA_ADMIN,
+    administrador: LINEA_ADMIN,
+    administradora: LINEA_ADMIN,
+    vendedor: '#2C7BC4',
+    bodega: '#C4841C'
 }
-const TONO_NEUTRO = { linea: '#94a3b8', fondo: '#f1f5f9', texto: '#475569', oscuro: '#334155' }
+const LINEA_NEUTRA = '#8B94A3'
+
+/* Los roles que dan permisos totales, para pedir confirmación al concederlos */
+const ROLES_ADMIN = new Set(['admin', 'administrador', 'administradora'])
 
 const MODULOS_VISIBLES = 3
+
+/* El mismo valor que el @media de abajo. Si se cambia uno hay que cambiar el
+   otro: no hay forma de leer un breakpoint de CSS desde JS. */
+const MOVIL = '(max-width: 959.98px)'
+
+const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
 export default {
     name: 'UsuariosView',
     components: { EsqueletoBloque },
 
-    setup() {
+    setup () {
         const store = useStore()
         const { espera, usarDestello, usarResalte, usarAviso, usarEsqueleto } = useTemporizadores()
 
@@ -406,6 +513,16 @@ export default {
 
         const cargar = () => store.dispatch('usuarios/cargar')
 
+        /* ---------------- Ancho ---------------- */
+        /* Se decide en JS porque bajo el breakpoint se monta otro marcado, no
+           la misma tabla convertida en bloques. */
+        const esMovil = ref(false)
+        let mql = null
+        const alCambiarAncho = (e) => {
+            esMovil.value = e.matches
+            if (!e.matches) abiertaId.value = null
+        }
+
         /* ---------------- Carga ---------------- */
         const esqueleto = usarEsqueleto()
         const escalonar = ref(true)
@@ -414,6 +531,11 @@ export default {
         let control = null
         onMounted(async () => {
             control = new AbortController()
+
+            mql = window.matchMedia(MOVIL)
+            esMovil.value = mql.matches
+            mql.addEventListener('change', alCambiarAncho)
+            document.addEventListener('keydown', alTeclado)
 
             /* El esqueleto solo aparece si todavía no hay nada que mostrar:
                al volver a la pantalla con datos en el store, parpadear un
@@ -425,16 +547,27 @@ export default {
             await espera(900)
             escalonar.value = false
         })
-        onUnmounted(() => control?.abort())
+
+        onUnmounted(() => {
+            control?.abort()
+            mql?.removeEventListener('change', alCambiarAncho)
+            document.removeEventListener('keydown', alTeclado)
+            document.body.style.overflow = ''
+        })
 
         /* ---------------- Presentación ---------------- */
         /* Devuelve variables CSS: cada bloque que lleve color de rol las
            hereda, así el hex aparece una sola vez por fila o tarjeta. */
         const tono = (rol) => {
-            const t = TONOS[String(rol || '').toLowerCase()] || TONO_NEUTRO
+            const linea = LINEAS[String(rol || '').toLowerCase()] || LINEA_NEUTRA
             return {
-                '--rol-linea': t.linea, '--rol-fondo': t.fondo,
-                '--rol-texto': t.texto, '--rol-oscuro': t.oscuro
+                '--rol-linea': linea,
+                /* Teñido sobre la superficie del tema: claro sobre claro,
+                   oscuro sobre oscuro. */
+                '--rol-fondo': `color-mix(in srgb, ${linea} 16%, var(--surface))`,
+                /* Mayoría de color de texto del tema con un tinte del rol:
+                   así contrasta contra --rol-fondo en los dos temas. */
+                '--rol-texto': `color-mix(in srgb, ${linea} 42%, var(--text))`
             }
         }
 
@@ -445,11 +578,18 @@ export default {
         const modulosCorto = (rol) => modulosPorRol(rol).slice(0, MODULOS_VISIBLES)
         const modulosResto = (rol) => Math.max(0, modulosPorRol(rol).length - MODULOS_VISIBLES)
 
+        /* ---------------- Acordeón ---------------- */
+        const abiertaId = ref(null)
+        const alternar = (id) => { abiertaId.value = abiertaId.value === id ? null : id }
+
         /* ---------------- Filtros ---------------- */
         /* La búsqueda es local — UsuarioFiltro no tiene campo de texto — así
            que no necesita debounce ni viaja al servidor. */
         const busqueda = ref('')
-        watch(busqueda, (v) => store.dispatch('usuarios/buscar', v))
+        watch(busqueda, (v) => {
+            store.dispatch('usuarios/buscar', v)
+            abiertaId.value = null
+        })
 
         const estadoSel = computed(() =>
             filtro.value.activo === null ? '' : String(filtro.value.activo)
@@ -457,6 +597,7 @@ export default {
 
         const filtrarPor = (campo, valor) => {
             const limpio = valor === '' ? null : valor
+            abiertaId.value = null
             store.dispatch('usuarios/filtrar', {
                 [campo]: campo === 'activo' && limpio !== null ? limpio === 'true' : limpio
             })
@@ -468,6 +609,12 @@ export default {
 
         /* ---------------- Modales ---------------- */
         const modal = ref(null)
+        const confirmarDescarte = ref(false)
+        /* Se declara acá y no junto a su lógica más abajo: el watch de
+           overflow lo lee, y un watch se evalúa apenas se crea. */
+        const confirmRol = ref(null)
+        const campoNombre = ref(null)
+        const campoClave = ref(null)
         const guardando = computed(() => store.getters['usuarios/guardando'])
         /* Id de la fila con una operación en curso, para deshabilitarla sola
            y no congelar toda la tabla */
@@ -475,47 +622,82 @@ export default {
 
         /* Con el modal abierto, el fondo no debe scrollear detrás: en iOS
            el gesto se "escapa" al body y la hoja parece trabada. */
-        watch(modal, (abierto) => {
-            document.body.style.overflow = abierto ? 'hidden' : ''
+        watch([modal, confirmarDescarte, confirmRol], ([m, d, r]) => {
+            document.body.style.overflow = (m || d || r) ? 'hidden' : ''
         })
-        onUnmounted(() => { document.body.style.overflow = '' })
 
-        const abrirNuevo = () => {
-            modal.value = {
-                tipo: 'cuenta',
-                f: reactive({ id: null, name: '', email: '', password: '', role: 'vendedor', error: '' })
-            }
+        /* El sello es la ficha tal como se abrió. Comparar contra él evita
+           preguntar "¿descartar?" cuando no se tocó nada. */
+        const sellar = (f) => JSON.stringify({ ...f, error: '' })
+
+        const abrir = (tipo, f, campo) => {
+            modal.value = { tipo, f: reactive(f), sello: sellar(f) }
+            nextTick(() => campo?.value?.focus())
         }
 
-        const abrirEdicion = (u) => {
-            modal.value = {
-                tipo: 'cuenta',
-                f: reactive({ id: u.id, name: u.name, email: u.email, password: '', role: u.role, error: '' })
-            }
+        const abrirNuevo = () => abrir(
+            'cuenta',
+            { id: null, name: '', email: '', password: '', role: 'vendedor', error: '' },
+            campoNombre
+        )
+
+        const abrirEdicion = (u) => abrir(
+            'cuenta',
+            { id: u.id, name: u.name, email: u.email, password: '', role: u.role, error: '' },
+            campoNombre
+        )
+
+        const abrirClave = (u) => abrir(
+            'clave',
+            { id: u.id, name: u.name, password: '', error: '' },
+            campoClave
+        )
+
+        const cerrarModal = () => {
+            modal.value = null
+            confirmarDescarte.value = false
         }
 
-        const abrirClave = (u) => {
-            modal.value = {
-                tipo: 'clave',
-                f: reactive({ id: u.id, name: u.name, password: '', error: '' })
+        const sucio = () => !!modal.value && sellar(modal.value.f) !== modal.value.sello
+
+        /* Un clic al fondo borraba el formulario sin preguntar */
+        const intentarCerrar = () => {
+            if (guardando.value) return
+            if (sucio()) {
+                confirmarDescarte.value = true
+                return
             }
+            cerrarModal()
         }
 
-        const cerrarModal = () => { modal.value = null }
+        const descartar = () => cerrarModal()
 
         /* ---------------- Acciones ---------------- */
+        const validarCuenta = (f) => {
+            if ((f.name || '').trim().length < 2) return 'El nombre debe tener al menos 2 caracteres.'
+            if (!CORREO.test((f.email || '').trim())) return 'Revisa el correo: no tiene un formato válido.'
+            if (!f.id && (f.password || '').length < LARGO_MINIMO_PASSWORD) {
+                return `La contraseña necesita al menos ${LARGO_MINIMO_PASSWORD} caracteres.`
+            }
+            return ''
+        }
+
         const guardar = async () => {
             const f = modal.value.f
-            f.error = ''
+            /* El placeholder decía "Mínimo N caracteres" y nada lo comprobaba:
+               la validación quedaba entera en el servidor. */
+            f.error = validarCuenta(f)
+            if (f.error) return
+
             try {
                 if (f.id) {
                     await store.dispatch('usuarios/actualizarUsuario', {
-                        id: f.id, name: f.name, email: f.email, role: f.role
+                        id: f.id, name: f.name.trim(), email: f.email.trim(), role: f.role
                     })
                     resalte.marcar(f.id)
                 } else {
                     await store.dispatch('usuarios/crearUsuario', {
-                        name: f.name, email: f.email, password: f.password, role: f.role
+                        name: f.name.trim(), email: f.email.trim(), password: f.password, role: f.role
                     })
                 }
                 cerrarModal()
@@ -528,6 +710,11 @@ export default {
         const guardarClave = async () => {
             const f = modal.value.f
             f.error = ''
+            if ((f.password || '').length < LARGO_MINIMO_PASSWORD) {
+                f.error = `La contraseña necesita al menos ${LARGO_MINIMO_PASSWORD} caracteres.`
+                return
+            }
+
             try {
                 await store.dispatch('usuarios/restablecerPassword', { id: f.id, password: f.password })
                 const id = f.id
@@ -539,19 +726,44 @@ export default {
             }
         }
 
-        const cambiarRol = async (u, role) => {
-            const previo = u.role
-            ocupado.value = u.id
+        /* ---------------- Cambio de rol ---------------- */
+
+        /* Conceder administración pasa por confirmación; bajar de rol o mover
+           entre vendedor y bodega no, porque quita permisos en vez de darlos. */
+        const pedirCambioRol = (u, evento) => {
+            const nuevo = evento.target.value
+            if (nuevo === u.role) return
+
+            if (ROLES_ADMIN.has(String(nuevo).toLowerCase())) {
+                /* El select ya muestra el valor nuevo aunque todavía no se
+                   aplicó: se devuelve a la vista hasta que se confirme. */
+                evento.target.value = u.role
+                confirmRol.value = { id: u.id, nombre: u.name, previo: u.role, nuevo }
+                return
+            }
+
+            aplicarRol(u.id, u.name, nuevo)
+        }
+
+        const cancelarCambioRol = () => { confirmRol.value = null }
+
+        const confirmarCambioRol = () => {
+            const c = confirmRol.value
+            confirmRol.value = null
+            aplicarRol(c.id, c.nombre, c.nuevo)
+        }
+
+        const aplicarRol = async (id, nombre, role) => {
+            ocupado.value = id
             try {
-                await store.dispatch('usuarios/cambiarRolUsuario', { id: u.id, role })
-                avisar(`${u.name} ahora es ${textoRol(role)}`)
-                resalte.marcar(u.id)
+                await store.dispatch('usuarios/cambiarRolUsuario', { id, role })
+                avisar(`${nombre} ahora es ${textoRol(role)}`)
+                resalte.marcar(id)
             } catch (e) {
                 /* El select ya mostró el valor nuevo; recargar lo devuelve a
                    lo que realmente quedó en la base. */
                 await cargar()
                 avisar(e.message, true)
-                void previo
             } finally {
                 ocupado.value = null
             }
@@ -568,6 +780,15 @@ export default {
             } finally {
                 ocupado.value = null
             }
+        }
+
+        /* ---------------- Teclado ---------------- */
+        const alTeclado = (e) => {
+            if (e.key !== 'Escape') return
+            if (confirmarDescarte.value) confirmarDescarte.value = false
+            else if (confirmRol.value) cancelarCambioRol()
+            else if (modal.value) intentarCerrar()
+            else if (abiertaId.value) abiertaId.value = null
         }
 
         /* ---------------- Varios ---------------- */
@@ -601,9 +822,13 @@ export default {
             visibles, total, cargando, errorCarga, filtro, yoId, cargar,
             busqueda, estadoSel, filtrarPor, conteos, dRol,
             esqueleto, escalonar, resalte, aviso,
-            modal, guardando, ocupado,
+            esMovil, abiertaId, alternar,
+            modal, guardando, ocupado, campoNombre, campoClave,
+            confirmarDescarte, intentarCerrar, descartar,
             abrirNuevo, abrirEdicion, abrirClave, cerrarModal,
-            guardar, guardarClave, cambiarRol, alternarEstado,
+            guardar, guardarClave,
+            confirmRol, pedirCambioRol, cancelarCambioRol, confirmarCambioRol,
+            alternarEstado,
             clp, fecha
         }
     }
@@ -612,10 +837,9 @@ export default {
 
 <style scoped>
 /* ==========================================================================
-   MOBILE FIRST
-   La base es el teléfono. Casi todos los @media son de min-width; la
-   única excepción es el desarme de la tabla en tarjetas, que va en un
-   max-width para no romper la tabla nativa (ver más abajo).
+   MOBILE FIRST — consume los tokens globales (tokens.css), no define ninguno.
+   Antes esta vista tenía los colores escritos a mano y era la única del
+   sistema que no cambiaba con el tema.
    Puntos de quiebre: 600 (teléfono grande) · 960 (tabla real).
    ========================================================================== */
 
@@ -632,7 +856,8 @@ export default {
 .btn,
 .btn-icono,
 .opcion-rol,
-.select-rol {
+.select-rol,
+.cab {
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
 }
@@ -646,6 +871,14 @@ export default {
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
+}
+
+.suave { color: var(--text-muted); }
+.mini { font-size: 0.78rem; }
+
+.dato {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
 }
 
 /* ================================================================
@@ -679,13 +912,13 @@ tbody.escalonada .fila {
 /* Resalte tras un cambio. Acá los cambios son de permisos, así que el
    verde dice "quedó guardado", no "todo bien con esta cuenta". */
 @keyframes resalta {
-    0% { background: #d1fae5; }
-    70% { background: #ecfdf5; }
+    0% { background: var(--success-soft); }
     100% { background: transparent; }
 }
 
 .fila.resaltada,
-.fila.resaltada td {
+.fila.resaltada td,
+.cuenta.resaltada {
     animation: resalta 1400ms ease-out;
 }
 
@@ -705,18 +938,14 @@ tbody.escalonada .fila {
     transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.cambio-leave-active {
-    transition: opacity 0.1s ease;
-}
+.cambio-leave-active { transition: opacity 0.1s ease; }
 
 .cambio-enter-from {
     opacity: 0;
     transform: scale(0.98);
 }
 
-.cambio-leave-to {
-    opacity: 0;
-}
+.cambio-leave-to { opacity: 0; }
 
 /* Bloques que aparecen a mitad de flujo (el error dentro de un modal) */
 .desliza-enter-active {
@@ -735,32 +964,18 @@ tbody.escalonada .fila {
 
 /* Modales */
 .modal-enter-active,
-.modal-leave-active {
-    transition: opacity 0.18s ease;
-}
+.modal-leave-active { transition: opacity 0.18s ease; }
 
 .modal-enter-from,
-.modal-leave-to {
-    opacity: 0;
-}
+.modal-leave-to { opacity: 0; }
 
-.modal-enter-active .modal {
-    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.modal-leave-active .modal {
-    transition: transform 0.16s ease;
-}
+.modal-enter-active .modal { transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1); }
+.modal-leave-active .modal { transition: transform 0.16s ease; }
 
 /* En móvil la hoja sube desde abajo, que es de donde viene el componente.
    En escritorio (ver ≥600) el diálogo solo aparece apenas más chico. */
-.modal-enter-from .modal {
-    transform: translateY(40px);
-}
-
-.modal-leave-to .modal {
-    transform: translateY(20px);
-}
+.modal-enter-from .modal { transform: translateY(40px); }
+.modal-leave-to .modal { transform: translateY(20px); }
 
 /* Toast */
 .aviso-enter-active {
@@ -787,14 +1002,14 @@ tbody.escalonada .fila {
     width: 15px;
     height: 15px;
     flex-shrink: 0;
-    border: 2px solid rgba(255, 255, 255, 0.35);
-    border-top-color: #fff;
+    border: 2px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
+    border-top-color: var(--accent-contrast);
     border-radius: 50%;
     animation: girar 0.8s linear infinite;
 }
 
 .btn-ocupado:disabled {
-    background: #0f6e56;
+    background: var(--accent);
     opacity: 0.78;
     cursor: wait;
 }
@@ -830,14 +1045,14 @@ tbody.escalonada .fila {
     font-size: 1.3rem;
     line-height: 1.25;
     letter-spacing: -0.01em;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .pista {
     margin: 4px 0 0;
     font-size: 0.85rem;
     line-height: 1.45;
-    color: #64748b;
+    color: var(--text-muted);
 }
 
 /* ---------- Roles: carrusel con snap ---------- */
@@ -856,29 +1071,25 @@ tbody.escalonada .fila {
     padding-bottom: 2px;
 }
 
-.roles::-webkit-scrollbar {
-    display: none;
-}
+.roles::-webkit-scrollbar { display: none; }
 
 .rol-tarjeta {
     flex: 0 0 min(78%, 280px);
     scroll-snap-align: start;
-    background: #fff;
-    border: 1px solid #e2e8f0;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-top: 3px solid var(--rol-linea);
-    border-radius: 12px;
+    border-radius: var(--r-md, 12px);
     padding: 14px 15px 15px;
     transition: box-shadow 0.18s, transform 0.18s;
 }
 
 .rol-tarjeta:hover {
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+    box-shadow: var(--shadow-sm);
     transform: translateY(-2px);
 }
 
-.esq-rol {
-    border-top-color: #e2e8f0;
-}
+.esq-rol { border-top-color: var(--border); }
 
 .rol-tarjeta header {
     display: flex;
@@ -901,7 +1112,7 @@ tbody.escalonada .fila {
     align-items: center;
     justify-content: center;
     padding: 0 8px;
-    border-radius: 999px;
+    border-radius: var(--r-full, 999px);
     background: var(--rol-fondo);
     color: var(--rol-texto);
     font-size: 0.75rem;
@@ -912,7 +1123,7 @@ tbody.escalonada .fila {
 .rol-tarjeta p {
     margin: 0 0 10px;
     font-size: 0.78rem;
-    color: #64748b;
+    color: var(--text-muted);
     line-height: 1.5;
 }
 
@@ -927,7 +1138,7 @@ tbody.escalonada .fila {
 
 .modulos li {
     padding: 3px 9px;
-    border-radius: 999px;
+    border-radius: var(--r-full, 999px);
     background: var(--rol-fondo);
     color: var(--rol-texto);
     font-size: 0.68rem;
@@ -936,8 +1147,8 @@ tbody.escalonada .fila {
 
 .modulos .mas {
     background: transparent;
-    border: 1px dashed #cbd5e1;
-    color: #94a3b8;
+    border: 1px dashed var(--border-strong);
+    color: var(--text-faint);
 }
 
 /* ---------- Barra de filtros ---------- */
@@ -948,13 +1159,9 @@ tbody.escalonada .fila {
     margin-bottom: 14px;
 }
 
-.buscador {
-    position: relative;
-}
+.buscador { position: relative; }
 
-.buscador .campo {
-    padding-left: 38px;
-}
+.buscador .campo { padding-left: 38px; }
 
 .lupa {
     position: absolute;
@@ -963,7 +1170,7 @@ tbody.escalonada .fila {
     transform: translateY(-50%);
     width: 17px;
     height: 17px;
-    color: #94a3b8;
+    color: var(--text-faint);
     pointer-events: none;
 }
 
@@ -974,248 +1181,120 @@ tbody.escalonada .fila {
     gap: 8px;
 }
 
-.conteo {
-    align-self: flex-end;
-}
+.conteo { align-self: flex-end; }
 
 .vacio {
     padding: 36px 18px;
-    border: 1px dashed #cbd5e1;
-    border-radius: 12px;
-    background: #fff;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--r-md, 12px);
+    background: var(--surface);
     text-align: center;
-    color: #64748b;
+    color: var(--text-muted);
     font-size: 0.9rem;
 }
 
-.error-panel {
-    margin: 0;
+.error-panel { margin: 0; }
+.reintentar { margin-left: 10px; }
+
+/* ---------- Lista en móvil: acordeón ---------- */
+
+.lista {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.reintentar {
-    margin-left: 10px;
+.cuenta {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md, 12px);
+    overflow: hidden;
 }
 
-table {
+.cuenta.inactiva { opacity: 0.6; }
+
+.cuenta.abierta {
+    border-color: var(--rol-linea);
+}
+
+.cab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    border-collapse: collapse;
+    min-height: 60px;
+    padding: 0 14px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
-/* ---------- Lista de cuentas ----------
-   Todo lo que desarma la tabla vive dentro de un max-width. Pasar de
-   `table` a `block` y volver obliga al navegador a rearmar cajas anónimas
-   de tabla, y en ese viaje `thead` y `tbody` pueden terminar en tablas
-   distintas: columnas desalineadas. La tabla nativa nunca se toca. */
-@media (max-width: 959.98px) {
-    .tabla-envoltura {
-        overflow: visible;
-    }
-
-    /* En tarjetas no hay columnas que repartir */
-    colgroup {
-        display: none;
-    }
-
-    table,
-    thead,
-    tbody,
-    tr,
-    td {
-        display: block;
-        width: 100%;
-    }
-
-    thead {
-        display: none;
-    }
-
-    /* Cada cuenta es una tarjeta en dos columnas: los datos sueltos
-       (estado, fecha, boletas, vendido) se emparejan de a dos en vez de
-       ocupar una línea cada uno. */
-    tbody tr {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        overflow: hidden;
-        margin-bottom: 14px;
-        padding: 0;
-    }
-
-    /* Los rótulos se leen: minúscula, tamaño normal, sin espaciado
-       de letras. El gris claro en mayúsculas de 10px era ilegible. */
-    td {
-        display: flex;
-        align-items: center;
-        gap: 11px;
-        padding: 11px 16px;
-        border: none;
-        text-align: left;
-        min-width: 0;
-    }
-
-    td::before {
-        content: attr(data-label);
-        order: 2;
-        flex: 1;
-        font-size: 0.95rem;
-        font-weight: 400;
-        letter-spacing: 0;
-        text-transform: none;
-        color: #64748b;
-    }
-
-    .ico-dato {
-        order: 1;
-        width: 21px;
-        height: 21px;
-        color: #94a3b8;
-    }
-
-    .valor {
-        order: 3;
-        font-size: 1rem;
-        color: #0f172a;
-    }
-
-    /* Cabecera con el color del rol: identifica la cuenta antes de leerla */
-    .celda-cuenta {
-        grid-column: 1 / -1;
-        gap: 13px;
-        padding: 15px 16px;
-        background: var(--rol-fondo);
-    }
-
-    .celda-cuenta .avatar {
-        width: 52px;
-        height: 52px;
-        background: #fff;
-        color: var(--rol-texto);
-        font-size: 1.05rem;
-    }
-
-    .celda-cuenta .identidad b {
-        font-size: 1.18rem;
-        color: var(--rol-oscuro);
-    }
-
-    .celda-cuenta .correo {
-        font-size: 0.875rem;
-        color: var(--rol-texto);
-    }
-
-    .marca {
-        background: #fff;
-        color: var(--rol-texto);
-        font-size: 0.75rem;
-        text-transform: none;
-        letter-spacing: 0;
-        padding: 2px 9px;
-    }
-
-    /* Franja rol + estado */
-    td[data-label="Rol"],
-    td[data-label="Estado"] {
-        padding: 13px 16px;
-        border-bottom: 1px solid #f1f5f9;
-    }
-
-    td[data-label="Estado"] {
-        justify-content: flex-end;
-    }
-
-    td[data-label="Rol"]::before,
-    td[data-label="Estado"]::before,
-    .celda-cuenta::before,
-    .acciones-col::before {
-        content: none;
-    }
-
-    .rol-envoltura {
-        display: block;
-    }
-
-    .select-rol {
-        min-height: 46px;
-        padding: 0 36px 0 16px;
-        font-size: 1rem;
-    }
-
-    .rol-envoltura::after {
-        right: 16px;
-    }
-
-    .estado {
-        gap: 7px;
-        padding: 6px 13px;
-        border-radius: 999px;
-        font-size: 0.9rem;
-    }
-
-    .estado .ico {
-        width: 17px;
-        height: 17px;
-    }
-
-    .es-activa {
-        background: #E1F5EE;
-        color: #0F6E56;
-    }
-
-    .es-bloqueada {
-        background: #f1f5f9;
-        color: #475569;
-    }
-
-    /* Filas de datos separadas por hairlines suaves */
-    td[data-label="Último acceso"],
-    td[data-label="Boletas"] {
-        grid-column: 1 / -1;
-        border-bottom: 1px solid #f8fafc;
-    }
-
-    td[data-label="Vendido"] {
-        grid-column: 1 / -1;
-    }
-
-    .acciones-col {
-        grid-column: 1 / -1;
-        padding: 14px 16px 16px;
-    }
+.cab:focus-visible {
+    outline: 2px solid var(--rol-linea);
+    outline-offset: -2px;
 }
 
-/* Tres columnas de datos apenas hay ancho para ellas */
-@media (min-width: 600px) and (max-width: 959.98px) {
-    tbody tr {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-}
-
-td {
-    font-size: 0.875rem;
-}
-
-tr.inactiva .persona,
-tr.inactiva .dato {
-    opacity: 0.6;
-    transition: opacity 0.24s ease;
-}
-
-.suave {
-    color: #64748b;
-}
-
-.mini {
-    font-size: 0.78rem;
-}
-
-.dato {
-    font-variant-numeric: tabular-nums;
+.cab-nombre {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.98rem;
     font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Persona */
+.rol-chip {
+    flex-shrink: 0;
+    padding: 3px 11px;
+    border-radius: var(--r-full, 999px);
+    background: var(--rol-fondo);
+    color: var(--rol-texto);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.chevron {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 1.15rem;
+    line-height: 1;
+    transition: transform 0.16s ease;
+}
+
+.cuenta.abierta .chevron { transform: rotate(90deg); }
+
+.cuerpo {
+    padding: 2px 14px 14px;
+    border-top: 1px solid var(--border);
+}
+
+.correo-movil {
+    margin: 10px 0 6px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.fila-dato {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.86rem;
+}
+
+.fila-dato > span:first-child { color: var(--text-muted); }
+
+.grupo-rol { margin: 14px 0 4px; }
+
+/* ---------- Persona ---------- */
 .persona {
     display: flex;
     align-items: center;
@@ -1250,11 +1329,11 @@ tr.inactiva .dato {
 .identidad b {
     font-weight: 600;
     font-size: 0.95rem;
-    color: #0f172a;
+    color: var(--text);
 }
 
 /* El correo es lo único que puede desbordar: se corta con puntos
-   suspensivos en vez de estirar la tarjeta. */
+   suspensivos en vez de estirar la fila. */
 .correo {
     display: block;
     max-width: 100%;
@@ -1262,25 +1341,23 @@ tr.inactiva .dato {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.75rem;
-    color: #94a3b8;
+    color: var(--text-faint);
 }
 
-.marca {
-    margin-left: 7px;
-}
+.marca { margin-left: 7px; }
 
-/* Select de rol con forma de etiqueta.
+/* ---------- Select de rol ----------
    16px reales de fuente: por debajo de eso iOS hace zoom al enfocarlo. */
 .rol-envoltura {
     position: relative;
-    display: inline-block;
+    display: block;
     max-width: 100%;
 }
 
 .rol-envoltura::after {
     content: '';
     position: absolute;
-    right: 13px;
+    right: 16px;
     top: 50%;
     width: 6px;
     height: 6px;
@@ -1291,18 +1368,17 @@ tr.inactiva .dato {
     pointer-events: none;
 }
 
-.rol-envoltura.fijo::after {
-    display: none;
-}
+.rol-envoltura.fijo::after { display: none; }
 
 .select-rol {
     appearance: none;
     -webkit-appearance: none;
+    width: 100%;
     max-width: 100%;
-    min-height: 38px;
-    padding: 5px 32px 5px 14px;
+    min-height: 46px;
+    padding: 0 36px 0 16px;
     border: 1px solid transparent;
-    border-radius: 999px;
+    border-radius: var(--r-full, 999px);
     background: var(--rol-fondo);
     color: var(--rol-texto);
     font-family: inherit;
@@ -1312,9 +1388,7 @@ tr.inactiva .dato {
     transition: background-color 0.24s ease, color 0.24s ease, border-color 0.15s;
 }
 
-.rol-envoltura.fijo .select-rol {
-    padding-right: 14px;
-}
+.rol-envoltura.fijo .select-rol { padding-right: 16px; }
 
 .select-rol:focus-visible {
     outline: 2px solid var(--rol-linea);
@@ -1326,27 +1400,24 @@ tr.inactiva .dato {
     cursor: default;
 }
 
-/* Estado */
+/* ---------- Estado ---------- */
 .estado {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 0.82rem;
+    font-size: 0.86rem;
     font-weight: 600;
 }
 
-.es-activa {
-    color: #047857;
-}
-
-.es-bloqueada {
-    color: #94a3b8;
-}
+.es-activa { color: var(--success); }
+.es-bloqueada { color: var(--text-faint); }
 
 .etiqueta {
     display: inline-block;
     padding: 2px 8px;
-    border-radius: 999px;
+    border-radius: var(--r-full, 999px);
+    background: var(--rol-fondo);
+    color: var(--rol-texto);
     font-size: 0.62rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -1354,34 +1425,28 @@ tr.inactiva .dato {
     white-space: nowrap;
 }
 
-.et-verde {
-    background: #d1fae5;
-    color: #047857;
-}
-
-/* Acciones: en móvil, dos botones arriba y el de bloqueo a lo ancho */
+/* ---------- Acciones ---------- */
 .acciones {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 9px;
     width: 100%;
+    margin-top: 14px;
 }
 
 .btn-bloqueo,
-.propia {
-    grid-column: 1 / -1;
-}
+.propia { grid-column: 1 / -1; }
 
 /* Bloquear y reactivar no son la misma acción: cada una con su color */
 .btn-bloqueo {
-    border-color: #F7C1C1;
-    color: #A32D2D;
+    border-color: var(--danger-border, var(--danger));
+    color: var(--danger);
 }
 
 .btn-bloqueo.reactivar {
-    border-color: #9FE1CB;
-    background: #E1F5EE;
-    color: #0F6E56;
+    border-color: var(--success);
+    background: var(--success-soft);
+    color: var(--success);
 }
 
 .propia {
@@ -1390,7 +1455,7 @@ tr.inactiva .dato {
     justify-content: center;
     height: 44px;
     font-size: 0.875rem;
-    color: #94a3b8;
+    color: var(--text-faint);
 }
 
 /* ---------- Botones ---------- */
@@ -1402,9 +1467,12 @@ tr.inactiva .dato {
     min-height: 46px;
     padding: 0.65rem 1.15rem;
     border: none;
-    border-radius: 0.5rem;
-    background: #0f6e56;
-    color: #fff;
+    border-radius: var(--r-sm, 8px);
+    /* Antes era un #0f6e56 propio de esta pantalla: el único botón primario
+       del sistema que no usaba el acento. Si el verde era de marca, es esta
+       línea la que vuelve atrás. */
+    background: var(--accent);
+    color: var(--accent-contrast);
     font-family: inherit;
     font-size: 0.95rem;
     font-weight: 600;
@@ -1412,40 +1480,37 @@ tr.inactiva .dato {
     transition: background-color 0.15s, transform 0.1s;
 }
 
-.btn:active:not(:disabled) {
-    transform: scale(0.97);
-}
-
-.btn:hover:not(:disabled) {
-    background: #085041;
-}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 
 .btn:disabled {
-    background: #a7c9bb;
+    opacity: 0.55;
     cursor: not-allowed;
 }
 
+.btn.peligro { background: var(--danger); }
+
 .btn-linea {
     background: transparent;
-    border: 1px solid #cbd5e1;
-    color: #475569;
+    border: 1px solid var(--border-strong);
+    color: var(--text-muted);
 }
 
 .btn-linea:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #94a3b8;
+    background: var(--surface-2);
+    color: var(--text);
 }
 
 .btn-linea:disabled {
     background: transparent;
-    color: #94a3b8;
+    color: var(--text-faint);
 }
 
 .btn-mini {
-    min-height: 50px;
+    min-height: 44px;
     padding: 0.3rem 0.7rem;
-    border-radius: 10px;
-    font-size: 1rem;
+    border-radius: var(--r-sm, 8px);
+    font-size: 0.88rem;
 }
 
 .btn-icono {
@@ -1453,37 +1518,35 @@ tr.inactiva .dato {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 50px;
+    min-height: 46px;
     padding: 0 0.7rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    background: #fff;
-    color: #334155;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm, 8px);
+    background: var(--surface);
+    color: var(--text-muted);
     font-family: inherit;
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s, background-color 0.15s, transform 0.1s;
 }
 
 .btn-icono:active:not(:disabled) {
-    background: #f8fafc;
+    background: var(--surface-2);
     transform: scale(0.96);
 }
 
 /* ---------- Esqueleto ---------- */
-.esq-barra {
-    margin-bottom: 14px;
-}
+.esq-barra { margin-bottom: 14px; }
 
 .esq-fila {
     display: flex;
     align-items: center;
     gap: 14px;
     padding: 16px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md, 12px);
     margin-bottom: 14px;
 }
 
@@ -1503,8 +1566,10 @@ tr.inactiva .dato {
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--overlay);
 }
+
+.fondo.z-alto { z-index: 70; }
 
 .modal {
     width: 100%;
@@ -1512,9 +1577,9 @@ tr.inactiva .dato {
     max-height: 92dvh;
     display: flex;
     flex-direction: column;
-    background: #fff;
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.3);
+    background: var(--surface);
+    border-radius: var(--r-lg, 16px) var(--r-lg, 16px) 0 0;
+    box-shadow: var(--shadow-lg);
 }
 
 .agarre {
@@ -1522,26 +1587,26 @@ tr.inactiva .dato {
     width: 38px;
     height: 4px;
     margin: 0 auto 12px;
-    border-radius: 999px;
-    background: #e2e8f0;
+    border-radius: var(--r-full, 999px);
+    background: var(--border-strong);
 }
 
 .modal-cab {
     padding: 10px 18px 14px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid var(--border);
 }
 
 .modal-cab h3 {
     margin: 0;
     font-size: 1.1rem;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .modal-cab p {
     margin: 4px 0 0;
     font-size: 0.82rem;
     line-height: 1.45;
-    color: #64748b;
+    color: var(--text-muted);
 }
 
 .modal-cuerpo {
@@ -1557,12 +1622,10 @@ tr.inactiva .dato {
     padding: 14px 18px;
     /* Deja libre la barra de gestos del iPhone */
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--border);
 }
 
-.modal-pie .btn {
-    flex: 1 1 0;
-}
+.modal-pie .btn { flex: 1 1 0; }
 
 label {
     display: block;
@@ -1571,52 +1634,57 @@ label {
     font-weight: 700;
     letter-spacing: 0.07em;
     text-transform: uppercase;
-    color: #475569;
+    color: var(--text-muted);
 }
 
 .campo {
     width: 100%;
     min-height: 46px;
     padding: 0.6rem 0.75rem;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.5rem;
-    background: #fff;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm, 8px);
+    background: var(--surface);
     font-family: inherit;
     /* 16px mínimos: si no, iOS hace zoom al enfocar y descuadra la vista */
     font-size: max(0.9rem, 16px);
-    color: #0f172a;
+    color: var(--text);
     outline: none;
     transition: border-color 0.18s, box-shadow 0.18s;
 }
 
 .campo:focus {
-    border-color: transparent;
-    box-shadow: 0 0 0 2px #10b981;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.grupo {
-    margin-bottom: 15px;
-}
+.grupo { margin-bottom: 15px; }
 
 .error {
     padding: 10px 13px;
     margin-bottom: 14px;
-    border-radius: 0 8px 8px 0;
-    border-left: 4px solid #dc2626;
-    background: #fee2e2;
-    color: #991b1b;
+    border-radius: 0 var(--r-sm, 8px) var(--r-sm, 8px) 0;
+    border-left: 4px solid var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
     font-size: 0.85rem;
 }
 
 .nota {
     padding: 10px 13px;
     margin-top: 14px;
-    border-radius: 0 8px 8px 0;
-    border-left: 3px solid #10b981;
-    background: #f0fdf4;
+    border-radius: 0 var(--r-sm, 8px) var(--r-sm, 8px) 0;
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
     font-size: 0.82rem;
-    color: #475569;
+    color: var(--text-muted);
     line-height: 1.55;
+}
+
+.nota.alerta {
+    margin-top: 0;
+    border-left-color: var(--warn);
+    background: var(--warn-soft);
+    color: var(--text);
 }
 
 .opciones-rol {
@@ -1631,27 +1699,25 @@ label {
     gap: 3px;
     min-height: 56px;
     padding: 11px 13px;
-    border: 1.5px solid #e2e8f0;
-    border-radius: 10px;
-    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-sm, 10px);
+    background: var(--surface);
     text-align: left;
     cursor: pointer;
     font-family: inherit;
     transition: border-color 0.18s, background-color 0.18s, transform 0.1s;
 }
 
-.opcion-rol:active {
-    transform: scale(0.99);
-}
+.opcion-rol:active { transform: scale(0.99); }
 
 .opcion-rol b {
     font-size: 0.9rem;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .opcion-rol span {
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-muted);
     line-height: 1.45;
 }
 
@@ -1660,9 +1726,7 @@ label {
     background: var(--rol-fondo);
 }
 
-.opcion-rol.on b {
-    color: var(--rol-texto);
-}
+.opcion-rol.on b { color: var(--rol-texto); }
 
 .aviso {
     position: fixed;
@@ -1671,18 +1735,16 @@ label {
     bottom: calc(16px + env(safe-area-inset-bottom));
     z-index: 80;
     padding: 13px 18px;
-    border-radius: 10px;
-    background: #04342c;
+    border-radius: var(--r-sm, 10px);
+    background: var(--success);
     color: #fff;
     font-size: 0.875rem;
     font-weight: 600;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+    box-shadow: var(--shadow-lg);
     text-align: center;
 }
 
-.aviso.malo {
-    background: #b91c1c;
-}
+.aviso.malo { background: var(--danger); }
 
 /* ==========================================================================
    ≥ 600px — teléfono grande y tablet vertical
@@ -1694,13 +1756,9 @@ label {
         align-items: flex-end;
     }
 
-    .cabecera h2 {
-        font-size: 1.5rem;
-    }
+    .cabecera h2 { font-size: 1.5rem; }
 
-    .btn-crear {
-        flex-shrink: 0;
-    }
+    .btn-crear { flex-shrink: 0; }
 
     .roles {
         display: grid;
@@ -1710,9 +1768,7 @@ label {
         padding-inline: 0;
     }
 
-    .rol-tarjeta {
-        flex: initial;
-    }
+    .rol-tarjeta { flex: initial; }
 
     .barra {
         flex-direction: row;
@@ -1725,14 +1781,17 @@ label {
         min-width: 0;
     }
 
-    .filtros {
-        flex: 1 1 300px;
-    }
+    .filtros { flex: 1 1 300px; }
 
     .conteo {
         margin-left: auto;
         align-self: center;
     }
+
+    .acciones { grid-template-columns: repeat(3, 1fr); }
+
+    .btn-bloqueo,
+    .propia { grid-column: auto; }
 
     .fondo {
         align-items: center;
@@ -1742,34 +1801,25 @@ label {
     .modal {
         max-width: 500px;
         max-height: 88dvh;
-        border-radius: 14px;
+        border-radius: var(--r-lg, 14px);
     }
+
+    .modal.angosto { max-width: 400px; }
 
     /* Acá el diálogo no "sube": aparece apenas más chico y centrado */
-    .modal-enter-from .modal {
-        transform: translateY(18px) scale(0.97);
-    }
+    .modal-enter-from .modal { transform: translateY(18px) scale(0.97); }
+    .modal-leave-to .modal { transform: translateY(8px) scale(0.98); }
 
-    .modal-leave-to .modal {
-        transform: translateY(8px) scale(0.98);
-    }
+    .agarre { display: none; }
 
-    .agarre {
-        display: none;
-    }
-
-    .modal-cab {
-        padding-top: 18px;
-    }
+    .modal-cab { padding-top: 18px; }
 
     .modal-pie {
         justify-content: flex-end;
         padding-bottom: 14px;
     }
 
-    .modal-pie .btn {
-        flex: 0 0 auto;
-    }
+    .modal-pie .btn { flex: 0 0 auto; }
 
     .aviso {
         left: 50%;
@@ -1779,19 +1829,18 @@ label {
     }
 
     .aviso-enter-from,
-    .aviso-leave-to {
-        transform: translate(-50%, 16px);
-    }
+    .aviso-leave-to { transform: translate(-50%, 16px); }
 }
 
 /* ==========================================================================
-   ≥ 960px — recién acá la tabla vuelve a ser tabla
+   ≥ 960px — la tabla. Solo se monta acá, así que sus estilos no necesitan
+   convivir con los de la lista.
    ========================================================================== */
 @media (min-width: 960px) {
     .panel {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md, 12px);
         overflow: hidden;
     }
 
@@ -1799,95 +1848,73 @@ label {
         gap: 9px;
         margin-bottom: 0;
         padding: 11px 12px;
-        border-bottom: 1px solid #e2e8f0;
-        background: #fcfcfd;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
     }
 
-    .filtros {
-        flex: 0 1 390px;
-    }
+    .filtros { flex: 0 1 390px; }
 
     .vacio {
         border: none;
         border-radius: 0;
     }
 
-    .error-panel {
-        margin: 14px;
-    }
+    .error-panel { margin: 14px; }
 
-    .tabla-envoltura {
-        overflow-x: auto;
-    }
+    .tabla-envoltura { overflow-x: auto; }
 
     /* `fixed` respeta los anchos del colgroup al pie de la letra y reparte
        el 100% del ancho disponible entre las siete columnas. */
     table {
+        width: 100%;
+        border-collapse: collapse;
         table-layout: fixed;
         min-width: 940px;
     }
 
-    .c-cuenta {
-        width: 26%;
-    }
-
-    .c-rol {
-        width: 15%;
-    }
-
-    .c-estado {
-        width: 11%;
-    }
-
-    .c-acceso {
-        width: 14%;
-    }
-
-    .c-boletas {
-        width: 7%;
-    }
-
-    .c-vendido {
-        width: 13%;
-    }
-
-    .c-acciones {
-        width: 14%;
-    }
+    .c-cuenta { width: 26%; }
+    .c-rol { width: 15%; }
+    .c-estado { width: 11%; }
+    .c-acceso { width: 14%; }
+    .c-boletas { width: 7%; }
+    .c-vendido { width: 13%; }
+    .c-acciones { width: 14%; }
 
     tbody tr {
         /* Altura fija: todas las filas comparten el mismo eje horizontal
            tenga o no datos cada celda. */
         height: 64px;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--border);
     }
 
-    tbody tr:last-child {
-        border-bottom: 0;
+    tbody tr:last-child { border-bottom: 0; }
+
+    tr.inactiva .persona,
+    tr.inactiva .dato {
+        opacity: 0.6;
+        transition: opacity 0.24s ease;
     }
 
-    .fila td {
-        transition: background-color 0.16s ease;
-    }
+    .fila td { transition: background-color 0.16s ease; }
 
-    tbody tr:hover {
-        background: #fcfcfd;
-    }
+    tbody tr:hover { background: var(--surface-2); }
 
     th {
         padding: 11px 12px;
-        background: #f8fafc;
-        border-bottom: 1px solid #e2e8f0;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
         font-size: 0.66rem;
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #94a3b8;
+        color: var(--text-muted);
     }
 
     td {
         padding: 8px 12px;
         vertical-align: middle;
+        font-size: 0.875rem;
+        color: var(--text);
         /* Con `fixed` nada puede estirar una columna: lo que no entra se
            corta con puntos suspensivos en vez de romper el reparto. */
         overflow: hidden;
@@ -1896,9 +1923,7 @@ label {
     }
 
     th,
-    td {
-        text-align: center;
-    }
+    td { text-align: center; }
 
     /* El bloque tiene ancho propio y se centra como bloque; adentro el
        contenido va a la izquierda. Si se centrara por su contenido, un
@@ -1932,18 +1957,14 @@ label {
     /* Todos los controles de la fila miden 36px de alto y tienen ancho
        declarado, así comparten eje vertical y horizontal entre filas. */
     .rol-envoltura {
-        display: block;
         width: 100%;
         max-width: 150px;
         margin: 0 auto;
     }
 
-    .rol-envoltura::after {
-        right: 14px;
-    }
+    .rol-envoltura::after { right: 14px; }
 
     .select-rol {
-        width: 100%;
         min-height: 36px;
         padding: 0 32px 0 14px;
         font-size: 0.8rem;
@@ -1956,9 +1977,7 @@ label {
         text-align-last: center;
     }
 
-    .select-rol:hover:not(:disabled) {
-        border-color: var(--rol-linea);
-    }
+    .select-rol:hover:not(:disabled) { border-color: var(--rol-linea); }
 
     .estado {
         justify-content: center;
@@ -1967,9 +1986,6 @@ label {
         max-width: 104px;
         height: 36px;
         margin: 0 auto;
-        padding: 0;
-        background: transparent;
-        border-radius: 0;
         font-size: 0.8rem;
     }
 
@@ -1978,62 +1994,34 @@ label {
         height: 16px;
     }
 
-    .es-activa {
-        color: #047857;
-    }
-
-    .es-bloqueada {
-        color: #94a3b8;
-    }
-
-    /* En la tabla el rótulo lo pone el encabezado de la columna, y el
-       texto de los botones lo pone el `title` */
-    .ico-dato,
-    .texto-accion {
-        display: none;
-    }
-
-    .valor {
-        font-size: inherit;
-    }
-
-    td[data-label="Último acceso"] {
-        color: #64748b;
+    .col-acceso {
+        color: var(--text-muted);
         font-size: 0.82rem;
     }
 
     /* El tercer botón es un ícono igual que los otros dos, pero con el
-       color de su acción: rojo para bloquear, verde para reactivar. */
-    .btn-bloqueo {
-        border-color: #F7C1C1;
-        color: #A32D2D;
-    }
-
+       color de su acción. */
     .btn-bloqueo:hover:not(:disabled) {
-        border-color: #E24B4A;
-        background: #FCEBEB;
-        color: #A32D2D;
+        border-color: var(--danger);
+        background: var(--danger-soft);
+        color: var(--danger);
     }
 
     .btn-bloqueo.reactivar {
-        border-color: #9FE1CB;
         background: transparent;
-        color: #0F6E56;
     }
 
     .btn-bloqueo.reactivar:hover:not(:disabled) {
-        border-color: #1D9E75;
-        background: #E1F5EE;
-        color: #0F6E56;
+        border-color: var(--success);
+        background: var(--success-soft);
+        color: var(--success);
     }
 
-    .acciones-col {
-        overflow: visible;
-    }
+    .acciones-col { overflow: visible; }
 
     /* Tres carriles iguales. `grid-column: auto` es obligatorio: sin eso
-       el botón de bloqueo hereda el `1 / -1` de la tarjeta móvil y se monta
-       en una segunda fila debajo de los íconos. */
+       el botón de bloqueo hereda el `1 / -1` de la tarjeta y se monta en
+       una segunda fila debajo de los íconos. */
     .acciones {
         display: grid;
         grid-template-columns: repeat(3, 36px);
@@ -2041,14 +2029,11 @@ label {
         justify-content: center;
         align-items: center;
         width: auto;
-        padding-top: 0;
-        border-top: none;
+        margin-top: 0;
     }
 
     .btn-bloqueo,
-    .propia {
-        grid-column: auto;
-    }
+    .propia { grid-column: auto; }
 
     /* En la cuenta propia el tercer carril queda vacío, para que los dos
        íconos no se corran de lugar respecto de las otras filas. */
@@ -2068,16 +2053,6 @@ label {
         color: var(--rol-linea);
     }
 
-    /* El rótulo del ícono solo existe en móvil, donde no hay title útil */
-    .rotulo {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0 0 0 0);
-        white-space: nowrap;
-    }
-
     .btn-mini {
         min-height: 36px;
         padding: 0 0.6rem;
@@ -2095,21 +2070,19 @@ label {
     .avatar,
     .opcion-rol,
     .atenuada,
+    .chevron,
     .fila td,
     tr.inactiva .persona,
-    tr.inactiva .dato {
-        transition: none;
-    }
+    tr.inactiva .dato { transition: none; }
 
     .al-entrar,
     .fila,
     .fila.resaltada,
     .fila.resaltada td,
+    .cuenta.resaltada,
     .destella,
     .spinner,
-    .btn-icono.ocupado {
-        animation: none;
-    }
+    .btn-icono.ocupado { animation: none; }
 
     .cambio-enter-active,
     .cambio-leave-active,
@@ -2120,16 +2093,10 @@ label {
     .modal-enter-active .modal,
     .modal-leave-active .modal,
     .aviso-enter-active,
-    .aviso-leave-active {
-        transition: none;
-    }
+    .aviso-leave-active { transition: none; }
 
-    .rol-tarjeta:hover {
-        transform: none;
-    }
+    .rol-tarjeta:hover { transform: none; }
 
-    .atenuada {
-        opacity: 1;
-    }
+    .atenuada { opacity: 1; }
 }
 </style>

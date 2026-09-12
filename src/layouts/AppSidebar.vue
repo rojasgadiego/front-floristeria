@@ -51,8 +51,8 @@
           </div>
 
           <div v-if="!colapsadoVisual" class="logo-texto">
-            <span class="logo-nombre">Floristería Colibrí</span>
-            <span class="logo-bajada">ERP &amp; Punto de Venta</span>
+            <span class="logo-nombre">Colibrí</span>
+            <!-- <span class="logo-bajada">ERP &amp; Punto de Venta</span> -->
           </div>
         </div>
 

@@ -113,6 +113,19 @@ export default {
             }
         },
 
+        /**
+         * Los últimos movimientos de un producto. Responde "por qué bajó el
+         * stock" sin salir de la pantalla.
+         *
+         * No toca el state: el resultado vive en el acordeón que lo pidió.
+         * Guardarlo dejaría "los movimientos del último producto abierto" vivos
+         * después de cerrarlo, y al abrir otro se vería un instante lo del
+         * anterior.
+         */
+        movimientosDe(_, { productoId, tamano = 6, signal } = {}) {
+            return inventarioService.movimientos({ productoId, tamano }, { signal })
+        },
+
         async crearCategoria({ commit }, { nombre, orden = 0 }) {
             const creada = await inventarioService.crearCategoria({ nombre, orden })
             commit('AGREGAR_CATEGORIA', creada)

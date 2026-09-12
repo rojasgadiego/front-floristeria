@@ -2,6 +2,7 @@
     <div class="inv-bodega">
         <EncabezadoSeccion titulo="Inventario Bodega" :volver-a="{ name: 'Inventario' }">
             <template v-if="puedeEditar" #acciones>
+                <button class="btn btn-linea" @click="abrirRamo(null)">💐 Nuevo ramo</button>
                 <button class="btn" @click="abrirNuevo">＋ Nuevo producto</button>
             </template>
         </EncabezadoSeccion>
@@ -46,8 +47,7 @@
                             <!-- El primero es el que toca por FIFO: lo que vence
                                  antes se vende primero. Se puede cambiar, pero
                                  no hace falta pensarlo. -->
-                            <select id="t-lote" class="campo" v-model="traspaso.loteCodigo"
-                                @change="ajustarMaximo">
+                            <select id="t-lote" class="campo" v-model="traspaso.loteCodigo" @change="ajustarMaximo">
                                 <option v-for="(l, i) in traspaso.lotes" :key="l.codigo" :value="l.codigo">
                                     {{ i === 0 ? '▸ ' : '' }}{{ l.codigo }} ·
                                     {{ l.varasDisponibles }} varas
@@ -74,8 +74,8 @@
 
                         <div class="grupo">
                             <label for="t-cant">Cantidad</label>
-                            <input id="t-cant" ref="campoTraspaso" class="campo dato" type="number"
-                                min="1" :max="maximo" v-model.number="traspaso.cantidad">
+                            <input id="t-cant" ref="campoTraspaso" class="campo dato" type="number" min="1"
+                                :max="maximo" v-model.number="traspaso.cantidad">
                             <p class="ayuda">
                                 Se crea una partida con su propia etiqueta QR. El vendedor
                                 la escanea para vender, y así el sistema sabe de qué balde
@@ -87,8 +87,7 @@
 
                 <div class="modal-pie">
                     <button class="btn btn-linea" @click="traspaso = null">Cancelar</button>
-                    <button class="btn" :disabled="guardando || !traspaso.lotes.length"
-                        @click="confirmarTraspaso">
+                    <button class="btn" :disabled="guardando || !traspaso.lotes.length" @click="confirmarTraspaso">
                         {{ guardando ? 'Bajando…' : 'Bajar' }}
                     </button>
                 </div>
@@ -131,6 +130,11 @@
         </div>
 
         <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+
+        <ModalProducto v-if="formularioAbierto" :producto="editando" @cerrar="cerrarFormulario"
+            @guardado="alGuardarProducto" />
+
+        <ModalRamo v-if="ramo" :producto="ramo.producto" @cerrar="ramo = null" @guardado="alGuardarRamo" />
     </div>
 </template>
 
@@ -144,12 +148,13 @@ import ModalArmado from '@/features/inventario/components/ModalArmado.vue'
 import { mostradorService } from '@/features/ventas/services/mostrador.service'
 import { lotesService } from '@/features/lotes/services/lotes.service'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
+import ModalProducto from '@/features/inventario/components/ModalProducto.vue'
+import ModalRamo from '@/features/inventario/components/ModalRamo.vue'
 
 export default {
     name: 'InventarioBodega',
-    components: { TablaProductos, EncabezadoSeccion, ModalArmado },
-
-    setup () {
+    components: { TablaProductos, EncabezadoSeccion, ModalArmado, ModalProducto, ModalRamo },
+    setup() {
         const store = useStore()
         const router = useRouter()
 
@@ -165,6 +170,16 @@ export default {
         const partida = ref(null)
         const guardando = ref(false)
         const campoTraspaso = ref(null)
+
+        const ramo = ref(null)
+        const abrirRamo = (p) => { ramo.value = { producto: p } }
+
+        const alGuardarRamo = (p) => {
+            ramo.value = null
+            avisar(`${p.nombre} guardado`)
+            resalte.marcar(p.id)
+            store.dispatch('productos/cargar')
+        }
 
         /**
          * Al abrir el modal se cargan los lotes activos del producto. El
@@ -246,7 +261,16 @@ export default {
             }
         }
 
-        
+        const formularioAbierto = computed(() => store.getters['productos/formularioAbierto'])
+        const editando = computed(() => store.getters['productos/editando'])
+        const cerrarFormulario = () => store.dispatch('productos/cerrarFormulario')
+
+        const alGuardarProducto = (p) => {
+            cerrarFormulario()
+            avisar(`${p.nombre} guardado`)
+            resalte.marcar(p.id)
+        }
+
 
         /* La hoja de etiquetas la arma la vista de etiquetas, que tiene los
            tres formatos y el QR. Acá solo se navega hacia allá. */
@@ -267,7 +291,7 @@ export default {
             { day: '2-digit', month: 'short' })
 
 
-                /* ---------------- Carga ---------------- */
+        /* ---------------- Carga ---------------- */
         let control = null
 
         onMounted(() => {
@@ -297,7 +321,8 @@ export default {
             traspaso, partida, guardando, campoTraspaso,
             loteElegido, maximo, ajustarMaximo,
             abrirTraspaso, confirmarTraspaso, imprimirEtiqueta,
-            alArmar, aviso, fecha
+            formularioAbierto, editando, cerrarFormulario, alGuardarProducto,
+            alArmar, aviso, fecha, abrirRamo, ramo, alGuardarRamo
         }
     }
 }
@@ -320,29 +345,33 @@ export default {
     background: rgba(0, 0, 0, .5);
 }
 
-.modal.angosto { max-width: 360px; }
+.modal.angosto {
+    max-width: 360px;
+}
 
-.cen { text-align: center; }
+.cen {
+    text-align: center;
+}
 
 .cargando {
-  padding: 20px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: .85rem;
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: .85rem;
 }
 
 /* El código en grande: es lo que se va a escribir en el balde si la
    impresora falla. */
 .codigo-partida {
-  font-family: var(--font-mono);
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: .06em;
-  color: var(--accent-text);
-  padding: 14px;
-  margin-bottom: 12px;
-  background: var(--accent-soft);
-  border-radius: var(--r-sm);
+    font-family: var(--font-mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    color: var(--accent-text);
+    padding: 14px;
+    margin-bottom: 12px;
+    background: var(--accent-soft);
+    border-radius: var(--r-sm);
 }
 
 .modal {

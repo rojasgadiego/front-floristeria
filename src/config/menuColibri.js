@@ -74,14 +74,6 @@ export const MENU_COLIBRI = [
     roles: ['Admin', 'Bodega'],
     icon: ico('<path d="M3 13.5V8.5h11v8H3z"/><path d="M14 11h3.5l2.5 3v2.5h-6z"/><circle cx="7.5" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>')
   },
-  // {
-  //   path: '/lotes',
-  //   clave: 'lotes',
-  //   name: 'Lotes',
-  //   seccion: 'Catálogo',
-  //   roles: ['Admin', 'Bodega'],
-  //   icon: ico('<path d="M4 7.5 12 4l8 3.5v9L12 20l-8-3.5z"/><path d="M4 7.5 12 11l8-3.5M12 11v9"/><path d="M8 5.8v3.6"/>')
-  // },
   {
     path: '/mermas',
     clave: 'mermas',
@@ -116,22 +108,22 @@ export const MENU_COLIBRI = [
   //   roles: ['Admin', 'Bodega'],
   //   icon: ico('<path d="M4 20h16"/><path d="M7.5 20v-5.5M12 20V7M16.5 20v-9"/>')
   // },
-  // {
-  //   path: '/usuarios',
-  //   clave: 'usuarios',
-  //   name: 'Equipo y Accesos',
-  //   seccion: 'Gestión',
-  //   roles: ['Admin'],
-  //   icon: ico('<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-6.2 6.2-6.2s6.2 2.8 6.2 6.2"/><path d="M15.8 5.3a3.4 3.4 0 010 5.4"/><path d="M17.6 14.2c2 .9 3.6 2.9 3.6 5.2"/>')
-  // },
-  // {
-  //   path: '/configuracion',
-  //   clave: 'configuracion',
-  //   name: 'Configuración',
-  //   seccion: 'Gestión',
-  //   roles: ['Admin'],
-  //   icon: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/>')
-  // }
+  {
+    path: '/usuarios',
+    clave: 'usuarios',
+    name: 'Equipo y Accesos',
+    seccion: 'Gestión',
+    roles: ['Admin'],
+    icon: ico('<circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-6.2 6.2-6.2s6.2 2.8 6.2 6.2"/><path d="M15.8 5.3a3.4 3.4 0 010 5.4"/><path d="M17.6 14.2c2 .9 3.6 2.9 3.6 5.2"/>')
+  },
+  {
+    path: '/configuracion',
+    clave: 'configuracion',
+    name: 'Configuración',
+    seccion: 'Gestión',
+    roles: ['Admin'],
+    icon: ico('<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9"/>')
+  }
 ]
 /**
  * Filtra el menú con los permisos que mandó el servidor.
