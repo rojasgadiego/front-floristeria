@@ -17,7 +17,7 @@
         </svg>
       </div>
 
-      <h1 class="brand-name">Floristería Colibrí</h1>
+      <h1 class="brand-name">Colibrí</h1>
 
       <form @submit.prevent="handleSubmit" class="login-form">
 

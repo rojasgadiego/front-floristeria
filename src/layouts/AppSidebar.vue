@@ -33,6 +33,10 @@
       @keydown="alPresionarTecla"
     >
       <!-- ---------- Cabecera / marca ---------- -->
+      <!-- Ningún texto usa v-if: al montarse y desmontarse empujaba el resto
+           del panel y la expansión se veía como un temblor. Ahora todo vive
+           siempre en el DOM y solo cambia de opacidad; el recorte lo hace el
+           overflow del contenedor. -->
       <div class="sidebar-header">
         <div class="logo-container">
           <div class="logo-icon" aria-hidden="true">
@@ -50,7 +54,7 @@
             </svg>
           </div>
 
-          <div v-if="!colapsadoVisual" class="logo-texto">
+          <div class="logo-texto texto-plegable">
             <span class="logo-nombre">Colibrí</span>
             <!-- <span class="logo-bajada">ERP &amp; Punto de Venta</span> -->
           </div>
@@ -75,10 +79,14 @@
       <nav class="sidebar-nav" aria-label="Menú principal">
         <ul>
           <template v-for="seccion in secciones" :key="seccion.nombre">
-            <li v-if="!colapsadoVisual" class="seccion-titulo" aria-hidden="true">
-              {{ seccion.nombre }}
+            <!-- Un solo <li> de alto fijo para el encabezado de sección.
+                 Antes eran dos elementos distintos (título o separador) y el
+                 cambio de alto reacomodaba toda la lista de abajo. La línea
+                 va en position:absolute para no aportar alto propio. -->
+            <li class="seccion-encabezado" aria-hidden="true">
+              <span class="seccion-texto texto-plegable">{{ seccion.nombre }}</span>
+              <span class="seccion-linea"></span>
             </li>
-            <li v-else class="seccion-separador" aria-hidden="true"></li>
 
             <li v-for="item in seccion.items" :key="item.path">
               <router-link
@@ -93,7 +101,7 @@
                      habría que renderizarlo como <svg> con solo el path, nunca
                      markup completo (riesgo XSS). -->
                 <span class="menu-icon" v-html="item.icon"></span>
-                <span v-if="!colapsadoVisual" class="menu-text">{{ item.name }}</span>
+                <span class="menu-text texto-plegable">{{ item.name }}</span>
               </router-link>
             </li>
           </template>
@@ -101,16 +109,18 @@
       </nav>
 
       <!-- ---------- Pie: usuario y salida ---------- -->
+      <!-- Avatar y datos conviven en una sola fila de alto constante. Antes
+           eran dos bloques alternativos de alturas distintas y el botón de
+           salir saltaba en cada expansión. -->
       <div class="sidebar-footer">
-        <div class="user-avatar-container" v-if="colapsadoVisual">
-          <div class="user-avatar" :title="nombreUsuario">
+        <div class="user-block">
+          <div class="user-avatar" :title="colapsadoVisual ? nombreUsuario : null">
             {{ userInitials }}
           </div>
-        </div>
-
-        <div class="user-info" v-else>
-          <div class="user-name">{{ nombreUsuario }}</div>
-          <div class="user-role">{{ rolUsuario }}</div>
+          <div class="user-info texto-plegable">
+            <div class="user-name">{{ nombreUsuario }}</div>
+            <div class="user-role">{{ rolUsuario }}</div>
+          </div>
         </div>
 
         <button
@@ -124,12 +134,13 @@
                stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
           </svg>
-          <span v-if="!colapsadoVisual" class="logout-text">Cerrar sesión</span>
+          <span class="logout-text texto-plegable">Cerrar sesión</span>
         </button>
       </div>
     </aside>
   </Teleport>
 </template>
+
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
@@ -284,9 +295,15 @@ function alPresionarTecla (e) {
   --sb-accent:        var(--accent);
   --sb-accent-soft:   var(--accent-soft);
 
+  /* Eje vertical sobre el que se alinean TODOS los iconos (logo, menú,
+     avatar, salir). Coincide con el centro del panel colapsado, así que al
+     expandir ningún icono se mueve un solo píxel: solo crece el borde
+     derecho. Los padding de abajo se calculan desde aquí, no a mano. */
+  --sb-eje: 38px;
+
   background-color: var(--sb-bg);
   color: var(--sb-text);
-  width: 260px;
+  width: 230px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -302,17 +319,34 @@ function alPresionarTecla (e) {
               border-color var(--t-med);
 }
 
-.sidebar.collapsed { width: 76px; }
+.sidebar.collapsed { width: calc(var(--sb-eje) * 2); }  /* 76px */
+
+/* ---------- Textos plegables ----------
+   Regla única para todo lo que aparece y desaparece. Al expandir el texto
+   entra con un pequeño retraso, cuando el ancho ya casi terminó de crecer;
+   al colapsar se va de inmediato para que no se vea recortado contra el
+   borde. El elemento nunca deja de ocupar su lugar en el layout. */
+.texto-plegable {
+  opacity: 1;
+  transition: opacity 0.16s ease 0.12s;
+}
+
+.sidebar.collapsed .texto-plegable {
+  opacity: 0;
+  transition-delay: 0s;
+  pointer-events: none;
+}
 
 /* ---------- Cabecera ---------- */
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  min-height: 5cap;
+  min-height: 68px;          /* fijo: 5cap variaba con la fuente cargada */
   padding: 16px 14px;
+  padding-left: calc(var(--sb-eje) - 17.5px);   /* centra el logo de 35px */
   border-bottom: 1px solid var(--sb-border);
+  overflow: hidden;          /* recorta el nombre en vez de ensanchar */
 }
 
 .logo-container {
@@ -322,8 +356,6 @@ function alPresionarTecla (e) {
   width: 100%;
   min-width: 0;
 }
-
-.sidebar.collapsed .logo-container { justify-content: center; }
 
 .logo-icon {
   display: flex;
@@ -400,9 +432,19 @@ function alPresionarTecla (e) {
 .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
 .sidebar-nav li { padding: 0 10px; margin-bottom: 2px; }
 
-.seccion-titulo {
-  margin: 14px 0 6px;
+/* Alto fijo pase lo que pase: es lo que impide que la lista se reacomode. */
+.seccion-encabezado {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin: 8px 0 2px;
   padding: 0 22px !important;
+}
+
+.seccion-encabezado:first-child { margin-top: 2px; }
+
+.seccion-texto {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -411,42 +453,48 @@ function alPresionarTecla (e) {
   white-space: nowrap;
 }
 
-.seccion-separador {
+/* Sustituye al antiguo <li class="seccion-separador">: aparece cuando el
+   texto se va, pero sin ocupar alto propio. */
+.seccion-linea {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
   height: 1px;
-  margin: 10px 14px !important;
-  padding: 0 !important;
-  background-color: var(--sb-border);   /* antes: rgba(255,255,255,0.1) */
+  background-color: var(--sb-border);
+  opacity: 0;
+  transition: opacity 0.16s ease;
 }
 
-.seccion-separador:first-child,
-.seccion-titulo:first-child { margin-top: 4px; }
+.sidebar.collapsed .seccion-linea { opacity: 1; transition-delay: 0.1s; }
 
 .sidebar-nav a {
   display: flex;
   align-items: center;
   min-height: 44px;
   padding: 10px 12px;
+  padding-left: calc(var(--sb-eje) - 20px);  /* 10px del <li> + medio icono */
   border-radius: 8px;
   border-left: 3px solid transparent;
   color: var(--sb-text);
   text-decoration: none;
+  overflow: hidden;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-.sidebar.collapsed .sidebar-nav a { justify-content: center; padding: 10px; }
 .sidebar-nav a:hover { background-color: var(--sb-bg-hover); color: var(--sb-text-strong); }
 .sidebar-nav a:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: -2px; }
 
 .sidebar-nav a.active {
   background-color: var(--sb-bg-active);
-  border-left-color: var(--sb-active-txt);   /* antes: #ffffff */
-  color: var(--sb-active-txt);               /* antes: #ffffff */
+  border-left-color: var(--sb-active-txt);
+  color: var(--sb-active-txt);
   font-weight: 600;
 }
 
 .sidebar.collapsed .sidebar-nav a.active {
   border-left-color: transparent;
-  box-shadow: inset 3px 0 0 var(--sb-active-txt);   /* antes: #ffffff */
+  box-shadow: inset 3px 0 0 var(--sb-active-txt);
 }
 
 .menu-icon {
@@ -456,8 +504,8 @@ function alPresionarTecla (e) {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  margin-right: 14px;
-  color: inherit;   /* ✔ hereda color → iconos correctos en ambos temas */
+  margin-right: 14px;   /* constante: si cambia, el icono se desliza */
+  color: inherit;
 }
 
 /* asegura que los SVG dentro del icono usen currentColor */
@@ -467,9 +515,8 @@ function alPresionarTecla (e) {
   stroke: currentColor;   /* si tus iconos son de RELLENO cambia a: fill: currentColor; */
 }
 
-.sidebar.collapsed .menu-icon { margin-right: 0; }
-
 .menu-text {
+  flex: 1;
   font-size: 0.92rem;
   line-height: 1.25;
   min-width: 0;
@@ -481,35 +528,40 @@ function alPresionarTecla (e) {
 /* ---------- Pie ---------- */
 .sidebar-footer {
   padding: 14px;
-  border-top: 1px solid var(--sb-border);   /* antes: rgba(255,255,255,0.1) */
+  border-top: 1px solid var(--sb-border);
   display: flex;
   flex-direction: column;
-  align-items: center;
   padding-bottom: max(14px, env(safe-area-inset-bottom));
 }
 
-.user-info {
+.user-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   min-width: 0;
+  padding: 0 0 10px;
+  padding-left: calc(var(--sb-eje) - 14px - 18px);  /* centra el avatar */
   margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px dashed var(--sb-border);   /* antes: rgba(255,255,255,0.15) */
+  border-bottom: 1px dashed var(--sb-border);
+  overflow: hidden;
 }
-
-.user-avatar-container { display: flex; justify-content: center; margin-bottom: 12px; }
 
 .user-avatar {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   border-radius: 50%;
   background-color: var(--sb-accent);
-  color: var(--accent-contrast);   /* antes: #ffffff */
+  color: var(--accent-contrast);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 0.85rem;
 }
+
+.user-info { min-width: 0; }
 
 .user-name {
   font-weight: 600;
@@ -521,16 +573,23 @@ function alPresionarTecla (e) {
   text-overflow: ellipsis;
 }
 
-.user-role { font-size: 0.75rem; color: var(--sb-text-dim); }
+.user-role {
+  font-size: 0.75rem;
+  color: var(--sb-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .logout-button {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;   /* centrado movía el icono al colapsar */
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
-  border: 1px solid var(--sb-border);   /* antes: rgba(255,255,255,0.15) */
+  padding-left: calc(var(--sb-eje) - 14px - 9px);
+  border: 1px solid var(--sb-border);
   border-radius: 8px;
   background-color: transparent;
   color: var(--sb-text);
@@ -538,14 +597,16 @@ function alPresionarTecla (e) {
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
   transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
 .logout-button:hover {
-  background-color: var(--danger-soft);   /* antes: rgba(239,68,68,0.18) */
-  border-color: var(--danger-border);     /* antes: rgba(239,68,68,0.5)  */
-  color: var(--danger);                    /* antes: #fecaca */
+  background-color: var(--danger-soft);
+  border-color: var(--danger-border);
+  color: var(--danger);
 }
 
 .logout-button:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: 2px; }
@@ -563,10 +624,10 @@ function alPresionarTecla (e) {
   justify-content: center;
   width: 44px;
   height: 44px;
-  border: 1px solid var(--border);      /* antes: fallback #e9e0da */
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface);           /* antes: fallback #ffffff */
-  color: var(--text);                   /* antes: fallback #2b2320 */
+  background: var(--surface);
+  color: var(--text);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -609,11 +670,19 @@ function alPresionarTecla (e) {
 .sidebar.is-cajon .logo-nombre { font-size: 0.88rem; }
 .sidebar.is-cajon.is-open { transform: translateX(0); }
 
+/* El cajón siempre va ancho, así que ignora el plegado aunque la clase
+   collapsed llegue a aplicarse (la regla de arriba deja entrever que puede
+   pasar). Sin esto el menú móvil se vería vacío. */
+.sidebar.is-cajon.collapsed .texto-plegable { opacity: 1; pointer-events: auto; }
+.sidebar.is-cajon.collapsed .seccion-linea { opacity: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .sidebar,
   .sidebar-backdrop,
   .sidebar-nav a,
-  .logout-button { transition: none; }
+  .logout-button,
+  .texto-plegable,
+  .seccion-linea { transition: none; }
 }
 </style>
 

@@ -1,524 +1,488 @@
 <template>
-    <div class="prod">
-        <div v-if="error" class="banda banda-error">
-            <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
-            <button class="btn btn-mini" @click="recargar">Reintentar</button>
-        </div>
-
-        <div v-if="foco === 'bodega' && esAdmin" class="kpis">
-            <div class="kpi destacado">
-                <div class="rot">Productos en catálogo</div>
-                <div class="val">{{ total }}</div>
-                <div class="pie">{{ filtro.activo === null ? 'Incluye desactivados' : 'Solo activos' }}</div>
-            </div>
-            <div class="kpi" :class="{ alerta: bajoMinimo.length }">
-                <div class="rot">Hay que comprar</div>
-                <div class="val">{{ bajoMinimo.length }}</div>
-                <div class="pie">{{ bajoMinimo.length ? 'Bajo el mínimo' : 'Todo abastecido' }}</div>
-            </div>
-        </div>
-
-        <div v-if="foco === 'bodega' && bajoMinimo.length" class="banda banda-aviso">
-            <span class="banda-texto">
-                <span class="banda-rotulo">Reponer</span>
-                {{bajoMinimo.slice(0, 5).map(p => p.nombre).join(', ')}}
-                <span v-if="bajoMinimo.length > 5" class="banda-extra">
-                    y {{ bajoMinimo.length - 5 }} más
-                </span>
-            </span>
-        </div>
-
-        <!-- Filtros -->
-        <div class="barra-filtros">
-            <div class="buscador">
-                <span aria-hidden="true">🔎</span>
-                <input v-model="busqueda" placeholder="Buscar por nombre o código…" aria-label="Buscar producto">
-                <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
-            </div>
-
-            <div v-if="foco === 'bodega'" class="segmentado">
-                <button v-for="t in FILTRO_TIPOS" :key="String(t.valor)" :class="{ on: filtro.tipo === t.valor }"
-                    @click="filtrar({ tipo: t.valor })">
-                    {{ t.texto }}
-                </button>
-            </div>
-
-            <select v-if="foco === 'bodega'" class="campo campo-corto" :value="filtro.categoriaId ?? ''"
-                @change="filtrar({ categoriaId: $event.target.value ? Number($event.target.value) : null })"
-                aria-label="Categoría">
-                <option value="">Todas las categorías</option>
-                <option v-for="c in categorias" :key="c.id" :value="c.id">
-                    {{ c.nombre }} ({{ c.productos }})
-                </option>
-            </select>
-
-            <label v-if="foco === 'bodega'" class="check">
-                <input type="checkbox" :checked="filtro.bajoMinimo"
-                    @change="filtrar({ bajoMinimo: $event.target.checked })">
-                <span>Solo bajo mínimo</span>
-            </label>
-
-            <label v-if="foco === 'bodega'" class="check">
-                <input type="checkbox" :checked="filtro.activo === null"
-                    @change="filtrar({ activo: $event.target.checked ? null : true })">
-                <span>Ver desactivados</span>
-            </label>
-
-            <label v-if="foco === 'venta'" class="check">
-                <input type="checkbox" v-model="soloConStock">
-                <span>Solo con stock en mostrador</span>
-            </label>
-        </div>
-
-        <!-- Tabla -->
-        <div v-if="cargando && !productosVista.length" class="vacio">Cargando catálogo…</div>
-
-        <div v-else-if="!productosVista.length" class="vacio">
-            <strong>{{ mensajeVacio.titulo }}</strong>
-            {{ mensajeVacio.detalle }}
-        </div>
-
-        <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
-            <table>
-                <thead>
-                    <tr>
-                        <th class="col-producto izq">Producto</th>
-                        <th v-if="foco === 'bodega'" class="col-categoria izq">Categoría</th>
-                        <th v-if="foco === 'bodega' && esAdmin" class="col-dinero">Costo</th>
-                        <th>Unidad</th>
-                        <th v-if="foco === 'bodega'">Ramo</th>
-                        <th v-if="foco === 'bodega'">Liquid.</th>
-                        <th v-if="foco === 'bodega' && esAdmin">Margen</th>
-                        <th v-if="foco === 'bodega'" class="col-bodega">Bodega</th>
-                        <th class="col-venta">Venta</th>
-                        <th class="acciones-col centro">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template v-for="(p, idx) in productosVista" :key="p.id">
-                        <tr class="fila" :style="{ '--i': Math.min(idx, 12) }"
-                            :class="{ inactiva: !p.activo, resaltada: p.id === resalte?.id, abierta: abiertoId === p.id }">
-
-                            <td class="col-producto">
-                                <!-- Misma acción en los dos anchos; cambia el reparto,
-                                     no lo que hace el botón. -->
-                                <button class="cab" :class="esMovil ? 'cab-movil' : 'cab-tabla'"
-                                    :aria-expanded="abiertoId === p.id" @click="alternar(p.id)">
-                                    <span class="chevron" :class="{ girado: abiertoId === p.id }"
-                                        aria-hidden="true">›</span>
-                                    <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
-                                    <span class="nombre">{{ p.nombre }}</span>
-
-                                    <!-- En escritorio el código y el tipo caben en la
-                                         celda; en móvil la cabecera queda mínima y esos
-                                         datos viven en la ficha del cuerpo. -->
-                                    <template v-if="!esMovil">
-                                        <span class="cod">{{ p.codigo }}</span>
-                                        <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"
-                                            :title="p.tipo"></span>
-                                    </template>
-
-                                    <span v-if="!p.activo" class="etiqueta et-gris">off</span>
-
-                                    <span v-if="esMovil" class="cantidad dato"
-                                        :class="foco === 'bodega' ? claseBodega(p) : ''">
-                                        {{ (foco === 'bodega' ? p.enBodega : p.enVenta) ?? 0 }}
-                                    </span>
-                                </button>
-                            </td>
-
-                            <!-- Bajo el breakpoint estas celdas no se renderizan: su
-                                 contenido pasa a la ficha del detalle, para que los dos
-                                 anchos muestren lo mismo al abrir. -->
-                            <template v-if="!esMovil">
-                                <td v-if="foco === 'bodega'" class="suave col-categoria">
-                                    {{ p.categoria || '—' }}
-                                </td>
-
-                                <!-- costoEfectivo lo resuelve el SP: costo en un simple,
-                                     costoArmado en un armado. -->
-                                <td v-if="foco === 'bodega' && esAdmin" class="der dato suave col-dinero">
-                                    <span v-if="p.costoEfectivo">{{ clp(p.costoEfectivo) }}</span>
-                                    <span v-else class="tenue">—</span>
-                                </td>
-
-                                <td class="der dato">{{ clp(p.precio) }}</td>
-
-                                <td v-if="foco === 'bodega'" class="der dato suave">
-                                    <span v-if="p.precioRamo">{{ clp(p.precioRamo) }}</span>
-                                    <span v-else class="tenue">—</span>
-                                </td>
-
-                                <td v-if="foco === 'bodega'" class="der dato suave">
-                                    <span v-if="p.precioLiquidacion">{{ clp(p.precioLiquidacion) }}</span>
-                                    <span v-else class="tenue">—</span>
-                                </td>
-
-                                <td v-if="foco === 'bodega' && esAdmin" class="der">
-                                    <span v-if="p.margen" class="chip-margen"
-                                        :class="p.margen < 25 ? 'margen-bajo' : 'margen-ok'">
-                                        {{ Number(p.margen).toFixed(0) }}%
-                                    </span>
-                                    <!-- Sin costo cargado no hay margen. Un 0% acá sería
-                                         peor que un guion: parecería que se vende a
-                                         pérdida cuando lo que falta es un dato. -->
-                                    <span v-else class="tenue">—</span>
-                                </td>
-
-                                <td v-if="foco === 'bodega'" class="der col-bodega">
-                                    <span class="dato" :class="claseBodega(p)"
-                                        :title="p.tipo === 'armado' ? 'unidades armadas' : `mínimo ${p.minimo}`">
-                                        {{ p.enBodega ?? 0 }}
-                                    </span>
-                                </td>
-
-                                <td class="der col-venta">
-                                    <span class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</span>
-                                    <span v-if="avisarSinBajar(p)" class="pin-bajar"
-                                        title="Hay en bodega sin bajar">↓</span>
-                                </td>
-
-                                <td class="acciones-col">
-                                    <div class="acciones">
-                                        <template v-if="foco === 'bodega' && puedeEditar">
-                                            <!-- Traspaso y retorno llevan color: son las
-                                                 dos acciones que mueven stock, y conviene
-                                                 que se distingan de editar o dar de baja. -->
-                                            <button v-if="p.enBodega > 0" class="btn-icono acc-bajar"
-                                                title="Bajar al mostrador" @click.stop="$emit('traspasar', p)">
-                                                <span aria-hidden="true">↓</span>
-                                            </button>
-                                            <button v-if="p.enVenta > 0" class="btn-icono acc-subir"
-                                                title="Devolver a bodega" @click.stop="$emit('retornar', p)">
-                                                <span aria-hidden="true">↑</span>
-                                            </button>
-                                            <span class="sep" aria-hidden="true"></span>
-
-                                            <button class="btn-icono" title="Editar" @click.stop="abrirEdicion(p)">
-                                                <span aria-hidden="true">✎</span>
-                                            </button>
-                                            <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
-                                                @click.stop="abrirBaja(p)">
-                                                <span aria-hidden="true">✕</span>
-                                            </button>
-                                            <button v-else class="btn btn-linea btn-mini"
-                                                @click.stop="cambiarEstado(p, true)">Reactivar</button>
-                                        </template>
-                                        <span v-else-if="foco === 'venta'" class="suave mini">
-                                            {{ p.enVenta ? 'disponible' : 'sin stock' }}
-                                        </span>
-                                        <span v-else class="suave mini">solo lectura</span>
-                                    </div>
-                                </td>
-                            </template>
-                        </tr>
-
-                        <!-- El detalle carga bajo demanda: pedir la receta y los
-                             lotes de diecisiete productos que nadie va a expandir
-                             sería trabajo perdido. -->
-                        <tr v-if="abiertoId === p.id" class="fila-detalle">
-                            <td :colspan="columnas">
-
-                                <!-- La ficha existe solo en móvil, y no es información
-                                     nueva: es lo que en escritorio se lee en las
-                                     columnas de la fila. -->
-                                <dl v-if="esMovil" class="ficha">
-                                    <div>
-                                        <dt>Código</dt>
-                                        <dd>
-                                            <span class="cod">{{ p.codigo }}</span>
-                                            <span class="punto"
-                                                :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"></span>
-                                            <span class="tipo-texto">{{ p.tipo }}</span>
-                                        </dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega'">
-                                        <dt>Categoría</dt>
-                                        <dd>{{ p.categoria || '—' }}</dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega'">
-                                        <dt>En bodega</dt>
-                                        <dd>
-                                            <b class="dato" :class="claseBodega(p)">{{ p.enBodega ?? 0 }}</b>
-                                            <span v-if="p.tipo === 'armado'" class="tenue"> · unidades armadas</span>
-                                            <span v-else-if="p.minimo" class="tenue"> · mínimo {{ p.minimo }}</span>
-                                        </dd>
-                                    </div>
-
-                                    <div>
-                                        <dt>En mostrador</dt>
-                                        <dd>
-                                            <b class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</b>
-                                            <span v-if="avisarSinBajar(p)" class="pin-bajar">
-                                                ↓ hay en bodega sin bajar
-                                            </span>
-                                        </dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega' && esAdmin">
-                                        <dt>Costo</dt>
-                                        <dd>
-                                            <span v-if="p.costoEfectivo" class="dato">{{ clp(p.costoEfectivo) }}</span>
-                                            <span v-else class="tenue">sin costo cargado</span>
-                                        </dd>
-                                    </div>
-
-                                    <div>
-                                        <dt>Precio unidad</dt>
-                                        <dd><b class="dato">{{ clp(p.precio) }}</b></dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega' && p.precioRamo">
-                                        <dt>Precio ramo</dt>
-                                        <dd class="dato">{{ clp(p.precioRamo) }}</dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega' && p.precioLiquidacion">
-                                        <dt>Liquidación</dt>
-                                        <dd class="dato">{{ clp(p.precioLiquidacion) }}</dd>
-                                    </div>
-
-                                    <div v-if="foco === 'bodega' && esAdmin">
-                                        <dt>Margen</dt>
-                                        <dd>
-                                            <span v-if="p.margen" class="chip-margen"
-                                                :class="p.margen < 25 ? 'margen-bajo' : 'margen-ok'">
-                                                {{ Number(p.margen).toFixed(0) }}%
-                                            </span>
-                                            <span v-else class="tenue">—</span>
-                                        </dd>
-                                    </div>
-                                </dl>
-
-                                <!-- El mismo componente en los dos anchos: la receta de
-                                     un armado y los lotes de un simple se ven igual en
-                                     el teléfono que en el escritorio. -->
-                                <DetalleProducto :producto="p" :puede-editar="puedeEditar" @editar="abrirEdicion"
-                                    @armar="$emit('armar', $event)" @traspasar="$emit('traspasar', $event)" />
-
-                                <!-- En escritorio las acciones están en su columna; acá
-                                     no hay columna donde ponerlas. -->
-                                <div v-if="esMovil && foco === 'bodega' && puedeEditar"
-                                    class="acciones acciones-movil">
-                                    <button v-if="p.enBodega > 0" class="btn-icono acc-bajar"
-                                        title="Bajar al mostrador" @click.stop="$emit('traspasar', p)">
-                                        <span aria-hidden="true">↓</span>
-                                    </button>
-                                    <button v-if="p.enVenta > 0" class="btn-icono acc-subir"
-                                        title="Devolver a bodega" @click.stop="$emit('retornar', p)">
-                                        <span aria-hidden="true">↑</span>
-                                    </button>
-                                    <button class="btn-icono" title="Editar" @click.stop="abrirEdicion(p)">
-                                        <span aria-hidden="true">✎</span>
-                                    </button>
-                                    <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
-                                        @click.stop="abrirBaja(p)">
-                                        <span aria-hidden="true">✕</span>
-                                    </button>
-                                    <button v-else class="btn btn-linea btn-mini"
-                                        @click.stop="cambiarEstado(p, true)">Reactivar</button>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
-        </div>
-
-        <p v-if="foco === 'bodega' && totalPaginas > 1" class="paginador">
-            <button class="btn btn-linea btn-mini" :disabled="filtro.pagina <= 1"
-                @click="filtrar({ pagina: filtro.pagina - 1 })">Anterior</button>
-            <span class="mini suave">Página {{ filtro.pagina }} de {{ totalPaginas }} · {{ total }} productos</span>
-            <button class="btn btn-linea btn-mini" :disabled="filtro.pagina >= totalPaginas"
-                @click="filtrar({ pagina: filtro.pagina + 1 })">Siguiente</button>
-        </p>
+  <div class="prod">
+    <div v-if="error" class="banda banda-error">
+      <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
+      <button class="btn btn-mini" @click="$emit('recargar')">Reintentar</button>
     </div>
+
+    <!-- Filtros -->
+    <div class="barra-filtros">
+      <div class="buscador">
+        <span aria-hidden="true">🔎</span>
+        <input v-model="busqueda" placeholder="Buscar por nombre o código…" aria-label="Buscar producto">
+        <button v-if="busqueda" class="btn-icono chico" aria-label="Limpiar" @click="busqueda = ''">✕</button>
+      </div>
+
+      <select
+        v-if="foco === 'bodega'"
+        class="campo campo-corto"
+        :value="filtros.categoriaId ?? ''"
+        aria-label="Categoría"
+        @change="$emit('filtrar', { categoriaId: $event.target.value ? Number($event.target.value) : null })"
+      >
+        <option value="">Todas las categorías</option>
+        <option v-for="c in categorias" :key="c.id ?? c" :value="c.id ?? c">
+          {{ c.nombre ?? c }}<template v-if="c.productos"> ({{ c.productos }})</template>
+        </option>
+      </select>
+
+      <label v-if="foco === 'bodega'" class="check">
+        <input type="checkbox" :checked="bajoMinimo" @change="$emit('filtrar', { bajoMinimo: $event.target.checked })">
+        <span>Solo bajo mínimo</span>
+      </label>
+
+      <label v-if="foco === 'bodega' && esAdmin" class="check">
+        <input type="checkbox" :checked="filtros.activo === null"
+               @change="$emit('filtrar', { activo: $event.target.checked ? null : true })">
+        <span>Ver desactivados</span>
+      </label>
+    </div>
+
+    <!-- Estados -->
+    <div v-if="cargando && !items.length" class="vacio">Cargando catálogo…</div>
+
+    <div v-else-if="!items.length" class="vacio">
+      <strong>{{ mensajeVacio.titulo }}</strong>
+      {{ mensajeVacio.detalle }}
+    </div>
+
+    <!-- Tabla -->
+    <div v-else class="tabla-envoltura" :class="{ atenuada: cargando }">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-producto izq">Producto</th>
+            <th v-if="col.categoria" class="col-categoria izq">Categoría</th>
+            <th v-if="col.costo" class="col-dinero">Costo</th>
+            <th>Unidad</th>
+            <th v-if="col.ramo">Ramo</th>
+            <th v-if="col.liquidacion">Liquid.</th>
+            <th v-if="col.margen">Margen</th>
+            <th v-if="col.bodega" class="col-bodega">Bodega</th>
+            <th class="col-venta">Venta</th>
+            <th v-if="col.acciones" class="acciones-col centro">Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <template v-for="(p, idx) in items" :key="p.id">
+            <tr
+              class="fila"
+              :style="{ '--i': Math.min(idx, 12) }"
+              :class="{ inactiva: !p.activo, abierta: abiertoId === p.id }"
+            >
+              <td class="col-producto">
+                <button
+                  class="cab"
+                  :class="esMovil ? 'cab-movil' : 'cab-tabla'"
+                  :aria-expanded="abiertoId === p.id"
+                  @click="alternar(p.id)"
+                >
+                  <span class="chevron" :class="{ girado: abiertoId === p.id }" aria-hidden="true">›</span>
+                  <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
+                  <span class="nombre">{{ p.nombre }}</span>
+
+                  <template v-if="!esMovil">
+                    <span class="cod">{{ p.codigo }}</span>
+                    <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'" :title="p.tipo"></span>
+                  </template>
+
+                  <span v-if="!p.activo" class="etiqueta et-gris">off</span>
+                  <span v-if="estaVencido(p)" class="etiqueta et-rojo">vencido</span>
+                  <span v-else-if="porVencer(p)" class="etiqueta et-ambar">{{ p.diasParaVencer }} d</span>
+
+                  <span v-if="esMovil" class="cantidad dato" :class="col.bodega ? claseBodega(p) : ''">
+                    {{ (col.bodega ? p.enBodega : p.enVenta) ?? 0 }}
+                  </span>
+                </button>
+              </td>
+
+              <template v-if="!esMovil">
+                <td v-if="col.categoria" class="suave col-categoria">{{ p.categoria || '—' }}</td>
+
+                <td v-if="col.costo" class="der dato suave col-dinero">
+                  <span v-if="costoDe(p)">{{ clp(costoDe(p)) }}</span>
+                  <span v-else class="tenue">—</span>
+                </td>
+
+                <td class="der dato">{{ clp(precioDe(p)) }}</td>
+
+                <td v-if="col.ramo" class="der dato suave">
+                  <span v-if="p.precioRamo">{{ clp(p.precioRamo) }}</span>
+                  <span v-else class="tenue">—</span>
+                </td>
+
+                <td v-if="col.liquidacion" class="der dato suave">
+                  <span v-if="p.precioLiquidacion">{{ clp(p.precioLiquidacion) }}</span>
+                  <span v-else class="tenue">—</span>
+                </td>
+
+                <td v-if="col.margen" class="der">
+                  <span v-if="margenDe(p) != null" class="chip-margen"
+                        :class="margenDe(p) < 25 ? 'margen-bajo' : 'margen-ok'">
+                    {{ margenDe(p).toFixed(0) }}%
+                  </span>
+                  <span v-else class="tenue">—</span>
+                </td>
+
+                <td v-if="col.bodega" class="der col-bodega">
+                  <span class="dato" :class="claseBodega(p)"
+                        :title="p.tipo === 'armado' ? 'unidades armadas' : `mínimo ${p.minimo}`">
+                    {{ p.enBodega ?? 0 }}
+                  </span>
+                </td>
+
+                <td class="der col-venta">
+                  <span class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</span>
+                  <span v-if="avisarSinBajar(p)" class="pin-bajar" title="Hay en bodega sin bajar">↓</span>
+                </td>
+
+                <td v-if="col.acciones" class="acciones-col">
+                  <div class="acciones">
+                    <button
+                      v-if="puede.traspasar && (p.enBodega ?? 0) > 0"
+                      class="btn-icono"
+                      :class="puede.autorizar ? 'acc-pedir' : 'acc-bajar'"
+                      :title="puede.autorizar ? 'Solicitar bajada al mostrador' : 'Bajar al mostrador'"
+                      @click.stop="pedirTraspaso(p)"
+                    >
+                      <span aria-hidden="true">{{ puede.autorizar ? '🔑' : '↓' }}</span>
+                    </button>
+
+                    <button v-if="puede.retornar && (p.enVenta ?? 0) > 0" class="btn-icono acc-subir"
+                            title="Devolver a bodega" @click.stop="$emit('retornar', p)">
+                      <span aria-hidden="true">↑</span>
+                    </button>
+
+                    <button v-if="puede.armar && p.tipo === 'armado'" class="btn-icono"
+                            title="Armar" @click.stop="$emit('armar', p)">
+                      <span aria-hidden="true">✿</span>
+                    </button>
+
+                    <template v-if="puede.editar">
+                      <span class="sep" aria-hidden="true"></span>
+                      <button class="btn-icono" title="Editar" @click.stop="$emit('editar', p)">
+                        <span aria-hidden="true">✎</span>
+                      </button>
+                      <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
+                              @click.stop="$emit('baja', p)">
+                        <span aria-hidden="true">✕</span>
+                      </button>
+                      <button v-else class="btn btn-linea btn-mini"
+                              @click.stop="$emit('estado', p, true)">Reactivar</button>
+                    </template>
+
+                    <span v-if="!hayAcciones(p)" class="suave mini">solo lectura</span>
+                  </div>
+                </td>
+              </template>
+            </tr>
+
+            <!-- Detalle -->
+            <tr v-if="abiertoId === p.id" class="fila-detalle">
+              <td :colspan="columnas">
+                <dl v-if="esMovil" class="ficha">
+                  <div>
+                    <dt>Código</dt>
+                    <dd>
+                      <span class="cod">{{ p.codigo }}</span>
+                      <span class="punto" :class="p.tipo === 'armado' ? 'pt-rosa' : 'pt-verde'"></span>
+                      <span class="tipo-texto">{{ p.tipo }}</span>
+                    </dd>
+                  </div>
+
+                  <div v-if="col.categoria">
+                    <dt>Categoría</dt>
+                    <dd>{{ p.categoria || '—' }}</dd>
+                  </div>
+
+                  <div v-if="col.bodega">
+                    <dt>En bodega</dt>
+                    <dd>
+                      <b class="dato" :class="claseBodega(p)">{{ p.enBodega ?? 0 }}</b>
+                      <span v-if="p.tipo === 'armado'" class="tenue"> · unidades armadas</span>
+                      <span v-else-if="p.minimo" class="tenue"> · mínimo {{ p.minimo }}</span>
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>En mostrador</dt>
+                    <dd>
+                      <b class="dato" :class="{ tenue: !p.enVenta }">{{ p.enVenta ?? 0 }}</b>
+                      <span v-if="avisarSinBajar(p)" class="pin-bajar"> ↓ hay en bodega sin bajar</span>
+                    </dd>
+                  </div>
+
+                  <div v-if="col.costo">
+                    <dt>Costo</dt>
+                    <dd>
+                      <span v-if="costoDe(p)" class="dato">{{ clp(costoDe(p)) }}</span>
+                      <span v-else class="tenue">sin costo cargado</span>
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>Precio unidad</dt>
+                    <dd><b class="dato">{{ clp(precioDe(p)) }}</b></dd>
+                  </div>
+
+                  <div v-if="col.ramo && p.precioRamo">
+                    <dt>Precio ramo</dt>
+                    <dd class="dato">{{ clp(p.precioRamo) }}</dd>
+                  </div>
+
+                  <div v-if="col.liquidacion && p.precioLiquidacion">
+                    <dt>Liquidación</dt>
+                    <dd class="dato">{{ clp(p.precioLiquidacion) }}</dd>
+                  </div>
+
+                  <div v-if="col.margen">
+                    <dt>Margen</dt>
+                    <dd>
+                      <span v-if="margenDe(p) != null" class="chip-margen"
+                            :class="margenDe(p) < 25 ? 'margen-bajo' : 'margen-ok'">
+                        {{ margenDe(p).toFixed(0) }}%
+                      </span>
+                      <span v-else class="tenue">—</span>
+                    </dd>
+                  </div>
+                </dl>
+
+                <DetalleProducto
+                  :producto="p"
+                  :puede-editar="puede.editar"
+                  @editar="$emit('editar', $event)"
+                  @armar="$emit('armar', $event)"
+                  @traspasar="pedirTraspaso($event)"
+                />
+
+                <div v-if="esMovil && col.acciones && hayAcciones(p)" class="acciones acciones-movil">
+                  <button
+                    v-if="puede.traspasar && (p.enBodega ?? 0) > 0"
+                    class="btn-icono"
+                    :class="puede.autorizar ? 'acc-pedir' : 'acc-bajar'"
+                    :title="puede.autorizar ? 'Solicitar bajada' : 'Bajar al mostrador'"
+                    @click.stop="pedirTraspaso(p)"
+                  >
+                    <span aria-hidden="true">{{ puede.autorizar ? '🔑' : '↓' }}</span>
+                  </button>
+                  <button v-if="puede.retornar && (p.enVenta ?? 0) > 0" class="btn-icono acc-subir"
+                          title="Devolver a bodega" @click.stop="$emit('retornar', p)">
+                    <span aria-hidden="true">↑</span>
+                  </button>
+                  <template v-if="puede.editar">
+                    <button class="btn-icono" title="Editar" @click.stop="$emit('editar', p)">
+                      <span aria-hidden="true">✎</span>
+                    </button>
+                    <button v-if="p.activo" class="btn-icono peligro" title="Dar de baja"
+                            @click.stop="$emit('baja', p)">
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                    <button v-else class="btn btn-linea btn-mini"
+                            @click.stop="$emit('estado', p, true)">Reactivar</button>
+                  </template>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <p v-if="foco === 'bodega' && totalPaginas > 1" class="paginador">
+      <button class="btn btn-linea btn-mini" :disabled="pagina <= 1"
+              @click="$emit('filtrar', { pagina: pagina - 1 })">Anterior</button>
+      <span class="mini suave">Página {{ pagina }} de {{ totalPaginas }} · {{ total }} productos</span>
+      <button class="btn btn-linea btn-mini" :disabled="pagina >= totalPaginas"
+              @click="$emit('filtrar', { pagina: pagina + 1 })">Siguiente</button>
+    </p>
+  </div>
 </template>
 
+
 <script>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useStore } from 'vuex'
-import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import DetalleProducto from './DetalleProducto.vue'
 
-const FILTRO_TIPOS = [
-    { valor: null, texto: 'Todos' },
-    { valor: 'simple', texto: 'Simples' },
-    { valor: 'armado', texto: 'Armados' }
-]
-
-/* El mismo valor que el @media del bloque de abajo. Si se cambia uno hay que
-   cambiar el otro: no hay forma de leer un breakpoint de CSS desde JS. */
+/* El mismo valor que el @media del bloque de abajo. */
 const MOVIL = '(max-width: 860px)'
 
 export default {
-    name: 'TablaProductos',
-    components: { DetalleProducto },
-    props: {
-        // 'bodega': catálogo completo con costos, traspasos y edición.
-        // 'venta': solo lo que hay en el mostrador, sin acciones.
-        foco: { type: String, required: true, validator: (v) => ['bodega', 'venta'].includes(v) }
-    },
-    emits: ['traspasar', 'retornar', 'armar'],
+  name: 'TablaProductos',
+  components: { DetalleProducto },
 
-    setup (props) {
-        const store = useStore()
-        const { usarResalte, usarAviso } = useTemporizadores()
+  props: {
+    items:      { type: Array,   default: () => [] },
+    filtros:    { type: Object,  default: () => ({}) },
+    total:      { type: Number,  default: 0 },
+    cargando:   { type: Boolean, default: false },
+    error:      { type: String,  default: '' },
+    categorias: { type: Array,   default: () => [] },
+    bajoMinimo: { type: Boolean, default: false },
+    foco:       { type: String,  default: 'bodega', validator: v => ['bodega', 'venta'].includes(v) }
+  },
 
-        const esAdmin = computed(() => store.getters['auth/esAdmin'])
-        const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega'))
+  emits: ['filtrar', 'recargar', 'editar', 'traspasar', 'retornar', 'armar', 'baja', 'estado'],
 
-        const productos = computed(() => store.getters['productos/productos'])
-        const total = computed(() => store.getters['productos/total'])
-        const totalPaginas = computed(() => store.getters['productos/totalPaginas'])
-        const filtro = computed(() => store.getters['productos/filtro'])
-        const cargando = computed(() => store.getters['productos/cargando'])
-        const error = computed(() => store.getters['productos/error'])
-        const hayFiltro = computed(() => store.getters['productos/hayFiltro'])
+  setup (props, { emit }) {
+    const store = useStore()
 
-        const categorias = computed(() => store.getters['inventario/categorias'])
-        const bajoMinimo = computed(() => store.getters['inventario/bajoMinimo'])
-
-        /* ---------------- Acordeón ---------------- */
-        const esMovil = ref(false)
-        const abiertoId = ref(null)
-        let mql = null
-
-        /* Uno abierto a la vez. Con varios vuelve la muralla de tarjetas, que
-           es justo lo que el acordeón viene a resolver. */
-        const alternar = (id) => {
-            abiertoId.value = abiertoId.value === id ? null : id
-        }
-
-        /* Lo abierto se conserva al cruzar el breakpoint: los dos anchos
-           muestran el mismo detalle, así que cerrarlo sería perder el lugar
-           sin ninguna razón. */
-        const alCambiarAncho = (e) => { esMovil.value = e.matches }
-
-        /* Al cambiar de página o de filtro, lo que estaba abierto ya no está en
-           pantalla: dejarlo marcado abriría otra fila al volver. */
-        watch(
-            () => [filtro.value.pagina, filtro.value.buscar, filtro.value.categoriaId],
-            () => { abiertoId.value = null }
-        )
-
-        let control = null
-        onMounted(() => {
-            control = new AbortController()
-            const señal = { signal: control.signal }
-
-            store.dispatch('productos/cargar', señal)
-            if (props.foco === 'bodega') {
-                store.dispatch('inventario/cargarCategorias', señal)
-                store.dispatch('inventario/cargarBajoMinimo', señal)
-            }
-
-            mql = window.matchMedia(MOVIL)
-            esMovil.value = mql.matches
-            mql.addEventListener('change', alCambiarAncho)
-        })
-
-        onUnmounted(() => {
-            control?.abort()
-            mql?.removeEventListener('change', alCambiarAncho)
-        })
-
-        const recargar = () => store.dispatch('productos/cargar')
-        const filtrar = (cambios) => store.dispatch('productos/filtrar', cambios)
-
-        const busqueda = ref(filtro.value.buscar || '')
-        let tmr = null
-        watch(busqueda, (v) => {
-            clearTimeout(tmr)
-            tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
-        })
-        onUnmounted(() => clearTimeout(tmr))
-
-        /* En venta se filtra en cliente sobre lo ya cargado. Con 17 productos
-           da lo mismo; si crece, el SP ya acepta soloEnVenta=true y conviene
-           mover el filtro al servidor. */
-        const soloConStock = ref(props.foco === 'venta')
-        const productosVista = computed(() => {
-            if (props.foco !== 'venta') return productos.value
-            return soloConStock.value
-                ? productos.value.filter(p => p.enVenta > 0)
-                : productos.value
-        })
-
-        /* El colspan tiene que contar las celdas que de verdad se renderizaron.
-           En móvil la fila tiene una sola: el resto no existe. */
-        const columnas = computed(() => {
-            if (esMovil.value) return 1
-            let n = 3                                                 // producto, unidad, venta
-            if (props.foco === 'bodega') n += 4                       // categoría, ramo, liquidación, bodega
-            if (props.foco === 'bodega' && esAdmin.value) n += 2      // costo, margen
-            return n + 1                                              // acciones
-        })
-
-        /* Fuera del template: una cadena larga entre comillas dentro de una
-           interpolación es carne de cañón para el formateador automático, y un
-           salto de línea ahí rompe el parser de Vue. */
-        const mensajeVacio = computed(() => {
-            const filtrando = hayFiltro.value || soloConStock.value
-            return {
-                titulo: filtrando ? 'Ningún producto coincide' : 'Catálogo vacío',
-                detalle: filtrando
-                    ? 'Prueba con otro texto o quita los filtros.'
-                    : 'Crea el primer producto para empezar.'
-            }
-        })
-
-        const resalte = usarResalte()
-        const { avisar } = usarAviso()
-
-        const cambiarEstado = async (p, activo) => {
-            try {
-                await store.dispatch('productos/cambiarEstado', { id: p.id, activo })
-                avisar(`${p.nombre} ${activo ? 'reactivado' : 'desactivado'}`)
-                resalte.marcar(p.id)
-            } catch (e) {
-                avisar(e.message, true)
-            }
-        }
-
-        const abrirEdicion = (p) => store.dispatch('productos/abrirFormulario', p.id)
-        const abrirBaja = (p) => store.dispatch('productos/abrirBaja', p.id)
-
-        /* enBodega y bajoMinimo vienen resueltos del SP: las varas del simple o
-           las unidades montadas del armado, y el mínimo comparado contra los dos
-           lados. La unión simple/armado se decide una vez, en la base. */
-        const claseBodega = (p) => {
-            if (!p.enBodega) return 'stock-cero'
-            if (p.bajoMinimo) return 'stock-bajo'
-            return ''
-        }
-
-        /* La advertencia solo donde importa: productos que se venden por unidad
-           y hoy no están adelante. En quince de diecisiete filas dejaría de
-           leerse, que es lo mismo que no estar. */
-        const avisarSinBajar = (p) =>
-            p.tipo === 'simple' && p.controlaLotes && !p.enVenta && p.enBodega > 0
-
-        const fmt = new Intl.NumberFormat('es-CL', {
-            style: 'currency', currency: 'CLP', maximumFractionDigits: 0
-        })
-        const clp = (n) => fmt.format(Math.round(n || 0))
-
-        return {
-            FILTRO_TIPOS, Math,
-            esAdmin, puedeEditar,
-            productos, productosVista, total, totalPaginas, filtro, cargando, error, hayFiltro,
-            categorias, bajoMinimo, mensajeVacio,
-            recargar, filtrar, busqueda, soloConStock,
-            esMovil, abiertoId, alternar, columnas,
-            cambiarEstado, abrirEdicion, abrirBaja,
-            resalte, claseBodega, avisarSinBajar, clp
-        }
+    const tieneRol = (r) => {
+      const g = store.getters['auth/tieneRol']
+      return typeof g === 'function' ? !!g(r) : false
     }
+
+    const esAdmin  = computed(() => !!store.getters['auth/esAdmin'])
+    const esBodega = computed(() => tieneRol('bodega'))
+    const esVenta  = computed(() => tieneRol('venta'))
+
+    const puede = computed(() => ({
+      traspasar: esAdmin.value || esBodega.value || esVenta.value,
+      retornar:  esAdmin.value || esBodega.value,
+      armar:     esAdmin.value || esBodega.value,
+      editar:    esAdmin.value,
+      baja:      esAdmin.value,
+      autorizar: esVenta.value && !esBodega.value && !esAdmin.value
+    }))
+
+    const col = computed(() => {
+      const enBodega = props.foco === 'bodega'
+      return {
+        categoria:   enBodega,
+        costo:       esAdmin.value && enBodega,
+        ramo:        esAdmin.value && enBodega,
+        liquidacion: esAdmin.value && enBodega,
+        margen:      esAdmin.value && enBodega,
+        bodega:      esAdmin.value && enBodega,
+        acciones:    puede.value.traspasar || puede.value.retornar || puede.value.editar
+      }
+    })
+
+    const columnas = computed(() => {
+      if (esMovil.value) return 1
+      return 2 + Object.values(col.value).filter(Boolean).length
+    })
+
+    /* Búsqueda con rebote */
+    const busqueda = ref(props.filtros?.buscar ?? props.filtros?.busqueda ?? '')
+    const sincronizando = ref(false)
+    let tempo = null
+
+    watch(() => props.filtros?.buscar ?? props.filtros?.busqueda ?? '', (valor) => {
+      if (valor === busqueda.value) return
+      sincronizando.value = true
+      busqueda.value = valor
+      nextTick(() => { sincronizando.value = false })
+    })
+
+    watch(busqueda, (valor) => {
+      if (sincronizando.value) return
+      clearTimeout(tempo)
+      tempo = setTimeout(() => emit('filtrar', { buscar: valor.trim() }), 350)
+    })
+
+    /* Viewport */
+    const esMovil = ref(false)
+    let mql = null
+    const alCambiarAncho = (e) => { esMovil.value = e.matches }
+
+    onMounted(() => {
+      mql = window.matchMedia(MOVIL)
+      esMovil.value = mql.matches
+      mql.addEventListener('change', alCambiarAncho)
+    })
+
+    onBeforeUnmount(() => {
+      clearTimeout(tempo)
+      mql?.removeEventListener('change', alCambiarAncho)
+    })
+
+    /* Acordeón: uno abierto a la vez */
+    const abiertoId = ref(null)
+    const alternar = (id) => { abiertoId.value = abiertoId.value === id ? null : id }
+
+    watch(
+      () => [props.filtros?.pagina, props.filtros?.buscar, props.filtros?.categoriaId],
+      () => { abiertoId.value = null }
+    )
+
+    /* Paginación */
+    const pagina = computed(() => Number(props.filtros?.pagina ?? 1))
+    const porPagina = computed(() => Number(props.filtros?.limite ?? props.filtros?.porPagina ?? 0))
+    const totalPaginas = computed(() =>
+      porPagina.value > 0 ? Math.max(1, Math.ceil(props.total / porPagina.value)) : 1
+    )
+
+    const mensajeVacio = computed(() => {
+      const f = props.filtros || {}
+      const filtrando = !!(f.buscar || f.busqueda || f.categoriaId || props.bajoMinimo)
+      return {
+        titulo: filtrando ? 'Ningún producto coincide' : 'Catálogo vacío',
+        detalle: filtrando
+          ? 'Prueba con otro texto o quita los filtros.'
+          : 'Crea el primer producto para empezar.'
+      }
+    })
+
+    /* Lecturas tolerantes: el SP viejo traía costoEfectivo/precio/margen ya
+       resueltos; si useProductos devuelve costo/precioVenta, también sirve. */
+    const costoDe  = (p) => Number(p.costoEfectivo ?? p.costo ?? 0) || 0
+    const precioDe = (p) => Number(p.precio ?? p.precioVenta ?? 0) || 0
+
+    const margenDe = (p) => {
+      if (p.margen != null && p.margen !== '') return Number(p.margen)
+      const v = precioDe(p); const c = costoDe(p)
+      if (!v || !c) return null
+      return ((v - c) / v) * 100
+    }
+
+    const claseBodega = (p) => {
+      if (!p.enBodega) return 'stock-cero'
+      if (p.bajoMinimo) return 'stock-bajo'
+      return ''
+    }
+
+    const avisarSinBajar = (p) =>
+      p.tipo === 'simple' && p.controlaLotes && !p.enVenta && p.enBodega > 0
+
+    const estaVencido = (p) => p.diasParaVencer != null && Number(p.diasParaVencer) < 0
+    const porVencer   = (p) => p.diasParaVencer != null &&
+                               Number(p.diasParaVencer) >= 0 &&
+                               Number(p.diasParaVencer) <= 3
+
+    const hayAcciones = (p) => {
+      const c = puede.value
+      return (c.traspasar && Number(p.enBodega ?? 0) > 0) ||
+             (c.retornar  && Number(p.enVenta ?? 0) > 0) ||
+             (c.armar     && p.tipo === 'armado') ||
+             c.editar
+    }
+
+    /* El segundo argumento no autoriza nada: le dice al modal que pida la
+       credencial antes de mandar. Quien decide de verdad es el SP. */
+    const pedirTraspaso = (p) => {
+      emit('traspasar', p, { requiereAutorizacion: puede.value.autorizar })
+    }
+
+    const fmt = new Intl.NumberFormat('es-CL', {
+      style: 'currency', currency: 'CLP', maximumFractionDigits: 0
+    })
+    const clp = (n) => fmt.format(Math.round(n || 0))
+
+    return {
+      Math,
+      esAdmin, esBodega, esVenta, puede, col, columnas,
+      busqueda, esMovil, abiertoId, alternar,
+      pagina, totalPaginas, mensajeVacio,
+      costoDe, precioDe, margenDe, claseBodega, avisarSinBajar,
+      estaVencido, porVencer, hayAcciones, pedirTraspaso, clp
+    }
+  }
 }
+
 </script>
+
 
 <style scoped>
 .prod {
@@ -571,6 +535,23 @@ export default {
     min-height: 30px;
     padding: .3rem .7rem;
     font-size: .78rem;
+}
+
+/* Venta no baja stock sola: pide. El botón se ve distinto del ↓ directo. */
+.btn-icono.acc-pedir {
+    background: var(--warn-soft, #fef3c7);
+    border-color: var(--warn, #b45309);
+    color: var(--warn, #b45309);
+}
+
+.etiqueta.et-rojo {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.etiqueta.et-ambar {
+    background: var(--warn-soft, #fef3c7);
+    color: var(--warn, #b45309);
 }
 
 /* ─── Indicadores ─── */
@@ -1070,7 +1051,7 @@ tr.inactiva {
     padding: 12px 14px 2px;
 }
 
-.ficha > div {
+.ficha>div {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
@@ -1352,7 +1333,7 @@ tr.inactiva {
         padding: 12px 14px 14px;
     }
 
-    .acciones-movil > * {
+    .acciones-movil>* {
         width: 100%;
         min-width: 0;
     }
@@ -1360,7 +1341,7 @@ tr.inactiva {
     /* El botón que queda solo en su fila se estira a lo ancho. Se ancla a
        button, no a .btn-icono, para que Editar, Dar de baja o Reactivar
        entren todos en la misma regla sin casos especiales. */
-    .acciones-movil > button:last-child:nth-of-type(odd) {
+    .acciones-movil>button:last-child:nth-of-type(odd) {
         grid-column: 1 / -1;
     }
 

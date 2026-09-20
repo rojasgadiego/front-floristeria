@@ -1,9 +1,12 @@
 <template>
   <div class="menu-inv">
     <h2>Inventario</h2>
-    <!-- <p class="pista">Elige qué quieres revisar.</p> -->
 
-    <div class="grilla">
+    <div v-if="!cards.length" class="vacio">
+      No tienes secciones de inventario asignadas. Habla con un administrador.
+    </div>
+
+    <div v-else class="grilla" :class="{ pocas: cards.length < 3 }">
       <router-link v-for="c in cards" :key="c.clave" :to="{ name: c.ruta }" class="card" :class="`tono-${c.color}`">
         <span class="icono" v-html="c.icono" aria-hidden="true"></span>
         <span class="titulo">{{ c.titulo }}</span>
@@ -12,6 +15,7 @@
     </div>
   </div>
 </template>
+
 
 <script>
 import { computed } from 'vue'
@@ -25,35 +29,53 @@ const ICONO_MOVIMIENTOS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 
 const ICONO_LOTES = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>`
 
+/* Qué ve cada rol. Si alguien tiene dos roles, se suman las claves.
+   Esto es sólo la vista: quien corta de verdad es el guard de ruta. */
+const ACCESO = {
+  admin:  ['bodega', 'venta', 'movimientos', 'lotes'],
+  bodega: ['bodega', 'venta', 'lotes'],
+  vendedor:  ['venta']
+}
 
 export default {
   name: 'MenuInventario',
 
-  setup() {
+  setup () {
     const store = useStore()
 
-    // Datos rápidos por card, en el mismo espíritu que las "pie" de los KPI.
-    const bajoMinimo = computed(() => store.getters['inventario/bajoMinimo'] || [])
-    const productos = computed(() => store.getters['productos/productos'] || [])
-    const movimientos = computed(() => store.getters['inventario/movimientos'] || [])
-    const lotes = computed(() => store.getters['lotes/lotes'] || [])
+    const tieneRol = (r) => {
+      const g = store.getters['auth/tieneRol']
+      return typeof g === 'function' ? !!g(r) : false
+    }
 
-    // Lotes que caducan pronto: el dato accionable, no el total.
+    const esAdmin = computed(() => !!store.getters['auth/esAdmin'])
+
+    const clavesVisibles = computed(() => {
+      if (esAdmin.value) return new Set(ACCESO.admin)
+      const vistas = new Set()
+      for (const [rol, claves] of Object.entries(ACCESO)) {
+        if (rol === 'admin') continue
+        if (tieneRol(rol)) claves.forEach(c => vistas.add(c))
+      }
+      return vistas
+    })
+
+    const bajoMinimo  = computed(() => store.getters['inventario/bajoMinimo'] || [])
+    const movimientos = computed(() => store.getters['inventario/movimientos'] || [])
+    const lotes       = computed(() => store.getters['lotes/lotes'] || [])
+
+    /* Lo accionable, no el total. */
     const porVencer = computed(() =>
       lotes.value.filter(l => l.diasParaVencer != null && l.diasParaVencer <= 30).length
     )
 
-    const enVentaTotal = computed(() =>
-      productos.value.reduce((acc, p) => acc + (p.enVenta || 0), 0)
-    )
-
-    const cards = computed(() => [
+    const catalogo = computed(() => [
       {
         clave: 'bodega',
         ruta: 'InventarioBodega',
         titulo: 'Inventario Bodega',
         icono: ICONO_BODEGA,
-        color: 'secundario', // sage — cámara, almacenamiento
+        color: 'secundario',
         dato: bajoMinimo.value.length
           ? `${bajoMinimo.value.length} bajo mínimo`
           : 'Costos, mínimos y armado'
@@ -63,15 +85,15 @@ export default {
         ruta: 'InventarioVenta',
         titulo: 'Inventario Venta',
         icono: ICONO_VENTA,
-        color: 'accent', // rose — mostrador, venta
-        dato: `${enVentaTotal.value} unidades en mostrador`
+        color: 'accent',
+        dato: 'Unidades en mostrador'
       },
       {
         clave: 'movimientos',
         ruta: 'InventarioMovimientos',
         titulo: 'Movimientos',
         icono: ICONO_MOVIMIENTOS,
-        color: 'info', // azul — historial, datos
+        color: 'info',
         dato: movimientos.value.length
           ? `${movimientos.value.length} registrados`
           : 'Entradas y salidas'
@@ -81,17 +103,21 @@ export default {
         ruta: 'Lotes',
         titulo: 'Lotes',
         icono: ICONO_LOTES,
-        color: 'warn', // ámbar — caducidad, control de tandas
+        color: 'warn',
         dato: porVencer.value
           ? `${porVencer.value} por vencer`
           : 'Caducidades y trazabilidad'
       }
-
     ])
+
+    const cards = computed(() =>
+      catalogo.value.filter(c => clavesVisibles.value.has(c.clave))
+    )
 
     return { cards }
   }
 }
+
 </script>
 
 <style scoped>
@@ -190,6 +216,21 @@ export default {
   color: var(--accent);
 }
 
+/* Con una o dos cards, 1fr las deforma. Se les pone techo. */
+.grilla.pocas {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 260px));
+    justify-content: start;
+}
+
+.vacio {
+    padding: 28px 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--r-lg, 16px);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
 /* --- Móvil: una columna, cards a todo el ancho --- */
 @media (max-width: 640px) {
   .grilla {
@@ -200,6 +241,10 @@ export default {
     min-height: 130px;
     padding: 20px 16px;
   }
+
+   .grilla.pocas {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
