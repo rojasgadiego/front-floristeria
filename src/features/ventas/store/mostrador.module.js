@@ -28,7 +28,6 @@ export default {
     totalPaginas: 0,
     filtro: filtroInicial(),
     cargando: false,
-    guardando: false,
     error: null
   }),
 
@@ -43,7 +42,6 @@ export default {
       state.filtro = { ...state.filtro, ...cambios, pagina: cambios.pagina ?? 1 }
     },
     SET_CARGANDO (state, v) { state.cargando = v },
-    SET_GUARDANDO (state, v) { state.guardando = v },
     SET_ERROR (state, e) { state.error = e }
   },
 
@@ -77,57 +75,6 @@ export default {
      */
     escanear (_, codigo) {
       return mostradorService.escanear(codigo)
-    },
-
-    /** En orden de consumo: lo que vence antes sale primero. */
-    deProducto (_, { productoId, signal } = {}) {
-      return mostradorService.deProducto(productoId, { signal })
-    },
-
-    /**
-     * Baja varas de un lote al mesón. Devuelve la partida con su código y
-     * su QR, que es lo que hay que imprimir y pegar al balde.
-     */
-    async traspasar ({ commit, dispatch }, { lote, cantidad, notas = null }) {
-      commit('SET_GUARDANDO', true)
-      try {
-        const partida = await mostradorService.traspasar({ lote, cantidad, notas })
-        await dispatch('cargar')
-        /* El stock del producto cambió de lugar: salió de bodega y entró al
-           mesón. La grilla de inventario tiene que reflejarlo. */
-        dispatch('productos/cargar', {}, { root: true })
-        return partida
-      } finally {
-        commit('SET_GUARDANDO', false)
-      }
-    },
-
-    /** Para lo que no controla lotes: jarrones, cintas, tarjetas. */
-    async traspasarProducto ({ commit, dispatch }, { productoId, cantidad, notas = null }) {
-      commit('SET_GUARDANDO', true)
-      try {
-        const partida = await mostradorService.traspasarProducto({
-          productoId, cantidad, notas
-        })
-        await dispatch('cargar')
-        dispatch('productos/cargar', {}, { root: true })
-        return partida
-      } finally {
-        commit('SET_GUARDANDO', false)
-      }
-    },
-
-    /** Devuelve al lote del que salió. Bajar de más pasa. */
-    async retornar ({ commit, dispatch }, { partida, cantidad, notas = null }) {
-      commit('SET_GUARDANDO', true)
-      try {
-        const r = await mostradorService.retornar({ partida, cantidad, notas })
-        await dispatch('cargar')
-        dispatch('productos/cargar', {}, { root: true })
-        return r
-      } finally {
-        commit('SET_GUARDANDO', false)
-      }
     }
   },
 
@@ -137,7 +84,6 @@ export default {
     totalPaginas: state => state.totalPaginas,
     filtro: state => state.filtro,
     cargando: state => state.cargando,
-    guardando: state => state.guardando,
     error: state => state.error,
 
     /* Las que vencen hoy o mañana: son las que hay que empujar. */

@@ -56,12 +56,25 @@ export default {
   }),
 
   mutations: {
+    /* Se mezcla sección por sección: una sección que todavía no se guardó
+       nunca llega como null, y un spread plano pisaría el valor por defecto
+       con ese null. Los getters leen config.club.valorPunto sin preguntar. */
     SET_CONFIG (state, config) {
-      state.config = { ...configInicial(), ...config }
+      const base = configInicial()
+      const c = config || {}
+      state.config = {
+        ...base,
+        local: { ...base.local, ...(c.local || {}) },
+        ticket: { ...base.ticket, ...(c.ticket || {}) },
+        venta: { ...base.venta, ...(c.venta || {}) },
+        club: { ...base.club, ...(c.club || {}) },
+        actualizadoEn: c.actualizadoEn ?? null,
+        actualizadoPor: c.actualizadoPor ?? null
+      }
       state.cargada = true
     },
     SET_SECCION (state, { seccion, datos }) {
-      state.config = { ...state.config, [seccion]: datos }
+      state.config = { ...state.config, [seccion]: { ...state.config[seccion], ...(datos || {}) } }
     },
     SET_CARGANDO (state, v) { state.cargando = v },
     SET_GUARDANDO (state, seccion) { state.guardando = seccion },

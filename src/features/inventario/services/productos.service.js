@@ -72,10 +72,10 @@ export const productosService = {
     return pedir(http.put(`${RUTA}/${id}`, producto))
   },
 
-  /* No hay DELETE: las boletas y los lotes históricos referencian el
-     producto. Un producto que desaparece deja ventas sin nombre. */
+  /* Dar de baja es desactivar: lo saca del punto de venta y conserva su
+     historial. El backend expone una ruta por sentido, sin body. */
   cambiarEstado (id, activo) {
-    return pedir(http.patch(`${RUTA}/${id}/estado`, { activo }))
+    return pedir(http.patch(`${RUTA}/${id}/${activo ? 'activar' : 'desactivar'}`))
   },
 
   /* ---------------- Recetas ---------------- */
@@ -106,5 +106,27 @@ export const productosService = {
    */
   guardarReceta (id, { lineas }) {
     return pedir(http.put(`${RUTA}/${id}/receta`, { lineas }))
+  },
+
+  /* ---------------- Armado ---------------- */
+
+  /**
+   * Se consulta ANTES de armar. Separa lo que alcanza solo con flor de
+   * primera de lo que alcanzaría usando también la recuperada, y sugiere
+   * qué lotes cubrirían el faltante.
+   */
+  disponibilidadArmado (id, cantidad = 1, { signal } = {}) {
+    return pedir(http.get(`${RUTA}/${id}/disponibilidad-armado`, {
+      params: { cantidad }, signal
+    }))
+  },
+
+  /**
+   * Los ingredientes con lote se consumen por FIFO. `lotesAutorizados`
+   * habilita flor recuperada, que de otro modo queda fuera del reparto:
+   * se consume primero y abarata la producción.
+   */
+  armar (id, { cantidad, lotesAutorizados = [] }) {
+    return pedir(http.post(`${RUTA}/${id}/armar`, { cantidad, lotesAutorizados }))
   }
 }

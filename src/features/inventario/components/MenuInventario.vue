@@ -18,7 +18,7 @@
 
 
 <script>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 
 const ICONO_BODEGA = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5"/><path d="M4.5 8.5V19a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V8.5"/><path d="M9 20v-6h6v6"/></svg>`
@@ -61,6 +61,10 @@ export default {
     })
 
     const bajoMinimo  = computed(() => store.getters['inventario/bajoMinimo'] || [])
+
+    /* La lista es corta y cambia con cada venta o compra: se relee al
+       entrar al menú en vez de confiar en lo que quedó de otra pantalla. */
+    onMounted(() => store.dispatch('inventario/cargarBajoMinimo'))
     const movimientos = computed(() => store.getters['inventario/movimientos'] || [])
     const lotes       = computed(() => store.getters['lotes/lotes'] || [])
 

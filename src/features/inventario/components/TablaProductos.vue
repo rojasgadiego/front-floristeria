@@ -9,33 +9,35 @@
     <div class="barra-filtros">
       <div class="buscador">
         <span aria-hidden="true">🔎</span>
-        <input v-model="busqueda" placeholder="Buscar por nombre o código…" aria-label="Buscar producto">
+        <input v-model="busqueda" placeholder="Nombre o código…" aria-label="Buscar producto">
         <button v-if="busqueda" class="btn-icono chico" aria-label="Limpiar" @click="busqueda = ''">✕</button>
       </div>
 
-      <select
-        v-if="foco === 'bodega'"
-        class="campo campo-corto"
-        :value="filtros.categoriaId ?? ''"
-        aria-label="Categoría"
-        @change="$emit('filtrar', { categoriaId: $event.target.value ? Number($event.target.value) : null })"
-      >
-        <option value="">Todas las categorías</option>
-        <option v-for="c in categorias" :key="c.id ?? c" :value="c.id ?? c">
-          {{ c.nombre ?? c }}<template v-if="c.productos"> ({{ c.productos }})</template>
-        </option>
-      </select>
+      <div v-if="foco === 'bodega'" class="filtros-linea">
+        <select
+          class="campo-select"
+          :class="{ on: filtros.categoriaId }"
+          :value="filtros.categoriaId ?? ''"
+          aria-label="Categoría"
+          @change="$emit('filtrar', { categoriaId: $event.target.value ? Number($event.target.value) : null })"
+        >
+          <option value="">Categoría</option>
+          <option v-for="c in categorias" :key="c.id ?? c" :value="c.id ?? c">
+            {{ c.nombre ?? c }}<template v-if="c.productos"> ({{ c.productos }})</template>
+          </option>
+        </select>
 
-      <label v-if="foco === 'bodega'" class="check">
-        <input type="checkbox" :checked="bajoMinimo" @change="$emit('filtrar', { bajoMinimo: $event.target.checked })">
-        <span>Solo bajo mínimo</span>
-      </label>
+        <label class="check" :class="{ on: bajoMinimo }">
+          <input type="checkbox" :checked="bajoMinimo" @change="$emit('filtrar', { bajoMinimo: $event.target.checked })">
+          <span>Bajo mínimo</span>
+        </label>
 
-      <label v-if="foco === 'bodega' && esAdmin" class="check">
-        <input type="checkbox" :checked="filtros.activo === null"
-               @change="$emit('filtrar', { activo: $event.target.checked ? null : true })">
-        <span>Ver desactivados</span>
-      </label>
+        <label v-if="esAdmin" class="check" :class="{ on: filtros.activo === null }">
+          <input type="checkbox" :checked="filtros.activo === null"
+                 @change="$emit('filtrar', { activo: $event.target.checked ? null : true })">
+          <span>Desactivados</span>
+        </label>
+      </div>
     </div>
 
     <!-- Estados -->
@@ -409,7 +411,11 @@ export default {
 
     /* Paginación */
     const pagina = computed(() => Number(props.filtros?.pagina ?? 1))
-    const porPagina = computed(() => Number(props.filtros?.limite ?? props.filtros?.porPagina ?? 0))
+    /* useProductos pagina con `tamano`; limite/porPagina quedan por si otra
+       vista todavía los manda. */
+    const porPagina = computed(() =>
+      Number(props.filtros?.tamano ?? props.filtros?.limite ?? props.filtros?.porPagina ?? 0)
+    )
     const totalPaginas = computed(() =>
       porPagina.value > 0 ? Math.max(1, Math.ceil(props.total / porPagina.value)) : 1
     )
@@ -711,9 +717,44 @@ export default {
     font-size: max(.9rem, 16px);
 }
 
-.campo-corto {
-    width: auto;
-    flex: 0 1 210px;
+.filtros-linea {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+/* El select se viste de pastilla: mismo alto y borde que los checks, y se
+   marca cuando está filtrando. */
+.campo-select {
+    max-width: 220px;
+    min-height: 44px;
+    padding: 0 34px 0 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background:
+        var(--surface)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+        no-repeat right 13px center;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: max(.85rem, 16px);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+}
+
+.campo-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.campo-select.on {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+    color: var(--accent-text, var(--accent));
 }
 
 .segmentado {
@@ -744,21 +785,78 @@ export default {
     box-shadow: var(--shadow-sm);
 }
 
+/* El checkbox como interruptor-pastilla: mismo alto y borde que el
+   buscador y el select, para que la barra se lea como una sola fila. */
 .check {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: 9px;
+    min-height: 44px;
+    padding: 0 14px 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 9px;
+    background: var(--surface);
     font-size: .85rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--text-muted);
     cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+
+.check:hover {
+    border-color: var(--accent);
+    color: var(--text);
+}
+
+.check.on {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-text, var(--accent));
 }
 
 .check input {
-    width: 17px;
-    height: 17px;
-    accent-color: var(--accent);
+    appearance: none;
+    -webkit-appearance: none;
+    display: grid;
+    place-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 5px;
+    background: var(--surface);
     cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+
+/* El visto se dibuja con dos bordes girados: no depende de una fuente de
+   íconos y hereda el color de contraste del tema. */
+.check input::after {
+    content: '';
+    width: 5px;
+    height: 9px;
+    margin-top: -2px;
+    border: solid var(--accent-contrast, #fff);
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform .12s ease;
+}
+
+.check input:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.check input:checked::after {
+    transform: rotate(45deg) scale(1);
+}
+
+.check input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 /* ─── Tabla ─── */
@@ -1371,18 +1469,40 @@ tr.inactiva {
         width: 100%;
     }
 
-    .campo-corto {
-        flex: 1 1 100%;
-        width: 100%;
+    /* Celular: los filtros van dentro de una card y en columna, cada
+       control a todo el ancho para tocarlo sin apuntar. */
+    .barra-filtros {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md, 12px);
     }
 
     .buscador {
-        flex: 1 1 100%;
+        flex: 0 0 auto;
+    }
+
+    .filtros-linea {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .campo-select {
+        width: 100%;
+        max-width: none;
+    }
+
+    .check {
+        justify-content: center;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .chevron {
+    .chevron,
+    .check input::after {
         transition: none;
     }
 }

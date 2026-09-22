@@ -2,14 +2,30 @@
  * features/usuarios/store/usuarios.module.js
  * =========================================================================
  * Cuentas ajenas. Separado de `auth` porque son cosas distintas: auth es mi
- * sesión, esto es un CRUD con permiso de admin. Estaban juntas en el mock
- * solo porque compartían el array fakeUsers.
+ * sesión, esto es un CRUD con permiso de admin.
  *
- * BÚSQUEDA: UsuarioFiltro no tiene campo de texto, así que el buscador
- * filtra en el cliente sobre lo que ya se trajo. Para un equipo de
- * florería (entre 3 y 20 cuentas) traer todo de una es más simple y más
- * rápido que paginar. Si esto crece a cientos, agregá `Buscar` a
- * UsuarioFiltro y mové `usuariosVisibles` al servidor.
+ * API actual:
+ *   GET    /api/usuarios?busqueda=&rol=&activo=
+ *   GET    /api/usuarios/{id}
+ *   POST   /api/usuarios
+ *   PUT    /api/usuarios/{id}
+ *   PATCH  /api/usuarios/{id}/activar
+ *   PATCH  /api/usuarios/{id}/desactivar
+ *   POST   /api/usuarios/{id}/resetear-password
+ *
+ * BÚSQUEDA:
+ * La API actual sí soporta `busqueda`, así que el texto viaja al servidor.
+ * Igual se conserva `busqueda` separado de `filtro` para no romper la vista
+ * actual y porque conceptualmente es el texto del buscador.
+ *
+ * PAGINACIÓN:
+ * El backend actual no pagina usuarios. Se conserva `pagina` y `porPagina`
+ * en el estado para no tocar la tabla ni la UI, pero el service ya evita
+ * enviar esos parámetros si la API no los soporta.
+ *
+ * ROL:
+ * No existe PATCH /usuarios/{id}/rol. Para cambiar rol se usa PUT
+ * /usuarios/{id}, enviando el usuario con el nuevo rol.
  * =========================================================================
  */
 
@@ -34,17 +50,29 @@ const filtroInicial = () => ({
    evita el viaje de ida y vuelta para errores obvios. */
 function validarNombre (nombre) {
   const limpio = (nombre || '').trim()
-  if (!limpio) throw new Error('El nombre es obligatorio.')
+
+  if (!limpio) {
+    throw new Error('El nombre es obligatorio.')
+  }
+
   if (limpio.length < LARGO_MINIMO_NOMBRE || limpio.length > LARGO_MAXIMO_NOMBRE) {
     throw new Error(`El nombre debe tener entre ${LARGO_MINIMO_NOMBRE} y ${LARGO_MAXIMO_NOMBRE} caracteres.`)
   }
+
   return limpio
 }
 
 function validarEmail (email) {
   const limpio = (email || '').trim().toLowerCase()
-  if (!limpio) throw new Error('El correo es obligatorio.')
-  if (!EMAIL_RE.test(limpio)) throw new Error('El correo no tiene un formato válido.')
+
+  if (!limpio) {
+    throw new Error('El correo es obligatorio.')
+  }
+
+  if (!EMAIL_RE.test(limpio)) {
+    throw new Error('El correo no tiene un formato válido.')
+  }
+
   return limpio
 }
 
@@ -52,7 +80,13 @@ function validarPassword (password) {
   if (!password || password.length < LARGO_MINIMO_PASSWORD) {
     throw new Error(`La contraseña debe tener al menos ${LARGO_MINIMO_PASSWORD} caracteres.`)
   }
+
   return password
+}
+
+function mismaCuenta (a, b) {
+  if (a === null || a === undefined || b === null || b === undefined) return false
+  return String(a) === String(b)
 }
 
 export default {
@@ -62,38 +96,89 @@ export default {
     lista: [],
     total: 0,
     totalPaginas: 0,
+
     filtro: filtroInicial(),
-    /* Separado del filtro porque no viaja al servidor. */
+
+    /*
+     * Separado del filtro para mantener compatibilidad con la vista actual.
+     * Al cargar, se manda junto con rol/activo.
+     */
     busqueda: '',
+
     cargando: false,
     guardando: false,
     error: null
   }),
 
   mutations: {
-    SET_PAGINA (state, { items, total, pagina, totalPaginas }) {
-      state.lista = items
-      state.total = total
-      state.totalPaginas = totalPaginas
-      state.filtro.pagina = pagina
+    SET_PAGINA (state, { items, total, pagina, porPagina, totalPaginas }) {
+      state.lista = Array.isArray(items) ? items : []
+      state.total = total ?? state.lista.length
+      state.totalPaginas = totalPaginas ?? 1
+
+      state.filtro.pagina = pagina ?? state.filtro.pagina
+      state.filtro.porPagina = porPagina ?? state.filtro.porPagina
     },
-    SET_FILTRO (state, cambios) {
-      /* Cualquier cambio de filtro vuelve a la página 1: si estabas en la 3
-         y filtrás, la 3 del resultado nuevo puede no existir y verías una
-         tabla vacía sin entender por qué. */
-      state.filtro = { ...state.filtro, ...cambios, pagina: cambios.pagina ?? 1 }
+
+    SET_FILTRO (state, cambios = {}) {
+      /*
+       * Cualquier cambio de filtro vuelve a la página 1, salvo que el cambio
+       * sea explícitamente de página.
+       */
+      state.filtro = {
+        ...state.filtro,
+        ...cambios,
+        pagina: cambios.pagina ?? 1
+      }
     },
-    SET_BUSQUEDA (state, texto) { state.busqueda = texto },
+
+    SET_BUSQUEDA (state, texto) {
+      state.busqueda = texto ?? ''
+      state.filtro.pagina = 1
+    },
+
     RESET_FILTRO (state) {
       state.filtro = filtroInicial()
       state.busqueda = ''
     },
-    SET_CARGANDO (state, v) { state.cargando = v },
-    SET_GUARDANDO (state, v) { state.guardando = v },
-    SET_ERROR (state, e) { state.error = e },
+
+    SET_CARGANDO (state, v) {
+      state.cargando = v
+    },
+
+    SET_GUARDANDO (state, v) {
+      state.guardando = v
+    },
+
+    SET_ERROR (state, e) {
+      state.error = e
+    },
+
     UPSERT (state, usuario) {
-      const i = state.lista.findIndex(u => u.id === usuario.id)
-      if (i !== -1) state.lista.splice(i, 1, { ...state.lista[i], ...usuario })
+      if (!usuario || usuario.id === null || usuario.id === undefined) return
+
+      const i = state.lista.findIndex(u => mismaCuenta(u.id, usuario.id))
+
+      if (i !== -1) {
+        state.lista.splice(i, 1, {
+          ...state.lista[i],
+          ...usuario
+        })
+      } else {
+        state.lista.unshift(usuario)
+        state.total += 1
+      }
+    },
+
+    SET_ACTIVO_LOCAL (state, { id, activo }) {
+      const i = state.lista.findIndex(u => mismaCuenta(u.id, id))
+
+      if (i !== -1) {
+        state.lista.splice(i, 1, {
+          ...state.lista[i],
+          activo
+        })
+      }
     }
   },
 
@@ -101,153 +186,294 @@ export default {
     async cargar ({ commit, state }, { signal } = {}) {
       commit('SET_CARGANDO', true)
       commit('SET_ERROR', null)
+
       try {
-        commit('SET_PAGINA', await usuariosService.listar(state.filtro, { signal }))
+        const pagina = await usuariosService.listar(
+          {
+            ...state.filtro,
+            busqueda: state.busqueda
+          },
+          { signal }
+        )
+
+        commit('SET_PAGINA', pagina)
+
+        return pagina
       } catch (error) {
-        if (!error.esCancelado) commit('SET_ERROR', error.message)
+        if (!error.esCancelado) {
+          commit('SET_ERROR', error.message || 'No se pudieron cargar los usuarios.')
+        }
+
+        throw error
       } finally {
         commit('SET_CARGANDO', false)
       }
     },
 
-    /* Filtros que sí viajan (rol, activo) → recarga. */
-    async filtrar ({ commit, dispatch }, cambios) {
+    /*
+     * Filtros que viajan al servidor: rol y activo.
+     */
+    async filtrar ({ commit, dispatch }, cambios = {}) {
       commit('SET_FILTRO', cambios)
-      await dispatch('cargar')
+      return dispatch('cargar')
     },
 
-    /* Búsqueda por texto → local, sin request. Por eso no necesita debounce. */
-    buscar ({ commit }, texto) {
+    /*
+     * Búsqueda por texto.
+     *
+     * Antes era local. La API actual soporta `busqueda`, así que recarga.
+     * Si la vista llama esto en cada tecla, conviene que la vista tenga
+     * debounce para evitar demasiadas requests.
+     */
+    async buscar ({ commit, dispatch }, texto) {
       commit('SET_BUSQUEDA', texto ?? '')
+      return dispatch('cargar')
+    },
+
+    async resetearFiltros ({ commit, dispatch }) {
+      commit('RESET_FILTRO')
+      return dispatch('cargar')
     },
 
     /*
      * De acá para abajo los errores se propagan: la vista los muestra en el
-     * modal. Ahora el mensaje puede venir del servidor (409 correo
-     * duplicado, 400 última admin) en vez de un throw local.
+     * modal. Ahora el mensaje puede venir del servidor, por ejemplo:
+     * 409 correo duplicado, 400 última admin, etc.
      */
     async crearUsuario ({ commit, dispatch }, datos) {
       const name = validarNombre(datos.name)
       const email = validarEmail(datos.email)
       const password = validarPassword(datos.password)
-      if (!esRolValido(datos.role)) throw new Error('Selecciona un rol válido.')
+
+      if (!esRolValido(datos.role)) {
+        throw new Error('Selecciona un rol válido.')
+      }
 
       commit('SET_GUARDANDO', true)
+      commit('SET_ERROR', null)
+
       try {
-        const creado = await usuariosService.crear({ name, email, password, role: datos.role })
-        /* Recarga en vez de push: la lista viene ordenada por el servidor;
-           insertar a mano la desincroniza del total. */
+        const creado = await usuariosService.crear({
+          name,
+          email,
+          password,
+          role: datos.role
+        })
+
+        /*
+         * Recarga en vez de push: si el servidor ordena la lista, insertar a
+         * mano puede desincronizar orden, total o filtros.
+         */
         await dispatch('cargar')
+
         return creado
+      } catch (error) {
+        commit('SET_ERROR', error.message || 'No se pudo crear el usuario.')
+        throw error
       } finally {
         commit('SET_GUARDANDO', false)
       }
     },
 
     /**
-     * El PUT solo actualiza nombre y correo. Si además cambió el rol va por
-     * su endpoint: en la API son dos operaciones porque tienen consecuencias
-     * distintas.
+     * Actualiza nombre, correo y rol usando PUT /usuarios/{id}.
+     *
+     * La API actual no tiene endpoint PATCH /usuarios/{id}/rol, así que el
+     * cambio de rol no se separa en otra request.
      */
     async actualizarUsuario ({ commit, state }, datos) {
       const name = validarNombre(datos.name)
       const email = validarEmail(datos.email)
-      const actual = state.lista.find(u => u.id === datos.id)
+
+      const actual = state.lista.find(u => mismaCuenta(u.id, datos.id))
+      const role = datos.role ?? actual?.role
+
+      if (role && !esRolValido(role)) {
+        throw new Error('Selecciona un rol válido.')
+      }
 
       commit('SET_GUARDANDO', true)
-      try {
-        let usuario = await usuariosService.actualizar(datos.id, { name, email })
+      commit('SET_ERROR', null)
 
-        if (datos.role && actual && datos.role !== actual.role) {
-          usuario = await usuariosService.cambiarRol(datos.id, datos.role)
-        }
+      try {
+        const usuario = await usuariosService.actualizar(datos.id, {
+          name,
+          email,
+          role
+        })
 
         commit('UPSERT', usuario)
+
         return usuario
+      } catch (error) {
+        commit('SET_ERROR', error.message || 'No se pudo actualizar el usuario.')
+        throw error
       } finally {
         commit('SET_GUARDANDO', false)
       }
     },
 
+    /**
+     * Cambiar rol.
+     *
+     * No usa usuariosService.cambiarRol porque en la API real no existe
+     * PATCH /usuarios/{id}/rol. Para evitar un PUT parcial, reconstruimos el
+     * usuario actual y mandamos nombre, correo y rol.
+     */
     async cambiarRolUsuario ({ commit, state, rootGetters }, { id, role }) {
-      const usuario = state.lista.find(u => u.id === id)
-      if (!usuario) throw new Error('La cuenta no existe.')
-      if (!esRolValido(role)) throw new Error('Rol no válido.')
+      const usuario = state.lista.find(u => mismaCuenta(u.id, id))
 
-      /* La base protege que no quede ninguna admin, no que no te
-         desloguees vos. Quitarte tu propio rol te saca de esta pantalla en
-         la siguiente navegación; avisarlo antes es más barato que
-         explicarlo después. */
-      if (id === rootGetters['auth/currentUser']?.id && role !== ROL.ADMIN) {
+      if (!usuario) {
+        throw new Error('La cuenta no existe.')
+      }
+
+      if (!esRolValido(role)) {
+        throw new Error('Rol no válido.')
+      }
+
+      /*
+       * La base protege que no quede ninguna admin, no que no te desloguees
+       * vos. Quitarte tu propio rol te saca de esta pantalla en la siguiente
+       * navegación; avisarlo antes es más barato que explicarlo después.
+       */
+      if (
+        mismaCuenta(id, rootGetters['auth/currentUser']?.id) &&
+        role !== ROL.ADMIN
+      ) {
         throw new Error('Estás cambiando tu propio rol: vas a perder el acceso a esta pantalla.')
       }
 
-      commit('UPSERT', await usuariosService.cambiarRol(id, role))
+      commit('SET_GUARDANDO', true)
+      commit('SET_ERROR', null)
+
+      try {
+        const actualizado = await usuariosService.actualizar(id, {
+          name: usuario.name,
+          email: usuario.email,
+          role
+        })
+
+        commit('UPSERT', actualizado)
+
+        return actualizado
+      } catch (error) {
+        commit('SET_ERROR', error.message || 'No se pudo cambiar el rol del usuario.')
+        throw error
+      } finally {
+        commit('SET_GUARDANDO', false)
+      }
     },
 
     /**
-     * Bloquear / reactivar. Se conserva el nombre de la acción para no tocar
-     * la vista, aunque por dentro sean dos endpoints.
+     * Bloquear / reactivar.
      *
-     * Bloquear no corta la sesión abierta: el token sigue válido hasta
-     * ExpiraEn y el corte ocurre cuando ese front consulta /auth/me.
+     * Se conserva el nombre de la acción para no tocar la vista, aunque por
+     * dentro la API actual usa:
+     *
+     *   PATCH /usuarios/{id}/desactivar
+     *   PATCH /usuarios/{id}/activar
+     *
+     * Bloquear no corta necesariamente una sesión ya abierta: el token puede
+     * seguir válido hasta su expiración o hasta que ese frontend consulte
+     * /auth/me, según cómo esté implementada la validación.
      */
     async cambiarEstadoUsuario ({ commit, state, rootGetters }, { id, activo }) {
-      const usuario = state.lista.find(u => u.id === id)
-      if (!usuario) throw new Error('La cuenta no existe.')
+      const usuario = state.lista.find(u => mismaCuenta(u.id, id))
 
-      if (!activo && id === rootGetters['auth/currentUser']?.id) {
+      if (!usuario) {
+        throw new Error('La cuenta no existe.')
+      }
+
+      if (!activo && mismaCuenta(id, rootGetters['auth/currentUser']?.id)) {
         throw new Error('No podés bloquear tu propia cuenta.')
       }
 
-      const actualizado = activo
-        ? await usuariosService.reactivar(id)
-        : await usuariosService.bloquear(id)
+      commit('SET_GUARDANDO', true)
+      commit('SET_ERROR', null)
 
-      commit('UPSERT', actualizado)
+      try {
+        const actualizado = activo
+          ? await usuariosService.reactivar(id)
+          : await usuariosService.bloquear(id)
+
+        /*
+         * Algunos endpoints de activar/desactivar devuelven el usuario; otros
+         * solo devuelven un mensaje o true. Soportamos ambos casos.
+         */
+        if (actualizado?.id !== null && actualizado?.id !== undefined) {
+          commit('UPSERT', actualizado)
+        } else {
+          commit('SET_ACTIVO_LOCAL', { id, activo })
+        }
+
+        return actualizado
+      } catch (error) {
+        commit('SET_ERROR', error.message || 'No se pudo cambiar el estado del usuario.')
+        throw error
+      } finally {
+        commit('SET_GUARDANDO', false)
+      }
     },
 
-    /* La clave nunca vuelve del servidor ni toca el state. */
-    async restablecerPassword (_, { id, password }) {
+    /*
+     * La clave nunca vuelve del servidor ni toca el state.
+     */
+    async restablecerPassword ({ commit }, { id, password }) {
       validarPassword(password)
-      await usuariosService.restablecerPassword(id, password)
+
+      commit('SET_GUARDANDO', true)
+      commit('SET_ERROR', null)
+
+      try {
+        return await usuariosService.restablecerPassword(id, password)
+      } catch (error) {
+        commit('SET_ERROR', error.message || 'No se pudo restablecer la contraseña.')
+        throw error
+      } finally {
+        commit('SET_GUARDANDO', false)
+      }
     }
   },
 
   getters: {
-    /** Lo que trajo el servidor, sin filtrar por texto. */
+    /**
+     * Lo que trajo el servidor.
+     */
     usuarios: state => state.lista,
 
-    /** Lo que va a la tabla. La búsqueda es local: ver la nota de arriba. */
-    usuariosVisibles: (state) => {
-      const q = state.busqueda.trim().toLowerCase()
-      if (!q) return state.lista
-      return state.lista.filter(u =>
-        u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-      )
-    },
+    /**
+     * Lo que va a la tabla.
+     *
+     * Como la búsqueda ahora viaja al servidor, devolvemos directamente la
+     * lista. Se conserva el getter para no tocar la vista.
+     */
+    usuariosVisibles: state => state.lista,
 
     total: state => state.total,
+
     totalPaginas: state => state.totalPaginas,
+
     filtro: state => state.filtro,
+
     busqueda: state => state.busqueda,
+
     cargando: state => state.cargando,
+
     guardando: state => state.guardando,
+
     error: state => state.error,
 
     hayFiltroActivo: state =>
-      !!state.busqueda || state.filtro.rol !== null || state.filtro.activo !== null,
+      !!state.busqueda ||
+      state.filtro.rol !== null ||
+      state.filtro.activo !== null,
 
-    /* Para deshabilitar el botón de bloquear en la última admin. Cuenta
-       sobre lo cargado, así que es orientativo: la regla real es de la base. */
+    /*
+     * Para deshabilitar el botón de bloquear en la última admin.
+     * Cuenta sobre lo cargado, así que es orientativo: la regla real es de la
+     * base/backend.
+     */
     adminsActivas: state =>
       state.lista.filter(u => u.role === ROL.ADMIN && u.activo).length
   }
 }
-
-/* =========================================================================
- * NO existe `eliminarUsuario`: UsuariosController no tiene DELETE, y está
- * bien que no lo tenga. ventas.usuario_id y cajas.abierta_por apuntan a
- * esta tabla y ReportesService.EquipoAsync los lee para el histórico.
- * En la vista, "Eliminar" pasa a "Bloquear".
- * ========================================================================= */

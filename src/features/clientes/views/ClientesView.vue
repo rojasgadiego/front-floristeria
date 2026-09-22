@@ -1,226 +1,364 @@
 <template>
   <div class="clientes">
-    <header class="cabecera">
-      <div class="min0">
-        <h1>Clientes</h1>
-        <!-- <p class="ayuda">
-          Quién compra y qué se lleva. Los puntos son plata que el local debe:
-          cada uno vale {{ clp(valorPunto) }}.
-        </p> -->
+    <!-- ═════════════ CABECERA ═════════════ -->
+    <header class="hero">
+      <div class="hero-titulo">
+        <h2>Clientes</h2>
+        <p>
+          Fichas, compras, cumpleaños y puntos de fidelización
+        </p>
       </div>
-      <button class="btn" @click="abrirNuevo">
-        <span aria-hidden="true">＋</span> Nuevo cliente
+      <button class="btn btn-principal" @click="abrirNuevo">
+        <span aria-hidden="true">＋</span>
+        Nuevo cliente
       </button>
     </header>
 
     <div v-if="error" class="banda banda-error">
-      <span aria-hidden="true">⚠️</span><span>{{ error }}</span>
-      <button class="btn btn-mini" @click="recargar">Reintentar</button>
+      <span aria-hidden="true">⚠️</span>
+      <span>{{ error }}</span>
+      <button class="btn btn-mini btn-linea" @click="recargar">Reintentar</button>
     </div>
 
-    <!-- El pasivo de puntos a la vista: es lo que el local debe si todos
-         canjearan mañana, y casi nunca se mira hasta que alguien canjea. -->
-    <div v-if="pasivoPuntos > 0" class="tira-pasivo">
-      <div>
-        <span class="rot">Puntos en circulación</span>
-        <b class="dato">{{ puntosEnCirculacion }}</b>
+    <!-- ═════════════ RESUMEN ═════════════ -->
+    <section class="resumen-dashboard" aria-label="Resumen de clientes">
+      <article class="kpi">
+        <span class="kpi-label">Clientes cargados</span>
+        <strong>{{ clientes.length }}</strong>
+        <small v-if="parcial">de {{ total }}</small>
+        <small v-else>total visible</small>
+      </article>
+
+      <article class="kpi">
+        <span class="kpi-label">Activos</span>
+        <strong>{{ metricas.activos }}</strong>
+        <small>{{ metricas.inactivos }} desactivado(s)</small>
+      </article>
+
+      <article class="kpi kpi-puntos">
+        <span class="kpi-label">Puntos en circulación</span>
+        <strong>{{ puntosEnCirculacion }}</strong>
+        <small>{{ clp(pasivoPuntos) }} de pasivo</small>
+      </article>
+
+      <article class="kpi">
+        <span class="kpi-label">Valor punto</span>
+        <strong>{{ clp(valorPunto) }}</strong>
+        <small>por punto</small>
+      </article>
+    </section>
+
+    <!-- ═════════════ BUSCADOR + FILTROS ═════════════ -->
+    <section class="panel-filtros">
+      <div class="buscador">
+        <span aria-hidden="true">🔎</span>
+        <input
+          v-model="busqueda"
+          placeholder="Nombre, RUT o teléfono…"
+          aria-label="Buscar cliente"
+        >
+        <button
+          v-if="busqueda"
+          class="btn-icono chico"
+          @click="busqueda = ''"
+          aria-label="Limpiar búsqueda"
+        >
+          ✕
+        </button>
       </div>
-      <div>
-        <span class="rot">Lo que valen</span>
-        <b class="dato">{{ clp(pasivoPuntos) }}</b>
+
+      <div class="filtros-linea">
+        <div class="pastillas" role="group" aria-label="Filtro rápido">
+          <button
+            :class="{ on: !filtro.conPuntos && !filtro.sinComprarDias }"
+            @click="filtrar({ conPuntos: false, sinComprarDias: null })"
+          >
+            Todos
+          </button>
+
+          <button
+            :class="{ on: filtro.conPuntos }"
+            @click="filtrar({ conPuntos: true, sinComprarDias: null })"
+          >
+            Con puntos
+            <span v-if="metricas.conPuntos" class="pill-count">{{ metricas.conPuntos }}</span>
+          </button>
+
+          <button
+            :class="{ on: !!filtro.sinComprarDias }"
+            @click="filtrar({ conPuntos: false, sinComprarDias: 90 })"
+          >
+            Se alejaron
+            <span v-if="metricas.frios" class="pill-count">{{ metricas.frios }}</span>
+          </button>
+        </div>
+
+        <select
+          class="campo-select"
+          :class="{ on: filtro.cumpleMes }"
+          :value="filtro.cumpleMes ?? ''"
+          @change="filtrar({ cumpleMes: $event.target.value ? Number($event.target.value) : null })"
+          aria-label="Cumpleaños"
+        >
+          <option value="">🎂 Cumpleaños</option>
+          <option v-for="(m, i) in MESES" :key="i" :value="i + 1">
+            Cumple en {{ m }}
+          </option>
+        </select>
+
+        <label class="check" :class="{ on: filtro.activo === null }">
+          <input
+            type="checkbox"
+            :checked="filtro.activo === null"
+            @change="filtrar({ activo: $event.target.checked ? null : true })"
+          >
+          <span>Desactivados</span>
+        </label>
+
+        <button
+          v-if="filtrosActivos > 0"
+          class="limpiar"
+          :aria-label="`Limpiar ${filtrosActivos} filtro(s)`"
+          @click="limpiarFiltros"
+        >
+          Limpiar
+          <span class="contador">{{ filtrosActivos }}</span>
+        </button>
       </div>
-      <span v-if="parcial" class="nota-parcial">
-        de los {{ clientes.length }} cargados
-      </span>
+    </section>
+
+    <!-- ═════════════ ESTADOS ═════════════ -->
+    <div v-if="cargando && !clientes.length" class="vacio">
+      <span class="loader"></span>
+      <strong>Cargando clientes…</strong>
+      Preparando fichas y puntos.
     </div>
-
-    <div class="buscador">
-      <span aria-hidden="true">🔎</span>
-      <input v-model="busqueda" placeholder="Nombre, RUT, teléfono o correo…"
-        aria-label="Buscar cliente">
-      <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
-    </div>
-
-    <!-- Los filtros como pastillas y no como selects: son tres estados
-         excluyentes que se alternan de un toque, y en el teléfono un select
-         abre una hoja entera para elegir entre tres cosas. -->
-    <div class="filtros">
-      <div class="pastillas">
-        <button :class="{ on: !filtro.conPuntos && !filtro.sinComprarDias }"
-          @click="filtrar({ conPuntos: false, sinComprarDias: null })">Todos</button>
-        <button :class="{ on: filtro.conPuntos }"
-          @click="filtrar({ conPuntos: true, sinComprarDias: null })">Con puntos</button>
-        <button :class="{ on: !!filtro.sinComprarDias }"
-          @click="filtrar({ conPuntos: false, sinComprarDias: 90 })">Se alejaron</button>
-      </div>
-
-      <select class="campo corto" :value="filtro.cumpleMes ?? ''"
-        @change="filtrar({ cumpleMes: $event.target.value ? Number($event.target.value) : null })"
-        aria-label="Cumpleaños">
-        <option value="">Cualquier mes</option>
-        <option v-for="(m, i) in MESES" :key="i" :value="i + 1">Cumple en {{ m }}</option>
-      </select>
-
-      <label class="check">
-        <input type="checkbox" :checked="filtro.activo === null"
-          @change="filtrar({ activo: $event.target.checked ? null : true })">
-        <span>Ver desactivados</span>
-      </label>
-    </div>
-
-    <div v-if="cargando && !clientes.length" class="vacio">Cargando…</div>
 
     <div v-else-if="!clientes.length" class="vacio">
-      <strong>{{ hayFiltro ? 'Ninguno coincide' : 'Sin clientes' }}</strong>
+      <strong>{{ hayFiltro ? 'Ningún cliente coincide' : 'Sin clientes' }}</strong>
       {{ hayFiltro
-        ? 'Prueba con otro texto o quita los filtros.'
-        : 'Registra el primero para empezar a acumular puntos.' }}
+        ? 'Prueba con otro texto o limpia los filtros.'
+        : 'Registra el primer cliente para empezar a acumular puntos.' }}
+
+      <button v-if="hayFiltro" class="btn btn-mini btn-linea" @click="limpiarFiltros">
+        Limpiar filtros
+      </button>
     </div>
 
+    <!-- ═════════════ TARJETAS ═════════════ -->
     <div v-else class="tarjetas" :class="{ atenuada: cargando }">
-      <article v-for="c in clientes" :key="c.id" class="tarjeta"
-        :class="{ inactivo: !c.activo, abierta: detalleId === c.id }">
-
-        <!-- La cabecera entera abre el detalle: buscar un botón chico con el
-             pulgar es fricción sin motivo. -->
+      <article
+        v-for="c in clientesOrdenados"
+        :key="c.id"
+        class="tarjeta"
+        :class="{
+          inactivo: !c.activo,
+          abierta: detalleId === c.id,
+          frio: c.diasSinComprar > 90,
+          cumple: cumpleCerca(c),
+          conPuntos: c.puntos > 0
+        }"
+      >
         <button class="cab" @click="alternarDetalle(c.id)">
           <div class="avatar" :class="claseAvatar(c)" aria-hidden="true">
             {{ iniciales(c.nombre) }}
           </div>
 
-          <div class="min0">
+          <div class="identidad min0">
             <div class="nombre-fila">
               <b class="nombre">{{ c.nombre }}</b>
-              <span v-if="!c.activo" class="etiqueta">off</span>
+
+              <span v-if="!c.activo" class="badge estado off">Inactivo</span>
+              <span v-else-if="cumpleCerca(c)" class="badge estado cumple">
+                🎂 cumple
+              </span>
+              <span v-else-if="c.diasSinComprar > 90" class="badge estado frio">
+                frío
+              </span>
             </div>
+
             <div class="sub">
-              <span class="mono">{{ c.rut }}</span>
-              <template v-if="c.telefono"> · {{ c.telefono }}</template>
+              <span class="mono">{{ c.rut || 'sin RUT' }}</span>
+              <template v-if="contactoLinea(c)"> · {{ contactoLinea(c) }}</template>
             </div>
           </div>
 
-          <div class="derecha">
-            <!-- Los puntos con su valor en pesos debajo: "340 puntos" no
-                 dice nada, "$3.400" sí. -->
-            <template v-if="c.puntos > 0">
-              <b class="puntos">{{ c.puntos }}</b>
-              <span class="puntos-valor">{{ clp(c.valorPuntos) }}</span>
-            </template>
-            <span v-else class="tenue mini">sin puntos</span>
+          <div class="wallet" :class="{ vacia: !(c.puntos > 0) }">
+            <span class="wallet-label">Puntos</span>
+            <strong>{{ c.puntos || 0 }}</strong>
+            <small>{{ clp(valorCliente(c)) }}</small>
           </div>
 
-          <span class="flecha" :class="{ girada: detalleId === c.id }" aria-hidden="true">›</span>
+          <span class="flecha" :class="{ girada: detalleId === c.id }" aria-hidden="true">
+            ›
+          </span>
         </button>
 
-        <div class="resumen-fila">
+        <div class="metricas-card">
           <div>
             <span class="rot">Compras</span>
-            <b class="dato">{{ c.compras }}</b>
+            <b class="dato">{{ c.compras || 0 }}</b>
           </div>
+
           <div>
             <span class="rot">Gastado</span>
             <b class="dato">{{ clp(c.totalGastado) }}</b>
           </div>
-          <div v-if="c.ticketPromedio">
+
+          <div>
             <span class="rot">Promedio</span>
-            <b class="dato">{{ clp(c.ticketPromedio) }}</b>
+            <b class="dato">{{ c.ticketPromedio ? clp(c.ticketPromedio) : '—' }}</b>
           </div>
+
           <div>
             <span class="rot">Última</span>
-            <b class="dato" :class="{ frio: c.diasSinComprar > 90 }">
+            <b class="dato" :class="{ warn: c.diasSinComprar > 90 }">
               {{ c.ultimaCompra ? fecha(c.ultimaCompra) : 'nunca' }}
             </b>
           </div>
         </div>
 
-        <!-- El cumpleaños cerca es la razón por la que existe esa columna en
-             la base: sirve para llamar, no para adornar la ficha. -->
-        <p v-if="cumpleCerca(c)" class="cumple">
-          🎂 Cumple {{ c.diasParaCumple === 0 ? 'hoy' : `en ${c.diasParaCumple} día(s)` }}
-        </p>
+        <div v-if="cumpleCerca(c)" class="alerta-card cumple">
+          <span aria-hidden="true">🎂</span>
+          <span>
+            Cumple {{ c.diasParaCumple === 0 ? 'hoy' : `en ${c.diasParaCumple} día(s)` }}.
+          </span>
+        </div>
 
-        <p v-else-if="c.diasSinComprar > 90" class="frio-aviso">
-          Sin comprar hace {{ c.diasSinComprar }} días.
-        </p>
+        <div v-else-if="c.diasSinComprar > 90" class="alerta-card frio">
+          <span aria-hidden="true">🕒</span>
+          <span>Sin comprar hace {{ c.diasSinComprar }} días.</span>
+        </div>
 
-        <!-- ═══ Detalle ═══ -->
+        <!-- ═════════════ DETALLE ═════════════ -->
         <div v-if="detalleId === c.id" class="detalle">
-          <div v-if="cargandoDetalle === c.id" class="cargando">Cargando…</div>
+          <div v-if="cargandoDetalle === c.id" class="cargando">
+            <span class="loader"></span>
+            Cargando detalle…
+          </div>
 
           <template v-else-if="detalle">
-            <div v-if="detalle.frecuentes?.length" class="bloque">
-              <h4>Lo que siempre se lleva</h4>
-              <div class="frecuentes">
-                <span v-for="p in detalle.frecuentes" :key="p.productoId" class="frecuente">
-                  {{ p.emoji }} {{ p.producto }}
-                  <b>{{ p.veces }}×</b>
-                </span>
-              </div>
-            </div>
+            <div class="detalle-grid">
+              <section v-if="detalle.frecuentes?.length" class="bloque bloque-full">
+                <h4>Lo que suele comprar</h4>
 
-            <div v-if="detalle.compras7?.length" class="bloque">
-              <h4>Últimas compras</h4>
-              <div v-for="v in detalle.compras7" :key="v.id" class="item"
-                :class="{ anulada: v.anulada }">
-                <div class="min0">
-                  <span class="mono">{{ v.folio }}</span>
-                  <span class="desglose">
-                    {{ fecha(v.creadoEn) }} · {{ v.lineas }} línea(s)
-                    <template v-if="v.puntosGanados"> · +{{ v.puntosGanados }} pts</template>
-                    <span v-if="v.anulada" class="rojo"> · anulada</span>
+                <div class="frecuentes">
+                  <span
+                    v-for="p in detalle.frecuentes"
+                    :key="p.productoId"
+                    class="frecuente"
+                  >
+                    <span>{{ p.emoji }}</span>
+                    <span>{{ p.producto }}</span>
+                    <b>{{ p.veces }}×</b>
                   </span>
                 </div>
-                <b class="dato">{{ clp(v.total) }}</b>
-              </div>
-            </div>
+              </section>
 
-            <!-- Los puntos son dinero: cada movimiento con su saldo permite
-                 rastrear un saldo que no cuadra hasta donde se desvió. -->
-            <div v-if="detalle.puntos7?.length" class="bloque">
-              <h4>Movimientos de puntos</h4>
-              <div v-for="p in detalle.puntos7" :key="p.id" class="item">
-                <div class="min0">
-                  <b :class="p.cantidad > 0 ? 'verde' : 'rojo'">
-                    {{ p.cantidad > 0 ? '+' : '' }}{{ p.cantidad }}
-                  </b>
-                  <span class="desglose">
-                    {{ p.motivo }} · {{ fecha(p.creadoEn) }}
-                    <template v-if="p.usuario"> · {{ p.usuario }}</template>
-                  </span>
+              <section v-if="detalle.compras7?.length" class="bloque">
+                <h4>Últimas compras</h4>
+
+                <div
+                  v-for="v in detalle.compras7"
+                  :key="v.id"
+                  class="item"
+                  :class="{ anulada: v.anulada }"
+                >
+                  <div class="min0">
+                    <span class="mono item-titulo">{{ v.folio }}</span>
+                    <span class="desglose">
+                      {{ fecha(v.creadoEn) }} · {{ v.lineas }} línea(s)
+                      <template v-if="v.puntosGanados"> · +{{ v.puntosGanados }} pts</template>
+                      <span v-if="v.anulada" class="rojo"> · anulada</span>
+                    </span>
+                  </div>
+
+                  <b class="dato">{{ clp(v.total) }}</b>
                 </div>
-                <span class="dato suave">saldo {{ p.saldoResultante }}</span>
-              </div>
+              </section>
+
+              <section v-if="detalle.puntos7?.length" class="bloque">
+                <h4>Libro de puntos</h4>
+
+                <div
+                  v-for="p in detalle.puntos7"
+                  :key="p.id"
+                  class="item"
+                >
+                  <div class="min0">
+                    <b :class="p.cantidad > 0 ? 'verde' : 'rojo'">
+                      {{ p.cantidad > 0 ? '+' : '' }}{{ p.cantidad }}
+                    </b>
+
+                    <span class="desglose">
+                      {{ p.motivo }} · {{ fecha(p.creadoEn) }}
+                      <template v-if="p.usuario"> · {{ p.usuario }}</template>
+                    </span>
+                  </div>
+
+                  <span class="dato suave">saldo {{ p.saldoResultante }}</span>
+                </div>
+              </section>
             </div>
 
-            <div v-if="detalle.notas" class="notas">{{ detalle.notas }}</div>
+            <div v-if="detalle.notas" class="notas">
+              <span aria-hidden="true">📝</span>
+              <p>{{ detalle.notas }}</p>
+            </div>
 
             <div class="acciones">
               <button class="btn btn-linea btn-mini" @click="abrirEdicion(detalle)">
                 Editar ficha
               </button>
-              <button v-if="esAdmin" class="btn btn-linea btn-mini" @click="abrirPuntos(detalle)">
+
+              <button
+                v-if="esAdmin"
+                class="btn btn-linea btn-mini"
+                @click="abrirPuntos(detalle)"
+              >
                 Ajustar puntos
               </button>
-              <button v-if="esAdmin && detalle.activo" class="btn btn-linea btn-mini"
-                @click="cambiarEstado(detalle, false)">Desactivar</button>
-              <button v-else-if="esAdmin" class="btn btn-mini"
-                @click="cambiarEstado(detalle, true)">Reactivar</button>
+
+              <button
+                v-if="esAdmin && detalle.activo"
+                class="btn btn-linea btn-mini peligro"
+                @click="cambiarEstado(detalle, false)"
+              >
+                Desactivar
+              </button>
+
+              <button
+                v-else-if="esAdmin"
+                class="btn btn-mini"
+                @click="cambiarEstado(detalle, true)"
+              >
+                Reactivar
+              </button>
             </div>
           </template>
+
+          <div v-else class="sin-detalle">
+            No hay detalle disponible para este cliente.
+          </div>
         </div>
       </article>
     </div>
 
     <p v-if="parcial" class="paginador mini suave">
-      Mostrando {{ clientes.length }} de {{ total }}. Busca para acotar.
+      Mostrando {{ clientes.length }} de {{ total }}. Usa la búsqueda para acotar.
     </p>
 
-    <!-- ═══════════════ MODAL: ficha ═══════════════ -->
+    <!-- ═════════════ MODAL FICHA ═════════════ -->
     <div v-if="modal" class="fondo" @click.self="modal = null">
       <div class="modal" role="dialog" aria-modal="true">
         <div class="modal-cab">
-          <h3>{{ modal.f.id ? 'Editar cliente' : 'Nuevo cliente' }}</h3>
-          <p>El RUT es la llave con que se busca la ficha en el mesón.</p>
+          <div>
+            <span class="eyebrow">Ficha cliente</span>
+            <h3>{{ modal.f.id ? 'Editar cliente' : 'Nuevo cliente' }}</h3>
+            <p>El RUT permite encontrar rápido la ficha en el mesón.</p>
+          </div>
+
+          <button class="cerrar" @click="modal = null" aria-label="Cerrar">✕</button>
         </div>
 
         <div class="modal-cuerpo">
@@ -228,11 +366,17 @@
 
           <div class="grupo">
             <label for="c-rut">RUT</label>
-            <input id="c-rut" class="campo mono" v-model="modal.f.rut" maxlength="20"
-              :class="{ malo: rutMalo }" placeholder="12.345.678-9"
-              inputmode="text" @blur="normalizarRut">
-            <!-- El dígito sugerido convierte un "está malo" en un "quisiste
-                 decir esto": casi siempre es un dedo, no un RUT inventado. -->
+            <input
+              id="c-rut"
+              class="campo mono"
+              v-model="modal.f.rut"
+              maxlength="20"
+              :class="{ malo: rutMalo }"
+              placeholder="12.345.678-9"
+              inputmode="text"
+              @blur="normalizarRut"
+            >
+
             <p v-if="rutMalo" class="ayuda-campo mala">
               El dígito verificador no calza{{ dvSugerido ? `: debería ser ${dvSugerido}` : '' }}.
             </p>
@@ -240,117 +384,209 @@
 
           <div class="grupo">
             <label for="c-nombre">Nombre</label>
-            <input id="c-nombre" class="campo" v-model="modal.f.nombre" maxlength="160"
-              placeholder="María Fernanda Soto">
+            <input
+              id="c-nombre"
+              class="campo"
+              v-model="modal.f.nombre"
+              maxlength="160"
+              placeholder="María Fernanda Soto"
+            >
           </div>
 
           <div class="rejilla">
             <div class="grupo">
               <label for="c-tel">Teléfono</label>
-              <input id="c-tel" class="campo mono" type="tel" v-model="modal.f.telefono"
-                maxlength="40" inputmode="tel" placeholder="+56 9 1234 5678">
+              <input
+                id="c-tel"
+                class="campo mono"
+                type="tel"
+                v-model="modal.f.telefono"
+                maxlength="40"
+                inputmode="tel"
+                placeholder="+56 9 1234 5678"
+              >
             </div>
 
             <div class="grupo">
               <label for="c-correo">Correo</label>
-              <input id="c-correo" class="campo" type="email" v-model="modal.f.correo"
-                maxlength="160" inputmode="email" placeholder="maria@correo.cl">
+              <input
+                id="c-correo"
+                class="campo"
+                type="email"
+                v-model="modal.f.correo"
+                maxlength="160"
+                inputmode="email"
+                placeholder="maria@correo.cl"
+              >
             </div>
           </div>
 
           <div class="grupo">
             <label for="c-dir">Dirección</label>
-            <input id="c-dir" class="campo" v-model="modal.f.direccion" maxlength="240"
-              placeholder="Para los despachos">
+            <input
+              id="c-dir"
+              class="campo"
+              v-model="modal.f.direccion"
+              maxlength="240"
+              placeholder="Para despachos"
+            >
           </div>
 
           <div class="grupo">
             <label>Cumpleaños</label>
+
             <div class="cumple-campos">
-              <input class="campo dato" type="number" min="1" max="31" inputmode="numeric"
-                v-model.number="modal.f.cumpleDia" placeholder="Día" aria-label="Día">
+              <input
+                class="campo dato"
+                type="number"
+                min="1"
+                max="31"
+                inputmode="numeric"
+                v-model.number="modal.f.cumpleDia"
+                placeholder="Día"
+                aria-label="Día"
+              >
+
               <select class="campo" v-model.number="modal.f.cumpleMes" aria-label="Mes">
                 <option :value="null">Mes</option>
-                <option v-for="(m, i) in MESES" :key="i" :value="i + 1">{{ m }}</option>
+                <option v-for="(m, i) in MESES" :key="i" :value="i + 1">
+                  {{ m }}
+                </option>
               </select>
             </div>
+
             <p class="ayuda-campo">
-              Con esto aparece en la lista del mes para poder saludarla. Va
-              completo o ninguno.
+              El cumpleaños va completo o vacío. Sirve para campañas y saludos.
             </p>
           </div>
 
           <div class="grupo">
             <label for="c-notas">Notas</label>
-            <textarea id="c-notas" class="campo" v-model="modal.f.notas" maxlength="600"
-              rows="3" placeholder="Prefiere tonos claros. Compra para la oficina los viernes."></textarea>
+            <textarea
+              id="c-notas"
+              class="campo"
+              v-model="modal.f.notas"
+              maxlength="600"
+              rows="3"
+              placeholder="Prefiere flores amarillas. Compra para la oficina los viernes."
+            ></textarea>
           </div>
         </div>
 
         <div class="modal-pie">
-          <button class="btn btn-linea" :disabled="guardando" @click="modal = null">Cancelar</button>
+          <button class="btn btn-linea" :disabled="guardando" @click="modal = null">
+            Cancelar
+          </button>
+
           <button class="btn" :disabled="guardando" @click="guardar">
-            {{ guardando ? 'Guardando…' : 'Guardar' }}
+            {{ guardando ? 'Guardando…' : 'Guardar cliente' }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- ═══════════════ MODAL: puntos ═══════════════ -->
+    <!-- ═════════════ MODAL PUNTOS ═════════════ -->
     <div v-if="ajuste" class="fondo" @click.self="ajuste = null">
       <div class="modal angosto" role="dialog" aria-modal="true">
         <div class="modal-cab">
-          <h3>Ajustar puntos</h3>
-          <p>{{ ajuste.nombre }} · tiene {{ ajuste.puntos }} ({{ clp(ajuste.valor) }})</p>
+          <div>
+            <span class="eyebrow">Fidelización</span>
+            <h3>Ajustar puntos</h3>
+            <p>
+              {{ ajuste.nombre }} tiene {{ ajuste.puntos }} punto(s),
+              equivalentes a {{ clp(ajuste.valor) }}.
+            </p>
+          </div>
+
+          <button class="cerrar" @click="ajuste = null" aria-label="Cerrar">✕</button>
         </div>
 
         <div class="modal-cuerpo">
           <div v-if="ajuste.error" class="error">{{ ajuste.error }}</div>
 
+          <div class="saldo-puntos">
+            <span>Saldo actual</span>
+            <strong>{{ ajuste.puntos }}</strong>
+            <small>{{ clp(ajuste.valor) }}</small>
+          </div>
+
           <div class="opciones">
-            <button class="opcion" :class="{ on: ajuste.signo === 1 }" @click="ajuste.signo = 1">
-              <b>Regalar</b><span>Cortesía, compensación, campaña</span>
+            <button
+              class="opcion"
+              :class="{ on: ajuste.signo === 1 }"
+              @click="ajuste.signo = 1"
+            >
+              <b>Regalar puntos</b>
+              <span>Cortesía, compensación o campaña.</span>
             </button>
-            <button class="opcion" :class="{ on: ajuste.signo === -1 }" @click="ajuste.signo = -1">
-              <b>Descontar</b><span>Corregir un error de carga</span>
+
+            <button
+              class="opcion"
+              :class="{ on: ajuste.signo === -1 }"
+              @click="ajuste.signo = -1"
+            >
+              <b>Descontar puntos</b>
+              <span>Corrección de carga o ajuste administrativo.</span>
             </button>
           </div>
 
           <div class="grupo">
-            <label for="a-cant">¿Cuántos puntos?</label>
-            <input id="a-cant" ref="campoPuntos" class="campo dato" type="number" min="1"
-              inputmode="numeric" v-model.number="ajuste.cantidad">
+            <label for="a-cant">Cantidad</label>
+            <input
+              id="a-cant"
+              ref="campoPuntos"
+              class="campo dato"
+              type="number"
+              min="1"
+              inputmode="numeric"
+              v-model.number="ajuste.cantidad"
+            >
+
             <p class="ayuda-campo">
-              Equivalen a <b>{{ clp((ajuste.cantidad || 0) * valorPunto) }}</b>.
+              Equivale a <b>{{ clp((ajuste.cantidad || 0) * valorPunto) }}</b>.
               <template v-if="ajuste.signo === -1 && ajuste.cantidad > ajuste.puntos">
-                <span class="mala">Solo tiene {{ ajuste.puntos }}.</span>
+                <span class="mala"> Solo tiene {{ ajuste.puntos }}.</span>
               </template>
             </p>
           </div>
 
           <div class="grupo">
-            <label for="a-motivo">¿Por qué?</label>
-            <input id="a-motivo" class="campo" v-model="ajuste.motivo" maxlength="200"
-              placeholder="Compensación por el pedido que llegó tarde"
-              @keyup.enter="ajustarPuntos">
-            <!-- Los puntos son dinero: un saldo que no cuadra tiene que
-                 poder explicarse seis meses después. -->
+            <label for="a-motivo">Motivo</label>
+            <input
+              id="a-motivo"
+              class="campo"
+              v-model="ajuste.motivo"
+              maxlength="200"
+              placeholder="Compensación por pedido atrasado"
+              @keyup.enter="ajustarPuntos"
+            >
+
             <p class="ayuda-campo">
-              Mínimo 5 caracteres. Queda en el libro de puntos con tu nombre.
+              Mínimo 5 caracteres. Queda registrado en el libro de puntos.
             </p>
           </div>
         </div>
 
         <div class="modal-pie">
-          <button class="btn btn-linea" :disabled="guardando" @click="ajuste = null">Cancelar</button>
+          <button class="btn btn-linea" :disabled="guardando" @click="ajuste = null">
+            Cancelar
+          </button>
+
           <button class="btn" :disabled="guardando" @click="ajustarPuntos">
-            {{ guardando ? 'Guardando…' : (ajuste.signo === 1 ? 'Regalar' : 'Descontar') }}
+            {{ guardando ? 'Guardando…' : (ajuste.signo === 1 ? 'Regalar puntos' : 'Descontar puntos') }}
           </button>
         </div>
       </div>
     </div>
 
-    <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+    <div
+      v-if="aviso"
+      class="aviso"
+      :class="{ malo: aviso.malo }"
+      role="status"
+    >
+      {{ aviso.texto }}
+    </div>
   </div>
 </template>
 
@@ -388,19 +624,77 @@ export default {
     const valorPunto = computed(() => store.getters['configuracion/valorPunto'] || 0)
     const guardando = ref(false)
 
-    const hayFiltro = computed(() => {
-      const f = filtro.value
-      return !!(f.buscar || f.conPuntos || f.cumpleMes || f.sinComprarDias || f.activo === null)
+    const metricas = computed(() => {
+      const lista = clientes.value || []
+
+      return {
+        activos: lista.filter(c => c.activo).length,
+        inactivos: lista.filter(c => !c.activo).length,
+        conPuntos: lista.filter(c => (c.puntos || 0) > 0).length,
+        frios: lista.filter(c => (c.diasSinComprar || 0) > 90).length,
+        cumpleSemana: lista.filter(c => cumpleCerca(c)).length
+      }
     })
+
+    const filtrosActivos = computed(() => {
+      const f = filtro.value || {}
+      let n = 0
+
+      if (f.buscar) n++
+      if (f.conPuntos) n++
+      if (f.sinComprarDias) n++
+      if (f.cumpleMes) n++
+      if (f.activo === null) n++
+
+      return n
+    })
+
+    const hayFiltro = computed(() => filtrosActivos.value > 0)
+
+    const clientesOrdenados = computed(() => {
+      return [...(clientes.value || [])].sort((a, b) => {
+        const pa = prioridadCliente(a)
+        const pb = prioridadCliente(b)
+
+        if (pa !== pb) return pb - pa
+
+        return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+      })
+    })
+
+    const prioridadCliente = (c) => {
+      let p = 0
+
+      if (cumpleCerca(c)) p += 50
+      if ((c.puntos || 0) > 0) p += 20
+      if ((c.diasSinComprar || 0) > 90) p += 10
+      if (!c.activo) p -= 100
+
+      return p
+    }
 
     const busqueda = ref(filtro.value.buscar || '')
     let tmr = null
+
     watch(busqueda, (v) => {
       clearTimeout(tmr)
       tmr = setTimeout(() => filtrar({ buscar: v.trim() }), 350)
     })
 
     const filtrar = (cambios) => store.dispatch('clientes/filtrar', cambios)
+
+    const limpiarFiltros = () => {
+      busqueda.value = ''
+
+      return store.dispatch('clientes/filtrar', {
+        buscar: '',
+        conPuntos: false,
+        sinComprarDias: null,
+        cumpleMes: null,
+        activo: true
+      })
+    }
+
     const recargar = () => store.dispatch('clientes/cargar')
 
     /* ---------------- Detalle ---------------- */
@@ -410,9 +704,6 @@ export default {
       detalleId.value ? store.getters['clientes/detalleDe'](detalleId.value) : null
     )
 
-    /* Se pide al abrir, no al cargar la lista: son tres consultas más por
-       cliente, y traerlas para cien fichas que nadie va a expandir sería
-       trabajo perdido. */
     const alternarDetalle = async (id) => {
       if (detalleId.value === id) {
         detalleId.value = null
@@ -420,6 +711,7 @@ export default {
       }
 
       detalleId.value = id
+
       try {
         await store.dispatch('clientes/cargarDetalle', { id })
       } catch (e) {
@@ -432,11 +724,21 @@ export default {
     const modal = ref(null)
 
     const fichaVacia = () => ({
-      id: null, rut: '', nombre: '', telefono: '', correo: '',
-      direccion: '', cumpleMes: null, cumpleDia: null, notas: '', error: ''
+      id: null,
+      rut: '',
+      nombre: '',
+      telefono: '',
+      correo: '',
+      direccion: '',
+      cumpleMes: null,
+      cumpleDia: null,
+      notas: '',
+      error: ''
     })
 
-    const abrirNuevo = () => { modal.value = { f: fichaVacia() } }
+    const abrirNuevo = () => {
+      modal.value = { f: fichaVacia() }
+    }
 
     const abrirEdicion = (c) => {
       modal.value = {
@@ -455,10 +757,6 @@ export default {
       }
     }
 
-    /* ---------------- RUT ----------------
-     * Obligatorio acá, a diferencia del proveedor: es la llave con que el
-     * vendedor busca la ficha en el mesón, y dos fichas del mismo cliente
-     * parten sus puntos en dos —ninguno alcanza para canjear. */
     const rutMalo = computed(() =>
       !!modal.value?.f?.rut && !rutValido(modal.value.f.rut)
     )
@@ -466,12 +764,19 @@ export default {
     const dvSugerido = computed(() => {
       const limpio = limpiarRut(modal.value?.f?.rut || '')
       const cuerpo = limpio.slice(0, -1)
-      return cuerpo.length >= 7 && /^\d+$/.test(cuerpo) ? digitoVerificador(cuerpo) : ''
+
+      return cuerpo.length >= 7 && /^\d+$/.test(cuerpo)
+        ? digitoVerificador(cuerpo)
+        : ''
     })
 
     const normalizarRut = () => {
-      const f = modal.value.f
-      if (f.rut && rutValido(f.rut)) f.rut = formatearRut(f.rut)
+      const f = modal.value?.f
+      if (!f) return
+
+      if (f.rut && rutValido(f.rut)) {
+        f.rut = formatearRut(f.rut)
+      }
     }
 
     const guardar = async () => {
@@ -480,12 +785,11 @@ export default {
 
       if (!f.rut?.trim()) return (f.error = 'El RUT es obligatorio.')
       if (rutMalo.value) return (f.error = 'El RUT no es válido.')
+
       if ((f.nombre || '').trim().length < 2) {
         return (f.error = 'El nombre debe tener al menos 2 caracteres.')
       }
 
-      /* Día y mes van juntos: uno sin el otro no sirve para la campaña de
-         cumpleaños, que es para lo que existe ese dato. */
       if (!!f.cumpleMes !== !!f.cumpleDia) {
         return (f.error = 'Indica el día y el mes del cumpleaños, o ninguno.')
       }
@@ -502,6 +806,7 @@ export default {
       }
 
       guardando.value = true
+
       try {
         const c = f.id
           ? await store.dispatch('clientes/actualizarCliente', { id: f.id, ...datos })
@@ -510,9 +815,6 @@ export default {
         modal.value = null
         avisar(`${c.nombre} guardado`)
       } catch (e) {
-        /* El mensaje viene del RAISE: "Ese RUT ya está registrado a nombre de
-           María Soto". Nombra a quién pertenece, que es lo que permite
-           entender el conflicto. */
         f.error = e.message
       } finally {
         guardando.value = false
@@ -536,13 +838,14 @@ export default {
       ajuste.value = {
         id: c.id,
         nombre: c.nombre,
-        puntos: c.puntos,
-        valor: c.valorPuntos,
+        puntos: c.puntos || 0,
+        valor: valorCliente(c),
         signo: 1,
         cantidad: null,
         motivo: '',
         error: ''
       }
+
       await nextTick()
       campoPuntos.value?.focus()
     }
@@ -551,7 +854,9 @@ export default {
       const a = ajuste.value
       a.error = ''
 
-      if (!a.cantidad || a.cantidad < 1) return (a.error = 'Indica cuántos puntos.')
+      if (!a.cantidad || a.cantidad < 1) {
+        return (a.error = 'Indica cuántos puntos.')
+      }
 
       if (a.signo === -1 && a.cantidad > a.puntos) {
         return (a.error = `${a.nombre} tiene ${a.puntos} puntos.`)
@@ -562,18 +867,17 @@ export default {
       }
 
       guardando.value = true
+
       try {
         const c = await store.dispatch('clientes/ajustarPuntos', {
           id: a.id,
           cantidad: a.cantidad * a.signo,
-          motivo: a.motivo
+          motivo: a.motivo.trim()
         })
 
         ajuste.value = null
         avisar(`${c.nombre} queda con ${c.puntos} puntos`)
 
-        /* El detalle abierto quedó viejo: el libro de puntos tiene una línea
-           nueva. */
         if (detalleId.value === c.id) {
           await store.dispatch('clientes/cargarDetalle', { id: c.id, forzar: true })
         }
@@ -601,46 +905,93 @@ export default {
     })
 
     /* ---------------- Utilidades ---------------- */
-
-    /* Primera letra de las dos primeras palabras: "María Soto" → MS */
     const iniciales = (nombre) => {
       if (!nombre) return '?'
+
       const partes = nombre.trim().split(/\s+/).filter(Boolean)
+
       if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase()
+
       return (partes[0][0] + partes[1][0]).toUpperCase()
     }
 
-    /* El color del avatar cuenta la relación de un vistazo: rosa si viene
-       el cumpleaños, ámbar si se alejó, verde si tiene puntos por canjear. */
     const claseAvatar = (c) => {
+      if (!c.activo) return 'off'
       if (cumpleCerca(c)) return 'cumple'
-      if (c.diasSinComprar > 90) return 'frio'
-      if (c.puntos > 0) return 'puntos'
+      if ((c.diasSinComprar || 0) > 90) return 'frio'
+      if ((c.puntos || 0) > 0) return 'puntos'
+
       return ''
     }
 
     const cumpleCerca = (c) =>
       c.diasParaCumple != null && c.diasParaCumple >= 0 && c.diasParaCumple <= 7
 
+    const contactoLinea = (c) => c.telefono || c.correo || ''
+
+    const valorCliente = (c) => {
+      if (c.valorPuntos != null) return c.valorPuntos
+
+      return (c.puntos || 0) * valorPunto.value
+    }
+
     const fmt = new Intl.NumberFormat('es-CL', {
-      style: 'currency', currency: 'CLP', maximumFractionDigits: 0
+      style: 'currency',
+      currency: 'CLP',
+      maximumFractionDigits: 0
     })
+
     const clp = (n) => fmt.format(Math.round(n || 0))
 
-    const fecha = (iso) => (iso
+    const fecha = (iso) => iso
       ? new Date(iso).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
-      : '—')
+      : '—'
 
     return {
       MESES,
-      esAdmin, clientes, total, filtro, cargando, error, hayFiltro,
-      parcial, puntosEnCirculacion, pasivoPuntos, valorPunto, guardando,
-      busqueda, filtrar, recargar,
-      detalleId, detalle, cargandoDetalle, alternarDetalle,
-      modal, abrirNuevo, abrirEdicion, guardar, cambiarEstado,
-      rutMalo, dvSugerido, normalizarRut,
-      ajuste, campoPuntos, abrirPuntos, ajustarPuntos,
-      iniciales, claseAvatar, cumpleCerca, aviso, clp, fecha
+      esAdmin,
+      clientes,
+      clientesOrdenados,
+      total,
+      filtro,
+      cargando,
+      error,
+      hayFiltro,
+      filtrosActivos,
+      parcial,
+      puntosEnCirculacion,
+      pasivoPuntos,
+      valorPunto,
+      guardando,
+      metricas,
+      busqueda,
+      filtrar,
+      limpiarFiltros,
+      recargar,
+      detalleId,
+      detalle,
+      cargandoDetalle,
+      alternarDetalle,
+      modal,
+      abrirNuevo,
+      abrirEdicion,
+      guardar,
+      cambiarEstado,
+      rutMalo,
+      dvSugerido,
+      normalizarRut,
+      ajuste,
+      campoPuntos,
+      abrirPuntos,
+      ajustarPuntos,
+      iniciales,
+      claseAvatar,
+      cumpleCerca,
+      contactoLinea,
+      valorCliente,
+      aviso,
+      clp,
+      fecha
     }
   }
 }
@@ -650,27 +1001,45 @@ export default {
 .clientes {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
-.min0 { min-width: 0; }
-.mono { font-family: var(--font-mono); font-size: .95em; }
-.mini { font-size: .78rem; }
-.suave { color: var(--text-muted); }
-.tenue { color: var(--text-faint); }
-.verde { color: var(--success); }
-.rojo  { color: var(--danger); }
-.mala  { color: var(--danger); }
+.min0 {
+  min-width: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: .94em;
+}
+
+.mini {
+  font-size: .78rem;
+}
+
+.suave {
+  color: var(--text-muted);
+}
+
+.verde {
+  color: var(--success);
+}
+
+.rojo,
+.mala {
+  color: var(--danger);
+}
 
 .dato {
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 .rot {
   display: block;
+  margin-bottom: 3px;
   font-size: .62rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -678,73 +1047,155 @@ export default {
 
 .desglose {
   display: block;
+  margin-top: 2px;
   font-size: .73rem;
   color: var(--text-faint);
-  margin-top: 1px;
+  line-height: 1.35;
 }
 
-.ayuda {
-  font-size: .82rem;
-  color: var(--text-muted);
-  line-height: 1.55;
-  margin-top: 4px;
-  max-width: 58ch;
-}
+/* ═════════════ CABECERA ═════════════ */
 
-/* ─── Cabecera ─── */
-
-.cabecera {
+.hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 18px;
+  padding: 2px 0 4px;
 }
 
-h1 {
-  font-size: clamp(1.2rem, 5vw, 1.5rem);
-  font-weight: 700;
-  letter-spacing: -.02em;
+.hero-titulo {
+  min-width: 0;
 }
 
-/* Lo que el local debe si todos canjearan mañana. Casi nunca se mira hasta
-   que alguien canja. */
-.tira-pasivo {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  background: var(--accent-soft);
-  border-radius: var(--r-sm);
-}
-
-.tira-pasivo .dato {
-  font-size: 1.05rem;
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
   color: var(--accent-text);
 }
 
-.nota-parcial {
-  font-size: .72rem;
-  color: var(--text-muted);
-  margin-left: auto;
+h1 {
+  font-size: clamp(1.35rem, 4vw, 1.8rem);
+  font-weight: 800;
+  letter-spacing: -.04em;
+  line-height: 1.05;
 }
 
-/* ─── Filtros ─── */
+.hero p {
+  max-width: 62ch;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: .88rem;
+  line-height: 1.5;
+}
+
+/* ═════════════ RESUMEN ═════════════ */
+
+.resumen-dashboard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kpi {
+  position: relative;
+  overflow: hidden;
+  padding: 15px 16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.04), transparent),
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.kpi::after {
+  content: "";
+  position: absolute;
+  right: -30px;
+  bottom: -30px;
+  width: 88px;
+  height: 88px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  opacity: .75;
+}
+
+.kpi-label {
+  display: block;
+  color: var(--text-faint);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.kpi strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 8px;
+  color: var(--text);
+  font-size: clamp(1.15rem, 3vw, 1.45rem);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi small {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.kpi-puntos {
+  border-color: color-mix(in srgb, var(--success) 30%, var(--border));
+}
+
+.kpi-puntos strong {
+  color: var(--success);
+}
+
+/* ═════════════ FILTROS ═════════════ */
+
+/* En pantalla ancha, buscador y filtros en una fila: el buscador se
+   estira y los filtros quedan pegados a la derecha. En el celular la card
+   apila todo en columna (ver el @media de abajo). */
+.panel-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
 
 .buscador {
   display: flex;
   align-items: center;
-  gap: 9px;
-  min-height: 48px;
+  gap: 10px;
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 44px;
   padding: 0 14px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  transition: border-color var(--t-fast);
+  transition: border-color var(--t-fast), background-color var(--t-fast);
 }
 
-.buscador:focus-within { border-color: var(--accent); }
+.buscador:focus-within {
+  background: var(--surface);
+  border-color: var(--accent);
+}
 
 .buscador input {
   flex: 1;
@@ -754,41 +1205,44 @@ h1 {
   background: none;
   color: var(--text);
   font: inherit;
-  /* 16px mínimo: bajo eso iOS hace zoom al enfocar. */
-  font-size: max(.9rem, 16px);
+  font-size: max(.92rem, 16px);
 }
 
-.filtros {
+.filtros-linea {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
-/* Pastillas y no select: son tres estados excluyentes que se alternan de un
-   toque, y en el teléfono un select abre una hoja entera para elegir entre
-   tres cosas. */
 .pastillas {
-  display: flex;
+  display: inline-flex;
   gap: 4px;
-  padding: 3px;
+  padding: 4px;
   background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: var(--r-full);
 }
 
 .pastillas button {
-  min-height: 38px;
-  padding: 0 15px;
-  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
   border-radius: var(--r-full);
   background: transparent;
   color: var(--text-muted);
   font: inherit;
   font-size: .84rem;
-  font-weight: 600;
+  font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color var(--t-fast), color var(--t-fast);
+  transition:
+    background-color var(--t-fast),
+    color var(--t-fast),
+    box-shadow var(--t-fast);
 }
 
 .pastillas button.on {
@@ -797,88 +1251,259 @@ h1 {
   box-shadow: var(--shadow-sm);
 }
 
+.pill-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: .68rem;
+  font-weight: 800;
+}
+
 .campo {
   width: 100%;
   min-height: 44px;
-  padding: .6rem .75rem;
+  padding: .62rem .78rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--text);
   font: inherit;
   font-size: max(.9rem, 16px);
-  transition: border-color var(--t-fast);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
-.campo:focus { outline: 0; border-color: var(--accent); }
-.campo.malo { border-color: var(--danger); }
-.campo.corto { width: auto; flex: 0 1 190px; }
+.campo:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.campo.malo {
+  border-color: var(--danger);
+}
+
+/* El select se viste de pastilla: mismo alto y borde que el resto de la
+   fila, y se marca cuando está filtrando. */
+.campo-select {
+  min-height: 44px;
+  padding: 0 34px 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background:
+    var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+  font-weight: 600;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.campo-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.campo-select.on {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+  color: var(--accent-text);
+}
 
 textarea.campo {
-  min-height: 74px;
+  min-height: 84px;
   resize: vertical;
   line-height: 1.5;
 }
 
+/* El checkbox como pastilla, igual que en Inventario Bodega. */
+/* margin: 0 porque es un <label>, y la regla de label de los formularios
+   le agrega un margen inferior que lo deja más arriba que el select. */
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: .85rem;
+  gap: 9px;
+  margin: 0;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  background: var(--surface);
   color: var(--text-muted);
-  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 600;
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.check.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
 }
 
 .check input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-content: center;
   width: 18px;
   height: 18px;
-  accent-color: var(--accent);
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
   cursor: pointer;
 }
 
-/* ─── Tarjetas ─── */
+.check input::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--accent-contrast, #fff);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .12s ease;
+}
+
+.check input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.check input:checked::after {
+  transform: rotate(45deg) scale(1);
+}
+
+.check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.limpiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 12px 0 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.limpiar:hover {
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.contador {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .7rem;
+}
+
+/* ═════════════ TARJETAS ═════════════ */
 
 .tarjetas {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(365px, 1fr));
+  gap: 14px;
   align-items: start;
   transition: opacity .14s ease;
 }
 
-.tarjetas.atenuada { opacity: .45; }
+.tarjetas.atenuada {
+  opacity: .55;
+}
 
 .tarjeta {
+  position: relative;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  overflow: hidden;
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--t-fast),
+    box-shadow var(--t-fast),
+    transform var(--t-fast);
 }
 
-.tarjeta:hover { box-shadow: var(--shadow-sm); }
+.tarjeta::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: transparent;
+}
 
-/* Un cliente desactivado se atenúa pero sigue visible: las boletas
-   históricas lo referencian y su ficha tiene que poder consultarse. */
-.tarjeta.inactivo { opacity: .55; }
+.tarjeta:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
 
 .tarjeta.abierta {
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
 }
 
-/* La cabecera entera abre el detalle: buscar un botón chico con el pulgar
-   es fricción sin motivo. */
+.tarjeta.abierta::before {
+  background: var(--accent);
+}
+
+.tarjeta.conPuntos::before {
+  background: var(--success);
+}
+
+.tarjeta.frio::before {
+  background: var(--warn);
+}
+
+.tarjeta.cumple::before {
+  background: var(--accent);
+}
+
+.tarjeta.inactivo {
+  opacity: .62;
+}
+
+.tarjeta.inactivo::before {
+  background: var(--text-faint);
+}
+
 .cab {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto 18px;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   width: 100%;
-  padding: 14px 15px 12px;
-  border: none;
+  padding: 15px 16px 13px 18px;
+  border: 0;
   background: none;
   color: var(--text);
   font: inherit;
@@ -886,26 +1511,48 @@ textarea.campo {
   cursor: pointer;
 }
 
-.cab:hover { background: var(--surface-2); }
+.cab:hover {
+  background: var(--surface-2);
+}
 
-/* El color cuenta la relación de un vistazo: rosa si viene el cumpleaños,
-   ámbar si se alejó, verde si tiene puntos por canjear. */
 .avatar {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  flex-shrink: 0;
-  border-radius: var(--r-sm);
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   background: var(--surface-2);
   color: var(--text-muted);
   font-size: .92rem;
-  font-weight: 700;
+  font-weight: 850;
+  letter-spacing: -.02em;
 }
 
-.avatar.cumple { background: var(--accent-soft); color: var(--accent-text); }
-.avatar.frio   { background: var(--warn-soft);   color: var(--warn); }
-.avatar.puntos { background: var(--success-soft); color: var(--success); }
+.avatar.cumple {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.avatar.frio {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.avatar.puntos {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.avatar.off {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+.identidad {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 
 .nombre-fila {
   display: flex;
@@ -915,118 +1562,173 @@ textarea.campo {
 }
 
 .nombre {
-  font-size: .95rem;
-  font-weight: 700;
+  min-width: 0;
   overflow: hidden;
+  color: var(--text);
+  font-size: .96rem;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sub {
-  font-size: .75rem;
-  color: var(--text-faint);
-  margin-top: 2px;
   overflow: hidden;
+  color: var(--text-faint);
+  font-size: .75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.derecha {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-  text-align: right;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .03em;
+  text-transform: uppercase;
 }
 
-/* Los puntos con su valor en pesos debajo: "340 puntos" no dice nada,
-   "$3.400" sí. */
-.puntos {
-  font-size: 1.05rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--success);
-  line-height: 1.1;
+.badge.off {
+  background: var(--surface-2);
+  color: var(--text-muted);
 }
 
-.puntos-valor {
-  font-size: .68rem;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.flecha {
-  flex-shrink: 0;
-  color: var(--text-faint);
-  font-size: 1.2rem;
-  transition: transform var(--t-fast);
-}
-
-.flecha.girada { transform: rotate(90deg); }
-
-.resumen-fila {
-  display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 0 15px 13px;
-}
-
-.resumen-fila .dato { font-size: .88rem; }
-.resumen-fila .dato.frio { color: var(--warn); }
-
-.cumple,
-.frio-aviso {
-  padding: 8px 15px;
-  font-size: .78rem;
-  font-weight: 600;
-}
-
-.cumple {
+.badge.cumple {
   background: var(--accent-soft);
   color: var(--accent-text);
 }
 
-.frio-aviso {
+.badge.frio {
   background: var(--warn-soft);
   color: var(--warn);
 }
 
-/* ─── Detalle ─── */
+.wallet {
+  min-width: 86px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--success-soft);
+  color: var(--success);
+  text-align: right;
+}
+
+.wallet.vacia {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+.wallet-label {
+  display: block;
+  margin-bottom: 2px;
+  font-size: .58rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.wallet strong {
+  display: block;
+  font-size: 1.08rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.wallet small {
+  display: block;
+  margin-top: 3px;
+  font-size: .68rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.flecha {
+  color: var(--text-faint);
+  font-size: 1.35rem;
+  transition: transform var(--t-fast);
+}
+
+.flecha.girada {
+  transform: rotate(90deg);
+}
+
+.metricas-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 15px 18px;
+}
+
+.metricas-card .dato {
+  font-size: .86rem;
+}
+
+.metricas-card .dato.warn {
+  color: var(--warn);
+}
+
+.alerta-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px 9px 18px;
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.alerta-card.cumple {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.alerta-card.frio {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+/* ═════════════ DETALLE ═════════════ */
 
 .detalle {
-  padding: 14px 15px;
+  padding: 15px 16px 16px 18px;
   background: var(--surface-2);
   border-top: 1px solid var(--border);
 }
 
-.bloque { margin-bottom: 16px; }
-.bloque:last-of-type { margin-bottom: 0; }
-
-.detalle h4 {
-  font-size: .66rem;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 7px;
+.detalle-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
 }
 
-/* Lo que siempre se lleva: es lo que permite ofrecérselo antes de que
-   pregunte, y lo que separa una ficha de una agenda de teléfonos. */
+.bloque {
+  min-width: 0;
+}
+
+.bloque h4 {
+  margin-bottom: 8px;
+  color: var(--text-faint);
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
 .frecuentes {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
 }
 
 .frecuente {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
   border-radius: var(--r-full);
   background: var(--surface);
-  border: 1px solid var(--border);
   font-size: .78rem;
 }
 
@@ -1040,43 +1742,62 @@ textarea.campo {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 7px 0;
+  padding: 9px 0;
   border-bottom: 1px solid var(--border);
   font-size: .82rem;
 }
 
-.item:last-child { border-bottom: 0; }
-.item.anulada { opacity: .5; }
+.item:last-child {
+  border-bottom: 0;
+}
+
+.item.anulada {
+  opacity: .52;
+}
+
+.item-titulo {
+  font-weight: 750;
+}
 
 .notas {
-  padding: 10px 12px;
+  display: flex;
+  gap: 9px;
   margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--secondary);
+  border-radius: var(--r-sm);
   background: var(--surface);
-  border-left: 3px solid var(--secondary);
-  border-radius: 0 var(--r-sm) var(--r-sm) 0;
-  font-size: .8rem;
-  line-height: 1.55;
   color: var(--text-muted);
-  font-style: italic;
+  font-size: .82rem;
+  line-height: 1.55;
+}
+
+.notas p {
+  margin: 0;
 }
 
 .acciones {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 15px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
-.cargando {
-  padding: 20px;
-  text-align: center;
+.cargando,
+.sin-detalle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 70px;
   color: var(--text-muted);
   font-size: .85rem;
 }
 
-/* ─── Modales ─── */
+/* ═════════════ MODALES ═════════════ */
 
 .fondo {
   position: fixed;
@@ -1091,30 +1812,58 @@ textarea.campo {
 
 .modal {
   width: 100%;
-  max-width: 480px;
+  max-width: 520px;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-lg);
-  overflow: hidden;
 }
 
-.modal.angosto { max-width: 400px; }
+.modal.angosto {
+  max-width: 430px;
+}
 
 .modal-cab {
-  padding: 20px 22px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 22px 15px;
   border-bottom: 1px solid var(--border);
 }
 
-.modal-cab h3 { font-size: 1.1rem; font-weight: 700; }
+.modal-cab h3 {
+  font-size: 1.13rem;
+  font-weight: 850;
+}
 
 .modal-cab p {
-  font-size: .82rem;
-  color: var(--text-muted);
   margin-top: 4px;
+  color: var(--text-muted);
+  font-size: .82rem;
+  line-height: 1.45;
+}
+
+.cerrar {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cerrar:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
 .modal-cuerpo {
@@ -1131,7 +1880,9 @@ textarea.campo {
   background: var(--surface-2);
 }
 
-.modal-pie .btn { flex: 1; }
+.modal-pie .btn {
+  flex: 1;
+}
 
 .rejilla {
   display: grid;
@@ -1140,30 +1891,65 @@ textarea.campo {
   margin-bottom: 16px;
 }
 
-.grupo { margin-bottom: 16px; }
-.rejilla .grupo { margin-bottom: 0; }
+.grupo {
+  margin-bottom: 16px;
+}
+
+.rejilla .grupo {
+  margin-bottom: 0;
+}
 
 label {
   display: block;
-  font-size: .8rem;
-  font-weight: 600;
-  color: var(--text-muted);
   margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: .8rem;
+  font-weight: 750;
 }
 
 .ayuda-campo {
-  font-size: .75rem;
-  color: var(--text-faint);
-  line-height: 1.5;
   margin-top: 5px;
+  color: var(--text-faint);
+  font-size: .75rem;
+  line-height: 1.5;
 }
 
-/* El día angosto y el mes ancho: un día son dos dígitos, un mes es una
-   palabra. */
 .cumple-campos {
   display: grid;
-  grid-template-columns: 90px 1fr;
+  grid-template-columns: 92px 1fr;
   gap: 10px;
+}
+
+.saldo-puntos {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--success) 28%, var(--border));
+  border-radius: var(--r-md);
+  background: var(--success-soft);
+  color: var(--success);
+  text-align: center;
+}
+
+.saldo-puntos span {
+  display: block;
+  font-size: .68rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.saldo-puntos strong {
+  display: block;
+  margin-top: 5px;
+  font-size: 2rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.saldo-puntos small {
+  display: block;
+  margin-top: 4px;
+  font-size: .78rem;
 }
 
 .opciones {
@@ -1175,8 +1961,8 @@ label {
 .opcion {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 11px 14px;
+  gap: 3px;
+  padding: 12px 14px;
   border: 1.5px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -1184,15 +1970,25 @@ label {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color var(--t-fast), background-color var(--t-fast);
+  transition:
+    border-color var(--t-fast),
+    background-color var(--t-fast),
+    transform var(--t-fast);
 }
 
-.opcion:hover { border-color: var(--border-strong); }
-.opcion b { font-size: .88rem; }
+.opcion:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.opcion b {
+  font-size: .9rem;
+}
 
 .opcion span {
-  font-size: .76rem;
   color: var(--text-muted);
+  font-size: .76rem;
+  line-height: 1.35;
 }
 
 .opcion.on {
@@ -1200,9 +1996,11 @@ label {
   background: var(--accent-soft);
 }
 
-.opcion.on span { color: var(--accent-text); }
+.opcion.on span {
+  color: var(--accent-text);
+}
 
-/* ─── Botones y bandas ─── */
+/* ═════════════ BOTONES / BANDAS ═════════════ */
 
 .btn {
   display: inline-flex;
@@ -1211,20 +2009,35 @@ label {
   gap: 7px;
   min-height: 44px;
   padding: .65rem 1.15rem;
-  border: none;
+  border: 0;
   border-radius: var(--r-sm);
   background: var(--accent);
   color: var(--accent-contrast);
   font: inherit;
   font-size: .92rem;
-  font-weight: 600;
+  font-weight: 750;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color var(--t-fast);
+  transition:
+    background-color var(--t-fast),
+    border-color var(--t-fast),
+    color var(--t-fast),
+    transform var(--t-fast);
 }
 
-.btn:hover:not(:disabled) { background: var(--accent-hover); }
-.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.btn-principal {
+  box-shadow: var(--shadow-sm);
+}
 
 .btn-linea {
   background: transparent;
@@ -1232,7 +2045,15 @@ label {
   color: var(--text-muted);
 }
 
-.btn-linea:hover:not(:disabled) { background: var(--surface); color: var(--text); }
+.btn-linea:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.btn-linea.peligro:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 
 .btn-mini {
   min-height: 38px;
@@ -1256,18 +2077,10 @@ label {
   cursor: pointer;
 }
 
-.btn-icono.chico { width: 26px; height: 26px; font-size: .78rem; }
-
-.etiqueta {
-  padding: 1px 7px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: .6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  flex-shrink: 0;
+.btn-icono.chico {
+  width: 26px;
+  height: 26px;
+  font-size: .78rem;
 }
 
 .banda {
@@ -1286,7 +2099,9 @@ label {
   color: var(--danger);
 }
 
-.banda .btn { margin-left: auto; }
+.banda .btn {
+  margin-left: auto;
+}
 
 .error {
   padding: 11px 13px;
@@ -1300,25 +2115,42 @@ label {
 }
 
 .vacio {
-  text-align: center;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 260px;
   padding: 44px 20px;
   color: var(--text-muted);
   font-size: .88rem;
+  text-align: center;
   background: var(--surface);
   border: 1px dashed var(--border-strong);
   border-radius: var(--r-md);
 }
 
 .vacio strong {
-  display: block;
   color: var(--text);
-  font-size: 1.02rem;
-  margin-bottom: 5px;
+  font-size: 1.03rem;
+}
+
+.loader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  animation: girar .7s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .paginador {
-  text-align: center;
   margin: 0;
+  text-align: center;
 }
 
 .aviso {
@@ -1333,61 +2165,159 @@ label {
   background: var(--success);
   color: #fff;
   font-size: .88rem;
-  font-weight: 600;
+  font-weight: 750;
   text-align: center;
   box-shadow: var(--shadow-lg);
 }
 
-.aviso.malo { background: var(--danger); }
+.aviso.malo {
+  background: var(--danger);
+}
 
-/* ═══════════════════════════════════════════════════════════
-   MÓVIL
-   ═══════════════════════════════════════════════════════════ */
+/* ═════════════ RESPONSIVE ═════════════ */
 
-@media (max-width: 720px) {
-  .cabecera .btn { width: 100%; }
-
-  .tarjetas { grid-template-columns: 1fr; }
-
-  /* Las pastillas ocupan la línea entera y se reparten: con el pulgar,
-     tres botones apretados se aciertan mal. */
-  .pastillas { width: 100%; }
-  .pastillas button { flex: 1; padding: 0 8px; }
-
-  .campo.corto { flex: 1 1 100%; width: 100%; }
-
-  .check { min-height: 44px; }
-
-  .tira-pasivo { gap: 18px; }
-  .nota-parcial { margin-left: 0; width: 100%; }
-
-  /* El resumen se reparte en dos columnas en vez de estirarse: cuatro
-     datos en una fila de 360px quedan ilegibles. */
-  .resumen-fila {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px 18px;
+@media (max-width: 980px) {
+  .resumen-dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .acciones .btn { flex: 1 1 calc(50% - 4px); min-height: 42px; }
+  .tarjetas {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+}
 
-  /* El modal sube desde abajo a pantalla completa: con siete campos, un
-     diálogo flotante desperdicia el alto que el formulario necesita. */
-  .fondo { padding: 0; align-items: flex-end; }
+@media (max-width: 720px) {
+  .hero {
+    flex-direction: column;
+  }
+
+  .hero .btn {
+    width: 100%;
+  }
+
+  .resumen-dashboard {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .kpi {
+    padding: 13px;
+  }
+
+  /* Celular: la card apila buscador y filtros en columna, cada control a
+     todo el ancho para tocarlo sin apuntar. */
+  .panel-filtros,
+  .filtros-linea {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .buscador {
+    flex: 0 0 auto;
+  }
+
+  .filtros-linea > * {
+    width: 100%;
+  }
+
+  .pastillas button {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
+  }
+
+  .check,
+  .limpiar {
+    justify-content: center;
+  }
+
+  .tarjetas {
+    grid-template-columns: 1fr;
+  }
+
+  .cab {
+    grid-template-columns: 42px minmax(0, 1fr) 18px;
+  }
+
+  .wallet {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+  }
+
+  .wallet-label {
+    margin: 0;
+  }
+
+  .wallet small {
+    margin: 0;
+  }
+
+  .flecha {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .metricas-card {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+  }
+
+  .acciones .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-height: 42px;
+  }
+
+  .fondo {
+    align-items: flex-end;
+    padding: 0;
+  }
 
   .modal {
     max-width: none;
     max-height: 100dvh;
     height: 100dvh;
-    border: none;
+    border: 0;
     border-radius: 0;
   }
 
-  .modal-cab { padding: 16px 18px 12px; }
-  .modal-cuerpo { padding: 18px; }
+  .modal-cab {
+    padding: 16px 18px 12px;
+  }
+
+  .modal-cuerpo {
+    padding: 18px;
+  }
 
   .modal-pie {
     padding: 14px 18px calc(14px + env(safe-area-inset-bottom, 0));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .check input::after {
+    transition: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .resumen-dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .cab {
+    padding-right: 13px;
+  }
+
+  .metricas-card {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .acciones .btn {
+    flex-basis: 100%;
   }
 }
 </style>

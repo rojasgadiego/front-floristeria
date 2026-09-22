@@ -38,25 +38,5 @@ export const mostradorService = {
    */
   escanear (codigo, { signal } = {}) {
     return pedir(http.get(`${RUTA}/partidas/${encodeURIComponent(codigo)}`, { signal }))
-  },
-
-  /** En orden de consumo: lo que vence antes sale primero. */
-  deProducto (productoId, { signal } = {}) {
-    return pedir(http.get(`${RUTA}/producto/${productoId}`, { signal }))
-  },
-
-  /** Devuelve la partida creada con su código y su QR. */
-  traspasar ({ lote, cantidad, notas = null }) {
-    return pedir(http.post(`${RUTA}/traspasos`, { lote, cantidad, notas }))
-  },
-
-  /** Para lo que no controla lotes: jarrones, cintas, tarjetas. */
-  traspasarProducto ({ productoId, cantidad, notas = null }) {
-    return pedir(http.post(`${RUTA}/traspasos/producto`, { productoId, cantidad, notas }))
-  },
-
-  /** Devuelve al lote del que salió. Bajar de más pasa. */
-  retornar ({ partida, cantidad, notas = null }) {
-    return pedir(http.post(`${RUTA}/retornos`, { partida, cantidad, notas }))
   }
 }

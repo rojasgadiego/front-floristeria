@@ -74,7 +74,7 @@
         </div>
 
         <!-- ================= Descuento manual ================= -->
-        <div class="grupo">
+        <!-- <div class="grupo">
           <div class="seccion-cab">
             <label for="c-desc">Descuento a mano</label>
             <span class="mini suave">
@@ -87,12 +87,6 @@
           <input v-if="descuento > 0" class="campo motivo" v-model="motivo" maxlength="200"
             placeholder="Motivo del descuento">
 
-          <!--
-            Sobre el umbral hay que verificar credenciales contra la base. No
-            alcanza con que la pantalla diga que alguien autorizó: subir el
-            tope de descuento es el atajo más rentable para vaciar un punto
-            de venta.
-          -->
           <div v-if="necesitaAutorizacion" class="autorizacion">
             <div class="auth-cab">
               <span aria-hidden="true">🔐</span>
@@ -109,7 +103,7 @@
                 autocomplete="off" @keyup.enter="cobrar">
             </div>
           </div>
-        </div>
+        </div> -->
 
         <!-- ================= Totales ================= -->
         <div class="totales">

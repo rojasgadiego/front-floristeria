@@ -31,8 +31,7 @@
           @change="filtrar({ activo: $event.target.checked ? null : true })">
         <span>Ver desactivados</span>
       </label>
-
-      <span class="conteo">{{ lista.length }} proveedor(es)</span>
+      <!-- <span class="conteo">{{ lista.length }} proveedor(es)</span> -->
     </div>
 
     <div v-if="cargando && !lista.length" class="vacio">Cargando proveedores…</div>

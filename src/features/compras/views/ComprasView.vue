@@ -595,9 +595,13 @@ export default {
       const señal = { signal: control.signal }
       store.dispatch('compras/cargar', señal)
       store.dispatch('proveedores/cargar', señal)
-      if (!store.getters['productos/productos'].length) {
-        store.dispatch('productos/cargar', señal)
-      }
+      /* Siempre con el filtro completo: el catálogo del store lo comparte
+         el POS, que lo deja en "solo lo del mesón". Sin esto, entrar acá
+         después de vender mostraría solo lo que está adelante. */
+      store.dispatch('productos/filtrar', {
+        buscar: '', categoriaId: null, tipo: null, activo: true,
+        bajoMinimo: false, controlaLotes: null, soloEnVenta: false
+      })
 
       mql = window.matchMedia(MOVIL)
       esMovil.value = mql.matches

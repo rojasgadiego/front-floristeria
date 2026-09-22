@@ -107,7 +107,7 @@
 
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useStore } from 'vuex'
+import { productosService } from '@/features/inventario/services/productos.service'
 import { claseAlerta } from '@/features/lotes/store/lotes.module'
 
 export default {
@@ -118,15 +118,15 @@ export default {
   emits: ['cerrar', 'armado'],
 
   setup (props, { emit }) {
-    const store = useStore()
-
     const cantidad = ref(1)
     const autorizados = ref([])
     const error = ref('')
     const consultando = ref(false)
 
-    const d = computed(() => store.getters['productos/disponibilidad'])
-    const guardando = computed(() => store.getters['productos/guardando'])
+    /* La consulta vive en el modal, no en Vuex: nace y muere con él, así
+       que al abrir otro producto no se ve un instante lo del anterior. */
+    const d = ref(null)
+    const guardando = ref(false)
 
     /*
      * Cuánto se puede armar realmente: si hay lotes recuperados marcados,
@@ -151,15 +151,17 @@ export default {
       if (!cantidad.value || cantidad.value < 1) return
       control?.abort()
       control = new AbortController()
+      const { signal } = control
       consultando.value = true
+      error.value = ''
       try {
-        await store.dispatch('productos/consultarDisponibilidad', {
-          id: props.producto.id,
-          cantidad: cantidad.value,
-          signal: control.signal
-        })
+        d.value = await productosService.disponibilidadArmado(props.producto.id, cantidad.value, { signal })
+      } catch (e) {
+        if (e.esCancelado || e.name === 'AbortError') return
+        d.value = null
+        error.value = e.message
       } finally {
-        consultando.value = false
+        if (!signal.aborted) consultando.value = false
       }
     }
 
@@ -173,20 +175,26 @@ export default {
     onUnmounted(() => {
       clearTimeout(tmr)
       control?.abort()
-      store.dispatch('productos/limpiarDisponibilidad')
     })
 
     const confirmar = async () => {
+      if (!puedeArmar.value || guardando.value) return
       error.value = ''
+      guardando.value = true
       try {
-        const resultado = await store.dispatch('productos/armar', {
-          id: props.producto.id,
+        const resultado = await productosService.armar(props.producto.id, {
           cantidad: cantidad.value,
           lotesAutorizados: autorizados.value
         })
-        emit('armado', resultado)
+        emit('armado', {
+          productoId: props.producto.id,
+          armadas: cantidad.value,
+          ...resultado
+        })
       } catch (e) {
         error.value = e.message
+      } finally {
+        guardando.value = false
       }
     }
 

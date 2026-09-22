@@ -37,7 +37,7 @@ export default {
       /* La tabla esconde el paginador cuando foco es 'venta', así que lo que
          no venga en esta primera carga no se puede alcanzar desde la interfaz.
          Con el límite por defecto el mostrador vería solo la primera página. */
-      limite: 200,
+      tamano: 200,
       activo: true,
       soloEnVenta: true
     })

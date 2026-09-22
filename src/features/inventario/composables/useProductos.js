@@ -2,15 +2,7 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import { productosService } from '@/features/inventario/services/productos.service'
 
-/**
- * Estado de la grilla de productos, local a quien lo llame.
- *
- * Antes esto vivía en Vuex y lo compartían el POS y Bodega: al cambiar de
- * pantalla la grilla arrancaba con los datos del otro módulo y recién
- * después llegaba la respuesta buena. Acá el estado nace y muere con el
- * componente, así que no hay nada viejo que mostrar.
- */
-export function useProductos(filtrosIniciales = {}) {
+export function useProductos (filtrosIniciales = {}) {
     const items = ref([])
     const total = ref(0)
     const cargando = ref(false)

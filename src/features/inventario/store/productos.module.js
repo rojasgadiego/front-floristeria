@@ -47,12 +47,6 @@ export default {
     totalPaginas: 0,
     filtro: filtroInicial(),
 
-    /* El producto que está abierto en el formulario. null = cerrado.
-       Se guarda el objeto completo, no solo el id: el modal necesita los
-       valores actuales para pre-llenarse sin otro viaje. */
-    editando: null,
-    formularioAbierto: false,
-
     cargando: false,
     guardando: false,
     error: null
@@ -76,15 +70,6 @@ export default {
     },
 
     RESET_FILTRO(state) { state.filtro = filtroInicial() },
-
-    ABRIR_FORMULARIO(state, producto) {
-      state.editando = producto
-      state.formularioAbierto = true
-    },
-    CERRAR_FORMULARIO(state) {
-      state.editando = null
-      state.formularioAbierto = false
-    },
 
     UPSERT(state, producto) {
       const i = state.lista.findIndex(p => p.id === producto.id)
@@ -121,14 +106,6 @@ export default {
       await dispatch('cargar')
     },
 
-    /* ---------------- Formulario ---------------- */
-
-    abrirFormulario({ commit }, producto = null) {
-      commit('ABRIR_FORMULARIO', producto)
-    },
-
-    cerrarFormulario({ commit }) { commit('CERRAR_FORMULARIO') },
-
     async crear({ commit, dispatch }, datos) {
       commit('SET_GUARDANDO', true)
       try {
@@ -153,12 +130,6 @@ export default {
       }
     },
 
-    async cambiarEstado({ commit }, { id, activo }) {
-      const p = await productosService.cambiarEstado(id, activo)
-      commit('UPSERT', p)
-      return p
-    },
-
     /**
      * Para el lector del mesón. Devuelve null si no existe en vez de lanzar:
      * en el POS, escanear algo que no está en el catálogo es un caso
@@ -180,26 +151,12 @@ export default {
     totalPaginas: state => state.totalPaginas,
     filtro: state => state.filtro,
 
-    editando: state => state.editando,
-    formularioAbierto: state => state.formularioAbierto,
-
     cargando: state => state.cargando,
     guardando: state => state.guardando,
     error: state => state.error,
 
-    /* Lo que se puede vender en el mesón ahora mismo. */
-    enMostrador: state => state.lista.filter(p => (p.enVenta ?? 0) > 0),
-
-    /* Lo que hay que comprar. Es la lista con la que se va al terminal. */
-    bajoMinimo: state => state.lista.filter(p => p.bajoMinimo && p.activo),
-
-    /* Los armados: son los únicos que llevan receta y los únicos que se
-       pueden desarmar. */
-    armados: state => state.lista.filter(p => p.tipo === 'armado'),
-
-    /* Margen bajo el 25%: en una florería la merma se come esa diferencia
-       antes de fin de mes. */
-    margenBajo: state => state.lista.filter(p => p.activo && p.margen != null && p.margen < 25),
+    /* Lo que se puede comprar: un ramo no se compra, se arma. */
+    simples: state => state.lista.filter(p => p.tipo === 'simple' && p.activo),
 
     porId: state => (id) => state.lista.find(p => p.id === id) ?? null
   }
