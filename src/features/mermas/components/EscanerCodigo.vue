@@ -5,8 +5,9 @@
          se escribe en cualquier otra parte. -->
     <div class="campo-codigo" :class="{ leyendo: camara }">
       <span aria-hidden="true">🏷️</span>
-      <input ref="entrada" v-model="codigo" :placeholder="camara ? 'Apunta al código…' : 'Escanea o escribe el código'"
-        aria-label="Código de lote o partida" autocomplete="off" spellcheck="false" @keyup.enter="buscar">
+      <input ref="entrada" v-model="codigo" :placeholder="camara ? 'O escribe el código…' : 'Escanea o escribe el código'"
+        aria-label="Código de lote o partida" autocomplete="off" spellcheck="false"
+        @input="alTeclear" @paste="pegado = true" @keyup.enter="buscar">
       <span v-if="buscando" class="spinner" aria-hidden="true"></span>
       <button v-else-if="codigo" class="btn-icono chico" @click="limpiar" aria-label="Limpiar">✕</button>
     </div>
@@ -24,27 +25,32 @@
       </button>
     </div>
 
-    <!-- El visor solo aparece si se pidió la cámara: tenerlo siempre
-         encendido gasta batería y enciende la luz del teléfono sin motivo. -->
-    <div v-if="camara" class="visor">
-      <video ref="video" playsinline muted></video>
-      <div class="mira" aria-hidden="true"></div>
-    </div>
+    <!-- El mismo visor del punto de venta (qr-scanner): funciona en iPhone y
+         en Android, con linterna, cambio de cámara, zoom y lectura desde una
+         foto. Antes se usaba BarcodeDetector, que Safari no trae: en iPhone
+         la cámara no abría y todo terminaba registrado "a mano".
+         Se monta solo si se pide: tenerlo encendido gasta batería. -->
+    <EscanerQr v-if="camara" ref="visor" autoiniciar :continuo="false" :con-manual="false"
+      @detectado="alDetectar" />
 
     <p v-if="error" class="error">{{ error }}</p>
-
-    <p v-if="!camara && !soportaCamara" class="ayuda">
-      Este equipo no permite usar la cámara desde el navegador. Escribe el
-      código que aparece bajo el QR de la etiqueta.
-    </p>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, defineAsyncComponent } from 'vue'
+
+/* qr-scanner pesa: se carga recién al abrir la cámara, como en el POS. */
+const EscanerQr = defineAsyncComponent(() => import('@/features/ventas/components/EscanerQr.vue'))
+
+/* Una pistola lectora "teclea" el código entero en milisegundos; una
+   persona tarda bastante más por carácter. Bajo este promedio se asume
+   lector: el código se leyó de la etiqueta, no se inventó. */
+const MS_POR_CARACTER_LECTOR = 35
 
 export default {
   name: 'EscanerCodigo',
+  components: { EscanerQr },
   emits: ['leido'],
 
   setup(_, { emit }) {
@@ -53,30 +59,24 @@ export default {
     const buscando = ref(false)
     const error = ref('')
     const entrada = ref(null)
-    const video = ref(null)
+    const visor = ref(null)
 
-    /* BarcodeDetector es nativo en Chrome y Edge. Donde no está queda el
-       tipeo manual: es preferible eso a cargar una librería de 300 KB que
-       casi nadie va a usar. */
-    const soportaCamara = typeof window !== 'undefined' && 'BarcodeDetector' in window
-
-    let stream = null
-    let detector = null
-    let bucle = null
+    /* Para saber si el campo lo llenó una pistola o una persona. */
+    const pegado = ref(false)
+    let primeraTecla = 0
 
     onMounted(async () => {
       await nextTick()
       entrada.value?.focus()
     })
 
-    onUnmounted(() => cerrarCamara())
-
     /**
      * Emite el código leído. Quien lo recibe decide qué hacer con él; este
      * componente solo sabe leer.
      *
-     * `escaneado` distingue la cámara del tipeo: es el dato que después
-     * permite ver quién registra con el balde en la mano y quién no.
+     * `escaneado` distingue la lectura de la etiqueta (cámara, foto o
+     * pistola) del tipeo: es el dato que después permite ver quién registra
+     * con el balde en la mano y quién no.
      */
     const emitir = (valor, escaneado) => {
       buscando.value = true
@@ -84,89 +84,59 @@ export default {
       setTimeout(() => { buscando.value = false }, 600)
     }
 
+    const alTeclear = () => {
+      if (codigo.value.length <= 1) primeraTecla = Date.now()
+      if (!codigo.value) pegado.value = false
+    }
+
+    const fueLector = () => {
+      const largo = codigo.value.trim().length
+      if (pegado.value || largo < 4 || !primeraTecla) return false
+      return (Date.now() - primeraTecla) / largo < MS_POR_CARACTER_LECTOR
+    }
+
     const buscar = () => {
       error.value = ''
       if (!codigo.value.trim()) return
-      emitir(codigo.value, false)
+      emitir(codigo.value, fueLector())
     }
 
     const limpiar = () => {
       codigo.value = ''
+      pegado.value = false
+      primeraTecla = 0
       error.value = ''
       entrada.value?.focus()
     }
 
-    const abrirCamara = async () => {
+    const abrirCamara = () => {
       error.value = ''
-
-      if (!soportaCamara) {
-        error.value = 'Este navegador no permite leer códigos con la cámara.'
-        return
-      }
-
-      try {
-        detector = new window.BarcodeDetector({ formats: ['qr_code'] })
-
-        /* facingMode environment: la cámara trasera. Con la frontal habría
-           que dar vuelta el teléfono para apuntar al balde. */
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' }
-        })
-
-        camara.value = true
-        await nextTick()
-
-        video.value.srcObject = stream
-        await video.value.play()
-
-        leerContinuo()
-      } catch (e) {
-        camara.value = false
-        error.value = e.name === 'NotAllowedError'
-          ? 'Diste permiso denegado a la cámara. Puedes escribir el código a mano.'
-          : 'No se pudo abrir la cámara. Escribe el código a mano.'
-      }
-    }
-
-    /* Se lee cada 300ms en vez de en cada frame: un QR no se mueve tan
-       rápido, y detectar a 60fps calienta el teléfono sin leer más. */
-    const leerContinuo = () => {
-      bucle = setInterval(async () => {
-        if (!video.value || video.value.readyState !== 4) return
-
-        try {
-          const codigos = await detector.detect(video.value)
-          if (!codigos.length) return
-
-          const valor = codigos[0].rawValue
-          codigo.value = valor
-          cerrarCamara()
-
-          /* Vibra si el equipo puede: confirma la lectura sin mirar la
-             pantalla, que es lo que pasa con el teléfono apuntando al balde. */
-          if (navigator.vibrate) navigator.vibrate(60)
-
-          emitir(valor, true)
-        } catch {
-          /* Un frame borroso no es un error: el siguiente probablemente sirve. */
-        }
-      }, 300)
+      camara.value = true
     }
 
     const cerrarCamara = () => {
-      clearInterval(bucle)
-      bucle = null
-
-      stream?.getTracks().forEach(t => t.stop())
-      stream = null
       camara.value = false
     }
 
-    /* Para que el padre pueda mostrar un error del servidor acá abajo. */
-    const mostrarError = (msg) => { error.value = msg }
+    /* Cámara o foto: se leyó la etiqueta. El visor queda en pausa hasta que
+       el padre diga si el código sirve. */
+    const alDetectar = (valor, origen) => {
+      codigo.value = valor
+      emitir(valor, origen !== 'manual')
+    }
+
+    /* Para que el padre pueda mostrar un error del servidor acá abajo. Si la
+       cámara está abierta, vuelve a leer: el código no servía y lo natural es
+       apuntar al balde correcto sin tocar nada más. */
+    const mostrarError = (msg) => {
+      error.value = msg
+      if (camara.value) visor.value?.reanudar()
+    }
 
     const reiniciar = async () => {
       codigo.value = ''
+      pegado.value = false
+      primeraTecla = 0
       error.value = ''
       buscando.value = false
       await nextTick()
@@ -174,8 +144,9 @@ export default {
     }
 
     return {
-      codigo, camara, buscando, error, entrada, video, soportaCamara,
-      buscar, limpiar, abrirCamara, cerrarCamara, mostrarError, reiniciar
+      codigo, camara, buscando, error, entrada, visor, pegado,
+      alTeclear, buscar, limpiar, abrirCamara, cerrarCamara, alDetectar,
+      mostrarError, reiniciar
     }
   }
 }
@@ -228,30 +199,6 @@ export default {
 
 .acciones .btn {
   flex: 1;
-}
-
-.visor {
-  position: relative;
-  aspect-ratio: 4 / 3;
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  background: #000;
-}
-
-.visor video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* La mira dice dónde apuntar: sin ella la gente acerca el teléfono hasta
-   pegarlo al balde, que es justo donde el QR sale desenfocado. */
-.mira {
-  position: absolute;
-  inset: 22%;
-  border: 2px solid rgba(255, 255, 255, .85);
-  border-radius: var(--r-sm);
-  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .35);
 }
 
 .spinner {
@@ -333,12 +280,6 @@ export default {
   color: var(--danger);
   font-size: .84rem;
   line-height: 1.5;
-}
-
-.ayuda {
-  font-size: .78rem;
-  color: var(--text-faint);
-  line-height: 1.55;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -120,6 +120,10 @@
             <span>Descuento a mano</span>
             <b class="dato">−{{ clp(descuento) }}</b>
           </div>
+          <div v-if="abonoPrevio" class="linea verde">
+            <span>Ya abonado al evento</span>
+            <b class="dato">−{{ clp(abonoPrevio) }}</b>
+          </div>
           <div class="linea total">
             <span>Total</span>
             <b class="dato grande">{{ clp(totalEstimado) }}</b>
@@ -167,6 +171,7 @@ export default {
     const unidades = computed(() => store.getters['ventas/unidades'])
     const bruto = computed(() => store.getters['ventas/bruto'])
     const descuentoPromo = computed(() => store.getters['ventas/descuentoPromo'])
+    const abonoPrevio = computed(() => store.getters['ventas/abonoPrevio'])
     const promocionElegida = computed(() => store.getters['ventas/promocionElegida'])
     const cliente = computed(() => store.getters['ventas/cliente'])
     const cobrando = computed(() => store.getters['ventas/cobrando'])
@@ -198,7 +203,7 @@ export default {
     const maxCanjeable = computed(() => {
       if (!cliente.value || !valorPunto.value) return 0
       const topePorCompra = Math.floor(
-        Math.max(0, bruto.value - descuentoPromo.value) / valorPunto.value
+        Math.max(0, bruto.value - descuentoPromo.value - abonoPrevio.value) / valorPunto.value
       )
       return Math.min(cliente.value.puntos, topePorCompra)
     })
@@ -208,7 +213,8 @@ export default {
     /* ---------------- Totales ---------------- */
     const totalEstimado = computed(() => Math.max(
       0,
-      bruto.value - descuentoPromo.value - descuentoCanje.value - (descuento.value || 0)
+      bruto.value - descuentoPromo.value - descuentoCanje.value - (descuento.value || 0) -
+      abonoPrevio.value
     ))
 
     const vuelto = computed(() => (recibido.value || 0) - totalEstimado.value)
@@ -285,7 +291,7 @@ export default {
 
     return {
       MEDIOS_PAGO,
-      carrito, unidades, bruto, descuentoPromo, promocionElegida, cliente, cobrando,
+      carrito, unidades, bruto, descuentoPromo, abonoPrevio, promocionElegida, cliente, cobrando,
       valorPunto, clubActivo, canjeMinimo, umbral, primerNombre,
       medioPago, recibido, puntos, descuento, motivo, auth, error, campoRecibido,
       maxCanjeable, descuentoCanje, totalEstimado, vuelto, faltaEfectivo,

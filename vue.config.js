@@ -13,6 +13,10 @@ module.exports = defineConfig({
   },
 
   devServer: {
+    /* Para probar en el celular con `npm run serve:movil`: se entra por la
+       IP de la red (https://192.168.x.x:8080), y sin esto el servidor de
+       desarrollo rechaza ese host. Solo afecta a desarrollo. */
+    allowedHosts: 'all',
     proxy: {
       '/api': {
         target: 'http://localhost:5042',

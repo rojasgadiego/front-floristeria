@@ -36,6 +36,22 @@ export const mostradorService = {
    *
    * Acepta el código pelado o el contenido completo del QR.
    */
+  /**
+   * El QR de la partida como imagen (blob → URL). Como con los lotes, quien
+   * lo use llama a URL.revokeObjectURL al terminar.
+   */
+  async qr (codigo, { signal } = {}) {
+    try {
+      const { data } = await http.get(`${RUTA}/partidas/${encodeURIComponent(codigo)}/qr`, {
+        responseType: 'blob',
+        signal
+      })
+      return URL.createObjectURL(data)
+    } catch (e) {
+      throw normalizarError(e)
+    }
+  },
+
   escanear (codigo, { signal } = {}) {
     return pedir(http.get(`${RUTA}/partidas/${encodeURIComponent(codigo)}`, { signal }))
   }

@@ -282,6 +282,16 @@
           </div>
         </Transition>
 
+        <div class="grupo">
+          <label for="c-merma">Merma sin autorización</label>
+          <input id="c-merma" class="campo dato" type="number" min="0" step="1000" inputmode="numeric"
+            v-model.number="venta.mermaSinAutorizacion" :disabled="!esAdmin">
+          <p class="ayuda">
+            Una merma (o un desarme) que cuesta hasta {{ clp(venta.mermaSinAutorizacion) }}
+            se registra sola. Por encima, pide credenciales de una administradora.
+          </p>
+        </div>
+
         <div v-if="esAdmin" class="pie-tarjeta">
           <button v-if="sucio('venta')" class="btn btn-linea" @click="revertir('venta')">Descartar</button>
           <button class="btn ancho" :class="{ 'btn-ocupado': guardando('venta') }"
@@ -679,6 +689,8 @@ export default {
         }
         const d = Number(venta.descuentoSinAutorizacion)
         if (!Number.isFinite(d) || d < 0) return 'El descuento no puede ser negativo.'
+        const m = Number(venta.mermaSinAutorizacion)
+        if (!Number.isFinite(m) || m < 0) return 'El tope de merma no puede ser negativo.'
         return ''
       },
       /* Sin club activo las tres reglas no se aplican y no hace falta

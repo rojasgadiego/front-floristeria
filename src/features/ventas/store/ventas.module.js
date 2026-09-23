@@ -23,6 +23,7 @@
  */
 
 import { ventasService } from '../services/ventas.service'
+import { cotizacionesService } from '@/features/cotizaciones/services/cotizaciones.service'
 
 export const MEDIOS_PAGO = [
   { valor: 'efectivo', texto: 'Efectivo', icono: '💵' },
@@ -61,6 +62,11 @@ export default {
     puntosACanjear: 0,
     cotizacionId: null,
 
+    /* El evento que se está cobrando: folio y cliente para mostrarlo, y lo
+       ya abonado, que la boleta final descuenta. */
+    cotizacion: null,
+    abonoPrevio: 0,
+
     /* ---------- Historial ---------- */
     lista: [],
     total: 0,
@@ -95,6 +101,8 @@ export default {
       state.descuentoManual = 0
       state.puntosACanjear = 0
       state.cotizacionId = null
+      state.cotizacion = null
+      state.abonoPrevio = 0
     },
     SET_CLIENTE (state, cliente) {
       state.cliente = cliente
@@ -107,6 +115,11 @@ export default {
     SET_DESCUENTO (state, monto) { state.descuentoManual = monto },
     SET_PUNTOS (state, p) { state.puntosACanjear = p },
     SET_COTIZACION (state, id) { state.cotizacionId = id },
+    SET_COBRO_EVENTO (state, { id, folio, clienteNombre, abonoPrevio }) {
+      state.cotizacionId = id
+      state.cotizacion = { id, folio, clienteNombre }
+      state.abonoPrevio = abonoPrevio || 0
+    },
 
     /* ---------- Historial ---------- */
     SET_PAGINA (state, { items, total, pagina, totalPaginas }) {
@@ -171,16 +184,6 @@ export default {
       dispatch('consultarPromociones')
     },
 
-    /** Servicios: no tocan inventario y llevan nombre y precio propios. */
-    agregarServicio ({ commit, dispatch }, { nombre, precio, cantidad = 1 }) {
-      commit('AGREGAR', {
-        productoId: null, nombre, emoji: '🚚', precio, cantidad,
-        partida: null, loteCodigo: null,
-        esServicio: true, disponible: null
-      })
-      dispatch('consultarPromociones')
-    },
-
     cambiarCantidad ({ commit, dispatch }, { uid, cantidad }) {
       if (cantidad < 1) {
         commit('QUITAR_LINEA', uid)
@@ -196,6 +199,45 @@ export default {
     },
 
     vaciar ({ commit }) { commit('VACIAR') },
+
+    /**
+     * Carga en el carrito el cobro final de un evento. La flor entra como
+     * líneas normales, que se ajustan a lo que realmente salió. Los
+     * servicios (lo hecho a medida, traslado, montaje) se muestran pero no
+     * viajan al cobrar: la base los agrega desde la cotización con su precio
+     * cotizado, así nadie los reescribe en el mesón.
+     */
+    async cargarCotizacion ({ commit, dispatch, rootGetters }, id) {
+      const p = await cotizacionesService.prepararCobro(id)
+      const cot = await cotizacionesService.obtener(id)
+
+      commit('VACIAR')
+      commit('SET_COBRO_EVENTO', {
+        id,
+        folio: p.folio,
+        clienteNombre: cot.clienteNombre,
+        abonoPrevio: p.abonoPrevio
+      })
+
+      for (const l of p.lineas) {
+        const producto = l.productoId ? rootGetters['productos/porId'](l.productoId) : null
+        commit('AGREGAR', {
+          productoId: l.esServicio ? null : l.productoId,
+          nombre: l.nombre,
+          emoji: l.esServicio ? '🎀' : (producto?.emoji ?? '🌸'),
+          precio: l.precio,
+          cantidad: l.cantidad,
+          partida: null,
+          loteCodigo: null,
+          esServicio: l.esServicio,
+          deCotizacion: l.esServicio,
+          disponible: l.esServicio ? null : (l.disponible ?? null)
+        })
+      }
+
+      dispatch('consultarPromociones')
+      return p
+    },
 
     elegirCliente ({ commit, dispatch }, cliente) {
       commit('SET_CLIENTE', cliente)
@@ -276,7 +318,9 @@ export default {
           clienteId: state.clienteId,
           promocionId: state.promocionId,
           cotizacionId: state.cotizacionId,
-          items: state.carrito.map(l => ({
+          /* Los servicios del evento no viajan: los agrega la base desde
+             la cotización, con su precio cotizado. */
+          items: state.carrito.filter(l => !l.deCotizacion).map(l => ({
             /* Uno de los dos: la partida manda si está. */
             partida: l.partida,
             productoId: l.partida ? null : l.productoId,
@@ -299,6 +343,14 @@ export default {
         dispatch('productos/cargar', {}, { root: true })
 
         return venta
+      } catch (error) {
+        /* Si otra persona cerró la caja mientras se armaba la venta, la
+           pantalla la seguía mostrando abierta. Se relee para que ofrezca
+           abrirla en vez de dejar solo el mensaje de error. */
+        if (/caja/i.test(error?.message || '')) {
+          dispatch('caja/sincronizar', null, { root: true })
+        }
+        throw error
       } finally {
         commit('SET_COBRANDO', false)
       }
@@ -375,6 +427,13 @@ export default {
 
     /* Previsualización. El total real lo arma el servidor al cobrar. */
     bruto: state => state.carrito.reduce((t, l) => t + l.precio * l.cantidad, 0),
+
+    cotizacion: state => state.cotizacion,
+    abonoPrevio: state => state.abonoPrevio,
+
+    /* Lo que se cobra ahora: lo abonado a un evento ya entró a caja. */
+    aPagar: (state, getters) =>
+      Math.max(0, getters.bruto - getters.descuentoPromo - state.abonoPrevio),
 
     descuentoPromo: state => {
       const p = state.promocionesAplicables.find(x => x.id === state.promocionId)

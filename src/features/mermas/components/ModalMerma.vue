@@ -3,7 +3,8 @@
     <div class="modal" role="dialog" aria-modal="true">
       <div class="modal-cab">
         <h3>Registrar merma</h3>
-        <p v-if="!origen">Escanea el balde o la partida de donde sale.</p>
+        <p v-if="!origen && soloMostrador">Escanea la partida del mostrador (PAR-…) de donde sale.</p>
+        <p v-else-if="!origen">Escanea el balde o la partida de donde sale.</p>
         <p v-else>{{ origen.producto }} · {{ origen.codigo }}</p>
       </div>
 
@@ -18,7 +19,15 @@
         <template v-if="!origen">
           <EscanerCodigo ref="escaner" @leido="alEscanear" />
 
-          <button class="enlace" @click="modoManual = !modoManual">
+          <!-- Desde el mesón solo se merma lo del mostrador: el camino a mano
+               lista baldes de bodega, así que para el vendedor no aplica. Si
+               la etiqueta no se lee, escribe el código de la partida. -->
+          <p v-if="soloMostrador" class="ayuda">
+            ¿El QR no se lee? Escribe el código que aparece bajo el QR de la
+            partida (PAR-…). Los baldes de bodega los registra bodega.
+          </p>
+
+          <button v-else class="enlace" @click="modoManual = !modoManual">
             No puedo escanear · registrar a mano
           </button>
 
@@ -109,9 +118,13 @@
 
             <div class="grupo">
               <label for="m-motivo">Motivo</label>
-              <select id="m-motivo" class="campo" v-model="f.motivo">
+              <!-- Por categoría: "no se alcanzó a vender" y "marchita" son
+                   problemas distintos, y verlos separados ayuda a elegir bien. -->
+              <select id="m-motivo" class="campo" v-model="f.motivo" @change="alElegirMotivo">
                 <option value="">Selecciona…</option>
-                <option v-for="m in nombresMotivo" :key="m" :value="m">{{ m }}</option>
+                <optgroup v-for="c in motivosPorCategoria" :key="c.valor" :label="c.texto">
+                  <option v-for="m in c.motivos" :key="m.motivo" :value="m.motivo">{{ m.motivo }}</option>
+                </optgroup>
               </select>
             </div>
           </div>
@@ -162,9 +175,11 @@
           </template>
 
           <div class="grupo">
-            <label for="m-det">Detalle</label>
+            <label for="m-det">
+              Detalle<template v-if="detalleObligatorio"> (obligatorio)</template>
+            </label>
             <input id="m-det" class="campo" v-model="f.detalle" maxlength="200"
-              placeholder="Se cayó el balde, llegaron golpeadas del terminal…">
+              :placeholder="detalleObligatorio ? 'Cuenta qué pasó: sin esto no se entiende' : 'Se cayó el balde, llegaron golpeadas del terminal…'">
           </div>
 
           <!-- ═══ Autorización ═══
@@ -238,7 +253,13 @@ export default {
     const manual = reactive({ productoId: null, loteId: null, lotes: [] })
 
     const guardando = computed(() => store.getters['mermas/guardando'])
-    const nombresMotivo = computed(() => store.getters['mermas/nombresMotivo'])
+    const motivosPorCategoria = computed(() => store.getters['mermas/motivosPorCategoria'])
+    const motivoElegido = computed(() => store.getters['mermas/motivoPorNombre'](f.motivo))
+    const detalleObligatorio = computed(() => !!motivoElegido.value?.requiereDetalle)
+
+    /* El vendedor merma solo desde el mostrador. La API lo exige igual; acá
+       es para no ofrecerle un camino que termina en error. */
+    const soloMostrador = computed(() => !store.getters['auth/tieneRol']('admin', 'bodega'))
     const umbral = computed(() => store.getters['mermas/umbralAutorizacion'])
 
     /* Solo lo que se puede mermar: sin existencias no hay nada que sacar, y
@@ -336,6 +357,13 @@ export default {
 
     const necesitaAutorizacion = computed(() => costoTotal.value > umbral.value)
 
+    /* Algunos motivos traen su destino natural: "Llegó en mal estado" casi
+       siempre es devolución al proveedor. Se propone, no se impone. */
+    const alElegirMotivo = () => {
+      const sugerido = motivoElegido.value?.destinoSugerido
+      if (sugerido) elegirDestino(sugerido)
+    }
+
     const elegirDestino = (d) => {
       f.destino = d
       if (d !== 'reingreso') {
@@ -353,6 +381,7 @@ export default {
       if (!f.cantidad || f.cantidad < 1) return false
       if (f.cantidad > origen.value.disponible) return false
       if (!f.motivo) return false
+      if (detalleObligatorio.value && !f.detalle.trim()) return false
       if (f.destino === 'reingreso' && (!f.cantidadRecuperada || !f.calidad)) return false
       if (necesitaAutorizacion.value && (!auth.email || !auth.password)) return false
       return true
@@ -410,10 +439,10 @@ export default {
     return {
       Math, DESTINOS, CALIDADES,
       origen, escaneado, modoManual, error, escaner, campoCantidad,
-      f, auth, manual, guardando, nombresMotivo, umbral,
+      f, auth, manual, guardando, motivosPorCategoria, detalleObligatorio, soloMostrador, umbral,
       productosConStock, disponibleDe,
       alEscanear, alElegirManual, confirmarManual,
-      costoTotal, necesitaAutorizacion, elegirDestino, puedeRegistrar,
+      costoTotal, necesitaAutorizacion, alElegirMotivo, elegirDestino, puedeRegistrar,
       reiniciar, registrar, clp
     }
   }

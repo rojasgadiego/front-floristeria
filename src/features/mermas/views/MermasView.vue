@@ -38,10 +38,11 @@
         <div class="kpi principal" :class="{ alerta: mermaAlta }">
           <span class="rot">Se perdió</span>
           <b class="val">{{ clp(costoPerdido) }}</b>
-          <span class="pie">
+          <span v-if="porcentajeSobreVentas !== null" class="pie">
             {{ Number(porcentajeSobreVentas).toFixed(1) }}% de lo vendido
             <template v-if="mermaAlta"> · alto</template>
           </span>
+          <span v-else class="pie">lo que registraste</span>
         </div>
 
         <div class="kpi">
@@ -72,27 +73,63 @@
         </span>
       </div>
 
-      <!-- Cuatro controles apilados ocupaban media pantalla en móvil. Queda
-           el buscador y un botón; el resto vive en la hoja. -->
-      <div class="barra">
+      <!-- Por familia de motivo: separa lo que es de la flor de lo que es
+           de cómo se trabaja o de cuánto se compra. -->
+      <div v-if="porCategoria.length" class="categorias" aria-label="Pérdida por categoría">
+        <span v-for="c in porCategoria" :key="c.categoria" class="cat">
+          {{ textoCategoria(c.categoria) }} <b class="dato">{{ clp(c.costoPerdido) }}</b>
+        </span>
+      </div>
+
+      <!-- Filtros en línea con el buscador estirado; en el celular, en una
+           card con todo en columna (ver el @media). Igual que Clientes,
+           Inventario y Cotizaciones. -->
+      <div class="barra-filtros">
         <div class="buscador">
           <span aria-hidden="true">🔎</span>
           <input v-model="busqueda" placeholder="Producto, motivo o código…" aria-label="Buscar merma">
           <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
         </div>
 
-        <button class="btn btn-linea filtros-btn" :class="{ activo: nFiltros > 0 }" @click="filtrosAbiertos = true"
-          :aria-label="`Filtros${nFiltros ? `, ${nFiltros} activos` : ''}`">
-          Filtros
-          <span v-if="nFiltros" class="globo">{{ nFiltros }}</span>
-        </button>
-      </div>
+        <div class="filtros-linea">
+          <select class="campo-select" :class="{ on: filtro.destino }" :value="filtro.destino ?? ''"
+            aria-label="Destino" @change="filtrar({ destino: $event.target.value || null, pagina: 1 })">
+            <option value="">Destino</option>
+            <option v-for="d in DESTINOS" :key="d.valor" :value="d.valor">{{ d.texto }}</option>
+          </select>
 
-      <div v-if="chips.length" class="chips-filtro">
-        <button v-for="c in chips" :key="c.clave" class="chip-filtro" @click="quitarChip(c)">
-          {{ c.texto }} <span aria-hidden="true">✕</span>
-        </button>
-        <button class="chip-limpiar" @click="limpiarFiltros">Limpiar todo</button>
+          <select class="campo-select" :class="{ on: filtro.motivo }" :value="filtro.motivo ?? ''"
+            aria-label="Motivo" @change="filtrar({ motivo: $event.target.value || null, pagina: 1 })">
+            <option value="">Motivo</option>
+            <optgroup v-for="c in motivosPorCategoria" :key="c.valor" :label="c.texto">
+              <option v-for="m in c.motivos" :key="m.motivo" :value="m.motivo">{{ m.motivo }}</option>
+            </optgroup>
+          </select>
+
+          <select class="campo-select" :class="{ on: presetActivo !== 'todo' }" :value="presetActivo"
+            aria-label="Periodo" @change="aplicarPreset($event.target.value)">
+            <option v-for="p in PRESETS" :key="p.clave" :value="p.clave">
+              {{ p.clave === 'todo' ? 'Todo el periodo' : p.texto }}
+            </option>
+          </select>
+
+          <template v-if="presetActivo === 'personalizado'">
+            <input type="date" class="campo-fecha" aria-label="Desde" :value="filtro.desde ?? ''"
+              :max="filtro.hasta || undefined"
+              @change="filtrar({ desde: $event.target.value || null, pagina: 1 })">
+            <input type="date" class="campo-fecha" aria-label="Hasta" :value="filtro.hasta ?? ''"
+              :min="filtro.desde || undefined"
+              @change="filtrar({ hasta: $event.target.value || null, pagina: 1 })">
+          </template>
+
+          <label class="check" :class="{ on: filtro.revertida === null }">
+            <input type="checkbox" :checked="filtro.revertida === null"
+              @change="filtrar({ revertida: $event.target.checked ? null : false, pagina: 1 })">
+            <span>Con revertidas</span>
+          </label>
+
+          <button v-if="hayFiltro" class="limpiar" @click="limpiarFiltros">Quitar filtros</button>
+        </div>
       </div>
 
       <div v-if="cargando && !mermas.length" class="vacio">Cargando…</div>
@@ -176,7 +213,7 @@
               </td>
 
               <td class="acciones-col der">
-                <span v-if="m.revertida" class="etiqueta">revertida</span>
+                <span v-if="m.revertida" class="etiqueta" :title="m.motivoReversion || ''">revertida</span>
                 <button v-else-if="esAdmin" class="btn-icono" title="Revertir"
                   @click="abrirReversa(m)">↩</button>
               </td>
@@ -204,6 +241,8 @@
             </span>
           </div>
 
+          <div v-if="m.detalle" class="t-detalle">{{ m.detalle }}</div>
+
           <div class="t-fila-3 desglose">
             {{ m.motivo }}
             <template v-if="m.origenCodigo"> · <span class="mono">{{ m.origenCodigo }}</span></template>
@@ -212,7 +251,9 @@
             <span v-if="!m.escaneado" class="marca">✎ a mano</span>
           </div>
 
-          <div v-if="m.revertida" class="t-revertida">Revertida</div>
+          <div v-if="m.revertida" class="t-revertida">
+            Revertida<template v-if="m.motivoReversion"> · {{ m.motivoReversion }}</template>
+          </div>
           <button v-else-if="esAdmin" class="btn btn-linea btn-mini" @click="abrirReversa(m)">
             Revertir
           </button>
@@ -231,6 +272,11 @@
     <!-- ═══════════════ CONTROL ═══════════════ -->
     <template v-else>
       <div v-if="cargandoPatrones && !patrones" class="vacio">Calculando…</div>
+
+      <div v-else-if="errorPatrones" class="banda banda-error">
+        <span aria-hidden="true">⚠️</span><span>{{ errorPatrones }}</span>
+        <button class="btn btn-mini" @click="irAControl">Reintentar</button>
+      </div>
 
       <template v-else-if="patrones">
         <!-- Esto NO acusa a nadie: una florería con una sola persona en
@@ -336,72 +382,10 @@
           hace falta contar la cámara y comparar.
         </p>
       </template>
+
+      <!-- El catálogo no depende del reporte: se administra aunque falle. -->
+      <GestionMotivos />
     </template>
-
-    <!-- ═══ Hoja de filtros ═══ -->
-    <div v-if="filtrosAbiertos" class="fondo" @click.self="filtrosAbiertos = false">
-      <div class="modal hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-filtros">
-        <div class="modal-cab hoja-cab">
-          <span class="agarre" aria-hidden="true"></span>
-          <h3 id="titulo-filtros">Filtros</h3>
-          <button class="btn-icono" @click="filtrosAbiertos = false" aria-label="Cerrar">✕</button>
-        </div>
-
-        <div class="modal-cuerpo">
-          <div class="grupo">
-            <label>Destino</label>
-            <div class="pastillas">
-              <button class="pastilla" :class="{ on: !filtro.destino }"
-                @click="filtrar({ destino: null, pagina: 1 })">Todos</button>
-              <button v-for="d in DESTINOS" :key="d.valor" class="pastilla"
-                :class="{ on: filtro.destino === d.valor }"
-                @click="filtrar({ destino: d.valor, pagina: 1 })">{{ d.texto }}</button>
-            </div>
-          </div>
-
-          <div class="grupo">
-            <label for="f-motivo">Motivo</label>
-            <select id="f-motivo" class="campo" :value="filtro.motivo ?? ''"
-              @change="filtrar({ motivo: $event.target.value || null, pagina: 1 })">
-              <option value="">Todos los motivos</option>
-              <option v-for="m in nombresMotivo" :key="m" :value="m">{{ m }}</option>
-            </select>
-          </div>
-
-          <div class="grupo">
-            <label>Periodo</label>
-            <div class="pastillas">
-              <button v-for="p in PRESETS" :key="p.clave" class="pastilla"
-                :class="{ on: presetActivo === p.clave }" @click="aplicarPreset(p.clave)">{{ p.texto }}</button>
-            </div>
-          </div>
-
-          <div v-if="presetActivo === 'personalizado'" class="grupo par">
-            <label class="campo-fecha">
-              <span>Desde</span>
-              <input type="date" :value="filtro.desde ?? ''"
-                @change="filtrar({ desde: $event.target.value || null, pagina: 1 })">
-            </label>
-            <label class="campo-fecha">
-              <span>Hasta</span>
-              <input type="date" :value="filtro.hasta ?? ''"
-                @change="filtrar({ hasta: $event.target.value || null, pagina: 1 })">
-            </label>
-          </div>
-
-          <label class="check">
-            <input type="checkbox" :checked="filtro.revertida === null"
-              @change="filtrar({ revertida: $event.target.checked ? null : false, pagina: 1 })">
-            <span>Ver mermas revertidas</span>
-          </label>
-        </div>
-
-        <div class="modal-pie">
-          <button class="btn btn-linea" @click="limpiarFiltros">Limpiar</button>
-          <button class="btn" @click="filtrosAbiertos = false">Ver {{ total }} registro(s)</button>
-        </div>
-      </div>
-    </div>
 
     <!-- ═══ Modales ═══ -->
     <ModalMerma v-if="registrando" @cerrar="registrando = false" @registrada="alRegistrar" />
@@ -409,14 +393,23 @@
     <div v-if="rev" class="fondo" @click.self="intentarCerrarReversa">
       <div class="modal angosto" role="dialog" aria-modal="true" aria-labelledby="titulo-reversa">
         <div class="modal-cab">
-          <h3 id="titulo-reversa">Revertir merma</h3>
+          <h3 id="titulo-reversa">{{ rev.desarmeGrupo ? 'Revertir desarme' : 'Revertir merma' }}</h3>
           <p>{{ rev.cantidad }} × {{ rev.producto }} · {{ fecha(rev.creadoEn) }}</p>
         </div>
 
         <div class="modal-cuerpo">
           <div v-if="rev.error" class="error">{{ rev.error }}</div>
 
-          <div class="nota">
+          <!-- Un desarme deja una merma por componente: se revierte entero,
+               y el armado vuelve al stock listo. -->
+          <div v-if="rev.desarmeGrupo" class="nota">
+            Esta merma es parte de un desarme: se revierte <b>el desarme completo</b>.
+            El armado vuelve al stock y los lotes recuperados de todos sus
+            componentes se anulan. Si ya se vendió algo de alguno, la reversa
+            no se puede hacer.
+          </div>
+
+          <div v-else class="nota">
             Las varas vuelven
             <template v-if="rev.origenCodigo">
               a <b class="mono">{{ rev.origenCodigo }}</b>
@@ -456,8 +449,9 @@
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
-import { DESTINOS, textoDestino, textoCalidad } from '@/features/mermas/store/mermas.module'
+import { DESTINOS, textoDestino, textoCalidad, textoCategoria } from '@/features/mermas/store/mermas.module'
 import ModalMerma from '@/features/mermas/components/ModalMerma.vue'
+import GestionMotivos from '@/features/mermas/components/GestionMotivos.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 /* El mismo valor que el @media de abajo. Si se cambia uno hay que cambiar el
@@ -487,7 +481,7 @@ const sumarDias = (d, n) => {
 
 export default {
   name: 'MermasView',
-  components: { ModalMerma },
+  components: { ModalMerma, GestionMotivos },
 
   setup () {
     const store = useStore()
@@ -495,7 +489,9 @@ export default {
     const { aviso, avisar } = usarAviso()
 
     const esAdmin = computed(() => store.getters['auth/esAdmin'])
-    const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega'))
+    /* Registrar lo puede cualquiera del equipo: el vendedor, solo desde una
+       partida del mostrador (lo decide la API y el modal lo respeta). */
+    const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega', 'vendedor'))
 
     const pestana = ref('registro')
 
@@ -517,8 +513,9 @@ export default {
     const unidadesRecuperadas = computed(() => store.getters['mermas/unidadesRecuperadas'])
     const porcentajeSobreVentas = computed(() => store.getters['mermas/porcentajeSobreVentas'])
     const motivoPrincipal = computed(() => store.getters['mermas/motivoPrincipal'])
+    const porCategoria = computed(() => store.getters['mermas/porCategoria'].filter(c => c.costoPerdido > 0))
     const mermaAlta = computed(() => store.getters['mermas/mermaAlta'])
-    const nombresMotivo = computed(() => store.getters['mermas/nombresMotivo'])
+    const motivosPorCategoria = computed(() => store.getters['mermas/motivosPorCategoria'])
 
     const filtrar = (cambios) => store.dispatch('mermas/filtrar', cambios)
     const recargar = () => store.dispatch('mermas/cargar')
@@ -555,7 +552,6 @@ export default {
     const alCambiarAncho = (e) => { esMovil.value = e.matches }
 
     /* ---------------- Filtros ---------------- */
-    const filtrosAbiertos = ref(false)
     const rangoManual = ref(false)
 
     const rangoPreset = (clave) => {
@@ -590,34 +586,11 @@ export default {
       filtrar({ ...rangoPreset(clave), pagina: 1 })
     }
 
-    const chips = computed(() => {
+    const hayFiltro = computed(() => {
       const f = filtro.value
-      const out = []
-      if (f.destino) {
-        out.push({ clave: 'destino', texto: textoDestino(f.destino), cambio: { destino: null } })
-      }
-      if (f.motivo) {
-        out.push({ clave: 'motivo', texto: f.motivo, cambio: { motivo: null } })
-      }
-      if (f.desde || f.hasta) {
-        const texto = presetActivo.value === 'personalizado'
-          ? `${f.desde || '…'} a ${f.hasta || '…'}`
-          : PRESETS.find(p => p.clave === presetActivo.value)?.texto
-        out.push({ clave: 'fechas', texto, cambio: { desde: null, hasta: null } })
-      }
-      if (f.revertida === null) {
-        out.push({ clave: 'revertidas', texto: 'Con revertidas', cambio: { revertida: false } })
-      }
-      return out
+      return !!(f.buscar || f.destino || f.motivo || f.desde || f.hasta || f.revertida === null) ||
+        rangoManual.value
     })
-
-    const nFiltros = computed(() => chips.value.length)
-    const hayFiltro = computed(() => nFiltros.value > 0 || !!filtro.value.buscar)
-
-    const quitarChip = (c) => {
-      if (c.clave === 'fechas') rangoManual.value = false
-      filtrar({ ...c.cambio, pagina: 1 })
-    }
 
     const limpiarFiltros = () => {
       rangoManual.value = false
@@ -643,6 +616,7 @@ export default {
     /* ---------------- Control ---------------- */
     const patrones = computed(() => store.getters['mermas/patrones'])
     const cargandoPatrones = computed(() => store.getters['mermas/cargandoPatrones'])
+    const errorPatrones = computed(() => store.getters['mermas/errorPatrones'])
 
     const irAControl = () => {
       pestana.value = 'control'
@@ -697,6 +671,7 @@ export default {
         creadoEn: m.creadoEn,
         origenCodigo: m.origenCodigo,
         loteRecuperacion: m.loteRecuperacion,
+        desarmeGrupo: m.desarmeGrupo,
         motivo: '',
         error: ''
       }
@@ -739,7 +714,6 @@ export default {
     const alTeclado = (e) => {
       if (e.key !== 'Escape') return
       if (rev.value) intentarCerrarReversa()
-      else if (filtrosAbiertos.value) filtrosAbiertos.value = false
     }
 
     /* ---------------- Carga ---------------- */
@@ -783,16 +757,16 @@ export default {
       : '')
 
     return {
-      Number, DESTINOS, PRESETS, textoDestino, textoCalidad,
+      Number, DESTINOS, PRESETS, textoDestino, textoCalidad, textoCategoria, porCategoria,
       esAdmin, puedeEditar, esMovil, pestana, irAControl,
       mermas, total, totalPaginas, filtro, cargando, guardando, error, hayFiltro,
       resumen, costoPerdido, costoBotado, costoDesvalorizado, costoRecuperado,
       unidadesPerdidas, unidadesRecuperadas, porcentajeSobreVentas,
-      motivoPrincipal, mermaAlta, nombresMotivo,
+      motivoPrincipal, mermaAlta, motivosPorCategoria,
       busqueda, filtrar, recargar,
-      filtrosAbiertos, presetActivo, aplicarPreset, chips, nFiltros, quitarChip, limpiarFiltros,
+      presetActivo, aplicarPreset, limpiarFiltros,
       registrando, alRegistrar,
-      patrones, cargandoPatrones, alertasControl, claseEscaneo,
+      patrones, cargandoPatrones, errorPatrones, alertasControl, claseEscaneo,
       horasCompletas, alturaBarra, resumenHoras,
       rev, campoMotivo, abrirReversa, intentarCerrarReversa, revertir,
       aviso, clp, fecha, hora
@@ -964,27 +938,32 @@ h1 {
 
 /* ─── Barra de filtros ─── */
 
-.barra {
+.barra-filtros {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  align-items: stretch;
 }
 
 .buscador {
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 auto;
+  flex: 1 1 240px;
   min-width: 0;
-  min-height: 46px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 12px;
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-sm);
-  transition: border-color var(--t-fast);
+  color: var(--text);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
-.buscador:focus-within { border-color: var(--accent); }
+.buscador:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 
 .buscador input {
   flex: 1;
@@ -998,85 +977,135 @@ h1 {
   font-size: max(.9rem, 16px);
 }
 
-.filtros-btn {
-  flex: 0 0 auto;
+.filtros-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.filtros-btn.activo {
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.globo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 19px;
-  height: 19px;
-  padding: 0 5px;
-  border-radius: var(--r-full);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: .7rem;
-  font-weight: 700;
-}
-
-.chips-filtro {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.chip-filtro,
-.chip-limpiar {
-  border: 1px solid var(--accent-soft);
-  border-radius: var(--r-full);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font: inherit;
-  font-size: .76rem;
-  font-weight: 600;
-  padding: 4px 11px;
-  cursor: pointer;
-}
-
-.chip-limpiar {
-  background: transparent;
-  border-color: var(--border-strong);
-  color: var(--text-muted);
-}
-
-.pastillas {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pastilla {
-  padding: 8px 13px;
+/* El select vestido de pastilla: se marca cuando está filtrando. */
+.campo-select {
+  min-height: 44px;
+  max-width: 220px;
+  padding: 0 34px 0 14px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--r-full);
-  background: var(--surface);
+  border-radius: var(--r-sm);
+  background:
+    var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
   color: var(--text-muted);
   font: inherit;
-  font-size: .82rem;
+  font-size: max(.85rem, 16px);
   font-weight: 600;
+  appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
-  transition: border-color var(--t-fast), color var(--t-fast), background-color var(--t-fast);
 }
 
-.pastilla.on {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.pastilla:focus-visible {
+.campo-select:focus-visible,
+.campo-fecha:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
+.campo-select.on {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.campo-fecha {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+}
+
+/* El checkbox como pastilla, igual que en Clientes e Inventario. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: .85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.check.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.check input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.check input::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .12s ease;
+}
+
+.check input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.check input:checked::after { transform: rotate(45deg) scale(1); }
+
+.check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.limpiar {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: .85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.limpiar:hover { border-color: var(--accent); color: var(--accent-text); }
+
+/* Solo el campo del modal de reversa. */
 .campo {
   width: 100%;
   min-height: 44px;
@@ -1093,51 +1122,6 @@ h1 {
 .campo:focus {
   outline: 0;
   border-color: var(--accent);
-}
-
-.campo-fecha {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  flex: 1;
-}
-
-.campo-fecha > span {
-  font-size: .74rem;
-  font-weight: 600;
-  color: var(--text-faint);
-  text-transform: none;
-  letter-spacing: 0;
-  margin: 0;
-}
-
-.campo-fecha input {
-  height: 44px;
-  width: 100%;
-  padding: 0 .6rem;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: max(.85rem, 16px);
-}
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 44px;
-  font-size: .88rem;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.check input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-  cursor: pointer;
 }
 
 /* ─── Tabla ─── */
@@ -1267,6 +1251,12 @@ tbody tr:last-child td { border-bottom: 0; }
   gap: 8px;
   flex-wrap: wrap;
   font-size: .78rem;
+}
+
+.t-detalle {
+  font-size: .8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
 
 .t-revertida {
@@ -1473,17 +1463,6 @@ tbody tr:last-child td { border-bottom: 0; }
   border-bottom: 1px solid var(--border);
 }
 
-.hoja-cab {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.hoja-cab h3 { flex: 1; }
-
-.agarre { display: none; }
-
 .modal-cab h3 {
   font-size: 1.1rem;
   font-weight: 700;
@@ -1513,7 +1492,6 @@ tbody tr:last-child td { border-bottom: 0; }
 
 .grupo { margin-bottom: 16px; }
 .grupo:last-child { margin-bottom: 0; }
-.grupo.par { display: flex; gap: 12px; }
 
 label {
   display: block;
@@ -1617,6 +1595,26 @@ label {
   font-size: .78rem;
 }
 
+.categorias {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cat {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+
+.cat .dato {
+  margin-left: 4px;
+  color: var(--text);
+}
+
 .banda {
   display: flex;
   align-items: center;
@@ -1709,6 +1707,22 @@ label {
 @media (max-width: 860px) {
   .cabecera .btn { width: 100%; }
 
+  /* Filtros en una card, en columna, cada control a todo el ancho. */
+  .barra-filtros {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+
+  .buscador { flex: 0 0 auto; }
+
+  .filtros-linea { flex-direction: column; align-items: stretch; }
+  .filtros-linea > * { width: 100%; max-width: none; }
+  .check { justify-content: center; }
+
   .resumen { grid-template-columns: repeat(2, 1fr); }
 
   .panel { padding: 15px; }
@@ -1722,7 +1736,7 @@ label {
 
   .hora:nth-child(3n + 1) .hora-num { visibility: visible; }
 
-  /* Las hojas suben desde abajo */
+  /* Los modales suben desde abajo */
   .fondo {
     padding: 0;
     align-items: flex-end;
@@ -1736,20 +1750,6 @@ label {
   }
 
   .modal.angosto { max-width: none; }
-
-  .hoja-cab { padding-top: 24px; }
-
-  .agarre {
-    display: block;
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 34px;
-    height: 4px;
-    border-radius: var(--r-full);
-    background: var(--border-strong);
-  }
 
   .modal-pie {
     flex-direction: column-reverse;
@@ -1765,7 +1765,7 @@ label {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn, .btn-icono, .pastilla, .campo, .buscador,
+  .btn, .btn-icono, .campo, .buscador, .check, .check input::after,
   .barra-hora, .tabla-envoltura, .tarjetas { transition: none; }
 }
 </style>

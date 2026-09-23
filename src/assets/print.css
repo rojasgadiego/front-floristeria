@@ -97,6 +97,33 @@
     break-inside: avoid;
   }
 
+  /* ─── Etiquetas Zebra (EtiquetasView) ───
+     No son un ticket: la página mide lo que la etiqueta del rollo, y eso lo
+     inyecta la vista. Acá solo se deshace lo de arriba que les estorba. */
+  html.modo-etiquetas,
+  html.modo-etiquetas body {
+    width: auto !important;
+  }
+
+  /* El layout mide 100vh con overflow oculto: sin esto se imprimiría solo
+     la primera etiqueta y el resto quedaría recortado. */
+  html.modo-etiquetas .app-wrapper,
+  html.modo-etiquetas .main-content,
+  html.modo-etiquetas .content-wrapper {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #fff !important;
+  }
+
+  html.modo-etiquetas .hover-area,
+  html.modo-etiquetas .sidebar-trigger,
+  html.modo-etiquetas .sidebar-backdrop {
+    display: none !important;
+  }
+
   /* El navegador imprime la URL y la fecha en los márgenes; con 80mm
      de ancho eso se come dos líneas del ticket. Esto no lo quita
      —solo el usuario puede, en "Más ajustes"— pero al menos deja el

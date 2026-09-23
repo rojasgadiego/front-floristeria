@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 
@@ -83,8 +83,10 @@ const etiquetaMenu = computed(() =>
 /* -------- Tema -------- */
 const { esOscuro, alternar } = useTheme()
 
-/* -------- Carrito (Vuex POS) -------- */
-const cartCount = computed(() => store.getters['pos/cantidadItems'] ?? 0)
+/* -------- Carrito -------- */
+/* Las unidades del carrito del punto de venta. Leía 'pos/cantidadItems', de
+   un módulo que ya no existe, y el globo quedaba siempre en cero. */
+const cartCount = computed(() => store.getters['ventas/unidades'] ?? 0)
 
 const cartCountFormateado = computed(() =>
   cartCount.value > 99 ? '99+' : String(cartCount.value)
@@ -99,10 +101,38 @@ const puedeVender = computed(() => store.getters['auth/puede']('pos'))
 
 const mostrarAbrir = ref(false)
 
-/* Se consulta una vez al montar el layout. El POS pregunta por el mismo
-   estado, así que pedirlo en los dos lados sería una llamada de más. */
+/*
+ * La caja es una sola y la comparte todo el turno: si alguien la abre o la
+ * cierra, el resto tiene que enterarse sin recargar la página. Se relee al
+ * volver a la pestaña o a la app (en el celular es lo más común) y cada
+ * minuto mientras está a la vista.
+ */
+const REFRESCO_CAJA_MS = 60_000
+let relojCaja = null
+let ultimaLectura = 0
+
+const refrescarCaja = () => {
+  if (!puedeVender.value || document.visibilityState !== 'visible') return
+  /* focus y visibilitychange suelen llegar juntos: una sola consulta. */
+  if (Date.now() - ultimaLectura < 5_000) return
+  ultimaLectura = Date.now()
+  store.dispatch('caja/sincronizar')
+}
+
 onMounted(() => {
-  if (puedeVender.value) store.dispatch('caja/cargarActual')
+  if (puedeVender.value) {
+    ultimaLectura = Date.now()
+    store.dispatch('caja/cargarActual')
+  }
+  document.addEventListener('visibilitychange', refrescarCaja)
+  window.addEventListener('focus', refrescarCaja)
+  relojCaja = setInterval(refrescarCaja, REFRESCO_CAJA_MS)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', refrescarCaja)
+  window.removeEventListener('focus', refrescarCaja)
+  clearInterval(relojCaja)
 })
 
 const etiquetaCarrito = computed(() => {

@@ -50,21 +50,37 @@ export const CALIDADES = [
   }
 ]
 
+/* Las familias de motivos. Separarlas es lo que deja ver en el reporte si
+   se pierde por la flor, por un accidente, por cómo se trabaja, por lo que
+   manda el proveedor, por decisiones de venta o porque algo desapareció. */
+export const CATEGORIAS = [
+  { valor: 'natural', texto: 'La flor', descripcion: 'Marchita, deshidratada, hongos' },
+  { valor: 'accidente', texto: 'Accidente', descripcion: 'Quebrada, golpeada, caída, siniestro' },
+  { valor: 'operacional', texto: 'El local', descripcion: 'Refrigeración, sobrantes de armado' },
+  { valor: 'proveedor', texto: 'Proveedor', descripcion: 'Llegó en mal estado' },
+  { valor: 'comercial', texto: 'Venta', descripcion: 'No se vendió, reclamos, cortesías, uso interno' },
+  { valor: 'faltante', texto: 'Faltante', descripcion: 'No está y no se sabe por qué' },
+  { valor: 'otro', texto: 'Otro', descripcion: 'Lo que no calza en lo anterior' }
+]
+
+export const textoCategoria = (v) => CATEGORIAS.find(c => c.valor === v)?.texto ?? v
+
 export const textoDestino = (v) => DESTINOS.find(d => d.valor === v)?.texto ?? v
 export const textoCalidad = (v) => CALIDADES.find(c => c.valor === v)?.texto ?? v
 
 /* Respaldo por si /mermas/motivos falla: el formulario tiene que servir
-   igual, y un campo libre ensucia el reporte para siempre.
-   Misma forma que la API: { motivo, usos }. */
+   igual, y un campo libre ensucia el reporte para siempre. Son motivos
+   que el catálogo trae de fábrica, así que la API los acepta.
+   Misma forma que la API. */
 const MOTIVOS_RESPALDO = [
-    { motivo: 'Marchita', usos: 0 },
-    { motivo: 'Quebrada', usos: 0 },
-    { motivo: 'Deshidratada', usos: 0 },
-    { motivo: 'Golpeada', usos: 0 },
-    { motivo: 'Sobrante de armado', usos: 0 },
-    { motivo: 'Regalo o cortesía', usos: 0 },
-    { motivo: 'Error de digitación', usos: 0 },
-    { motivo: 'Llegó en mal estado', usos: 0 }
+    { motivo: 'Marchita', categoria: 'natural', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Deshidratada', categoria: 'natural', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Quebrada', categoria: 'accidente', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Golpeada', categoria: 'accidente', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Sobrante de armado', categoria: 'operacional', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Llegó en mal estado', categoria: 'proveedor', requiereDetalle: false, destinoSugerido: 'devolucion_proveedor', usos: 0 },
+    { motivo: 'No se alcanzó a vender', categoria: 'comercial', requiereDetalle: false, destinoSugerido: null, usos: 0 },
+    { motivo: 'Otro', categoria: 'otro', requiereDetalle: true, destinoSugerido: null, usos: 0 }
 ]
 
 const filtroInicial = () => ({
@@ -92,6 +108,12 @@ export default {
         filtro: filtroInicial(),
         resumen: null,
         motivos: MOTIVOS_RESPALDO,
+        /* El mismo valor por defecto que la base: si /umbral falla, el
+           formulario pide firma igual que lo haría la API. */
+        umbral: 15000,
+        patrones: null,
+        cargandoPatrones: false,
+        errorPatrones: null,
         planDesarme: null,
         cargando: false,
         cargandoResumen: false,
@@ -112,6 +134,10 @@ export default {
         RESET_FILTRO(state) { state.filtro = filtroInicial() },
         SET_RESUMEN(state, r) { state.resumen = r },
         SET_MOTIVOS(state, m) { if (m?.length) state.motivos = m },
+        SET_UMBRAL(state, u) { if (Number.isFinite(u)) state.umbral = u },
+        SET_PATRONES(state, p) { state.patrones = p },
+        SET_CARGANDO_PATRONES(state, v) { state.cargandoPatrones = v },
+        SET_ERROR_PATRONES(state, e) { state.errorPatrones = e },
         SET_PLAN(state, p) { state.planDesarme = p },
         SET_CARGANDO(state, v) { state.cargando = v },
         SET_CARGANDO_RESUMEN(state, v) { state.cargandoResumen = v },
@@ -155,6 +181,43 @@ export default {
                 commit('SET_MOTIVOS', await mermasService.motivos({ signal }))
             } catch {
                 /* Queda el respaldo: el formulario tiene que servir igual. */
+            }
+        },
+
+        async cargarUmbral({ commit }, { signal } = {}) {
+            try {
+                commit('SET_UMBRAL', (await mermasService.umbral({ signal }))?.umbral)
+            } catch {
+                /* Queda el de respaldo. */
+            }
+        },
+
+        /**
+         * Lo que se escaneó, o null si el código no existe. Cualquier otro
+         * error se lanza: "no existe" y "no hay conexión" piden cosas distintas.
+         */
+        async escanear(_, codigo) {
+            try {
+                return await mermasService.escanear(codigo)
+            } catch (error) {
+                if (error.status === 404) return null
+                throw error
+            }
+        },
+
+        /* El control mira el mismo periodo que el registro. */
+        async cargarPatrones({ commit, state }, { signal } = {}) {
+            commit('SET_CARGANDO_PATRONES', true)
+            commit('SET_ERROR_PATRONES', null)
+            try {
+                commit('SET_PATRONES', await mermasService.patrones(
+                    { desde: state.filtro.desde, hasta: state.filtro.hasta },
+                    { signal }
+                ))
+            } catch (error) {
+                if (!error.esCancelado) commit('SET_ERROR_PATRONES', error.message)
+            } finally {
+                commit('SET_CARGANDO_PATRONES', false)
             }
         },
 
@@ -230,11 +293,11 @@ export default {
 
         limpiarPlan({ commit }) { commit('SET_PLAN', null) },
 
-        async desarmar({ commit, dispatch }, { productoId, cantidad, motivo, detalle, lineas }) {
+        async desarmar({ commit, dispatch }, { productoId, cantidad, motivo, detalle, lineas, autorizacion }) {
             commit('SET_GUARDANDO', true)
             try {
                 const resultado = await mermasService.desarmar(productoId, {
-                    cantidad, motivo, detalle, lineas
+                    cantidad, motivo, detalle, lineas, autorizacion
                 })
                 await Promise.all([dispatch('cargar'), dispatch('cargarResumen')])
                 return resultado
@@ -251,6 +314,10 @@ export default {
         motivos: state => state.motivos,
         resumen: state => state.resumen,
         planDesarme: state => state.planDesarme,
+        umbralAutorizacion: state => state.umbral,
+        patrones: state => state.patrones,
+        cargandoPatrones: state => state.cargandoPatrones,
+        errorPatrones: state => state.errorPatrones,
         cargando: state => state.cargando,
         cargandoResumen: state => state.cargandoResumen,
         guardando: state => state.guardando,
@@ -259,6 +326,14 @@ export default {
         /* Solo los nombres, para el select. El conteo de usos sirve para
         ordenarlos, no para mostrarlos. */
         nombresMotivo: state => state.motivos.map(m => m.motivo),
+
+        /* Para el <select> con <optgroup>: las categorías en su orden, cada
+           una con sus motivos, y sin grupos vacíos. */
+        motivosPorCategoria: state => CATEGORIAS
+            .map(c => ({ ...c, motivos: state.motivos.filter(m => (m.categoria || 'otro') === c.valor) }))
+            .filter(c => c.motivos.length),
+
+        motivoPorNombre: state => (nombre) => state.motivos.find(m => m.motivo === nombre) ?? null,
         /* Atajos al resumen, con cero por defecto para que la vista no tenga
            que preguntar si ya llegó. */
         costoPerdido: state => state.resumen?.costoPerdido ?? 0,
@@ -267,11 +342,14 @@ export default {
         costoDesvalorizado: state => state.resumen?.costoDesvalorizado ?? 0,
         unidadesPerdidas: state => state.resumen?.unidadesPerdidas ?? 0,
         unidadesRecuperadas: state => state.resumen?.unidadesRecuperadas ?? 0,
-        porcentajeSobreVentas: state => state.resumen?.porcentajeSobreVentas ?? 0,
+        /* Null para quien no es administrador: las ventas del local no son
+           suyas, y la API no las manda. */
+        porcentajeSobreVentas: state => state.resumen?.porcentajeSobreVentas ?? null,
 
         porDestino: state => state.resumen?.porDestino ?? [],
         porProducto: state => state.resumen?.porProducto ?? [],
         porMotivo: state => state.resumen?.porMotivo ?? [],
+        porCategoria: state => state.resumen?.porCategoria ?? [],
 
         motivoPrincipal: state => state.resumen?.porMotivo?.[0] ?? null,
 

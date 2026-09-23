@@ -4,15 +4,22 @@
         <header class="cabecera">
             <div class="min0">
                 <nav class="migas" aria-label="Ruta">
-                    <router-link :to="{ name: 'Lotes' }">Lotes</router-link>
+                    <router-link :to="{ name: origen.ruta }">{{ origen.texto }}</router-link>
                     <span class="migas-sep" aria-hidden="true">›</span>
                     <span aria-current="page">Etiquetas</span>
                 </nav>
 
-                <h2>Etiquetas</h2>
-                <p class="pista">
+                <h2>{{ esPartida ? 'Etiqueta del mesón' : esCompra ? 'Etiquetas del balde' : 'Etiquetas' }}</h2>
+                <p v-if="esPartida" class="pista">
+                    Pégala al balde <b>antes</b> de dejarlo adelante. El vendedor la
+                    escanea para vender: una partida sin etiqueta no se puede cobrar.
+                </p>
+                <p v-else class="pista">
+                    <template v-if="esCompra">
+                        Lo que entra por compra va directo al balde de bodega.
+                    </template>
                     Imprímelas y pégalas <b>antes</b> de meter los paquetes a la cámara.
-                    Un lote sin etiqueta no se puede escanear al vender.
+                    Un lote sin etiqueta no se puede escanear.
                 </p>
             </div>
 
@@ -60,59 +67,60 @@
             <router-link class="btn" :to="{ name: 'Lotes' }">Ir a lotes</router-link>
         </div>
 
-        <!-- Toolbar de opciones + resumen -->
+        <!-- Opciones -->
         <template v-else>
             <div class="toolbar">
-                <!-- QUÉ IMPRIMIR -->
+                <!-- Desde una compra no se elige: todo va al balde de bodega. -->
+                <template v-if="!esCompra && !esPartida">
+                    <div class="grupo">
+                        <span class="grupo-label">Qué imprimir</span>
+                        <div class="segmento" role="radiogroup" aria-label="Tipo de etiqueta">
+                            <button
+                                v-for="t in TIPOS"
+                                :key="t.valor"
+                                class="segmento-btn"
+                                :class="{ activo: tipo === t.valor }"
+                                role="radio"
+                                :aria-checked="tipo === t.valor"
+                                @click="tipo = t.valor"
+                            >
+                                <span class="segmento-emoji" aria-hidden="true">{{ t.emoji }}</span>
+                                <span class="segmento-txts">
+                                    <span class="segmento-titulo">{{ t.titulo }}</span>
+                                    <span class="segmento-sub">{{ t.sub }}</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="separador" aria-hidden="true"></div>
+                </template>
+
+                <!-- El tamaño tiene que ser el del rollo cargado en la Zebra. -->
                 <div class="grupo">
-                    <span class="grupo-label">Qué imprimir</span>
-                    <div class="segmento segmento-tipo" role="radiogroup" aria-label="Tipo de etiqueta">
+                    <span class="grupo-label">Tamaño del rollo (ancho × alto)</span>
+                    <div class="segmento segmento-tamano" role="radiogroup" aria-label="Tamaño de etiqueta">
                         <button
-                            v-for="t in TIPOS"
+                            v-for="t in TAMANOS"
                             :key="t.valor"
                             class="segmento-btn"
-                            :class="{ activo: tipo === t.valor }"
+                            :class="{ activo: tamano === t.valor }"
                             role="radio"
-                            :aria-checked="tipo === t.valor"
-                            @click="tipo = t.valor"
+                            :aria-checked="tamano === t.valor"
+                            @click="tamano = t.valor"
                         >
-                            <span class="segmento-emoji" aria-hidden="true">{{ t.emoji }}</span>
                             <span class="segmento-txts">
-                                <span class="segmento-titulo">{{ t.titulo }}</span>
+                                <span class="segmento-titulo">{{ t.ancho }}×{{ t.alto }}</span>
                                 <span class="segmento-sub">{{ t.sub }}</span>
                             </span>
                         </button>
                     </div>
                 </div>
 
-                <div class="separador" aria-hidden="true"></div>
-
-                <!-- FORMATO (solo relevante para la de balde) -->
-                <div class="grupo">
-                    <span class="grupo-label">Ancho</span>
-                    <div class="segmento" role="radiogroup" aria-label="Ancho de etiqueta">
-                        <button
-                            v-for="f in FORMATOS"
-                            :key="f.valor"
-                            class="segmento-btn"
-                            :class="{ activo: formato === f.valor }"
-                            role="radio"
-                            :aria-checked="formato === f.valor"
-                            @click="formato = f.valor"
-                        >
-                            <span class="segmento-txts">
-                                <span class="segmento-titulo">{{ f.corto }}</span>
-                                <span class="segmento-sub">{{ f.filas }}</span>
-                            </span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- INCLUIR (solo aplica a la de balde) -->
-                <template v-if="muestraBalde">
+                <template v-if="muestraBalde && !esPartida">
                     <div class="separador" aria-hidden="true"></div>
                     <div class="grupo">
-                        <span class="grupo-label">Incluir en balde</span>
+                        <span class="grupo-label">Incluir</span>
                         <div class="toggles">
                             <label class="pill" :class="{ activa: conVencimiento }">
                                 <input type="checkbox" v-model="conVencimiento">
@@ -128,95 +136,84 @@
             </div>
 
             <div class="notas">
-                <span v-if="tipo === 'ambas'" class="nota nota-info">
+                <span v-if="tipoEfectivo === 'ambas'" class="nota nota-info">
                     <span aria-hidden="true">🔀</span>
-                    Se imprimen <b>dos por lote</b>: una completa para el balde y una simple
-                    para el mostrador de ventas. Total: {{ listas.length }} etiquetas.
+                    Se imprimen <b>dos por lote</b>: una para el balde y una para el mostrador.
+                    Total: {{ listas.length }} etiquetas.
                 </span>
-                <span v-else-if="tipo === 'venta'" class="nota nota-info">
+                <span v-else-if="tipoEfectivo === 'venta'" class="nota nota-info">
                     <span aria-hidden="true">🛒</span>
-                    Etiqueta de <b>venta</b>: solo nombre y QR grande, pensada para escanear
-                    al cobrar. Pégala en el mostrador o en una carpeta de consulta.
+                    Etiqueta de <b>venta</b>: nombre y QR grande, para escanear al cobrar.
                 </span>
                 <span v-if="faltanQr" class="nota nota-alerta">
                     <span aria-hidden="true">◐</span>
                     {{ faltanQr }} código(s) sin imagen: se imprimen igual con el código escrito,
                     pero conviene reintentar.
                 </span>
-                <span class="nota nota-suave">
-                    <span aria-hidden="true">👁️</span>
-                    Vista previa. Al imprimir se oculta el resto de la pantalla; si tu impresora
-                    agrega márgenes, ajústalos a cero en el diálogo.
-                </span>
+                <!-- Chrome recuerda lo que se eligió la última vez, así que esto
+                     solo hay que hacerlo una vez por navegador. -->
+                <div class="nota nota-info ajustes-dialogo">
+                    <span aria-hidden="true">🖨️</span>
+                    <div>
+                        <b>En el diálogo de impresión, la primera vez:</b>
+                        <ul>
+                            <li>Destino: la <b>Zebra</b></li>
+                            <li>Márgenes: <b>Ninguno</b></li>
+                            <li>Escala: <b>100%</b></li>
+                            <li>Desmarca <b>Encabezados y pies de página</b> (es lo que agrega
+                                la hora y el título)</li>
+                        </ul>
+                        Cada etiqueta es una página: en la vista previa se ven separadas,
+                        en el rollo salen una tras otra.
+                    </div>
+                </div>
             </div>
         </template>
     </div>
 
-    <!-- ═══════════ La hoja: lo único que se imprime ═══════════ -->
+    <!-- ═══════════ Las etiquetas: lo único que se imprime ═══════════ -->
     <div v-if="listas.length" class="mesa">
-        <div class="hoja" :class="`formato-${formato}`">
+        <div class="hoja" :style="estiloHoja">
             <article
                 v-for="e in listas"
                 :key="e.clave"
                 class="etiqueta"
                 :class="e.venta ? 'etiqueta-venta' : 'etiqueta-balde'"
             >
-                <!-- ---------- Versión BALDE ---------- -->
+                <!-- ---------- BALDE ---------- -->
                 <template v-if="!e.venta">
                     <div class="et-izq">
-                        <div class="et-producto">
-                            <span class="emoji" aria-hidden="true">{{ e.emoji }}</span>
-                            <b>{{ e.producto }}</b>
-                        </div>
-
+                        <b class="et-producto">{{ e.producto }}</b>
                         <div class="et-codigo">{{ e.codigo }}</div>
-
-                        <dl class="et-datos">
-                            <div>
-                                <dt>Ingreso</dt>
-                                <dd>{{ fecha(e.fechaIngreso) }}</dd>
-                            </div>
-                            <div v-if="conVencimiento && e.fechaVencimiento">
-                                <dt>Vence</dt>
-                                <dd>{{ fecha(e.fechaVencimiento) }}</dd>
-                            </div>
-                            <div>
-                                <dt>Varas</dt>
-                                <dd>{{ e.varas }}</dd>
-                            </div>
-                            <div v-if="conProveedor && e.proveedor">
-                                <dt>Prov.</dt>
-                                <dd class="corta">{{ e.proveedor }}</dd>
-                            </div>
-                            <div v-if="e.ubicacion">
-                                <dt>Ubic.</dt>
-                                <dd class="corta">{{ e.ubicacion }}</dd>
-                            </div>
-                        </dl>
+                        <!-- Un dato por línea: juntos en una sola no caben al
+                             lado del QR, y lo que se cortaba era el vencimiento. -->
+                        <div v-if="conVencimiento && e.fechaVencimiento" class="et-linea et-vence">
+                            Vence {{ fecha(e.fechaVencimiento) }}
+                        </div>
+                        <!-- En el mesón lo que se pregunta es cuánto sale; en el
+                             balde de bodega, de dónde vino. -->
+                        <div v-if="e.esPartida" class="et-linea et-vence">{{ clp(e.precio) }}</div>
+                        <template v-else>
+                            <div class="et-linea">Ing {{ fecha(e.fechaIngreso) }}</div>
+                            <!-- Sin varas ni ubicación: la cantidad cambia apenas se saca
+                                 la primera y la etiqueta quedaría mintiendo. -->
+                            <div v-if="conProveedor && e.proveedor" class="et-linea et-prov">{{ e.proveedor }}</div>
+                        </template>
                     </div>
 
                     <div class="et-der">
                         <img v-if="qr[e.codigo]" :src="qr[e.codigo]" :alt="`QR ${e.codigo}`" class="qr">
-                        <div v-else class="qr-vacio">{{ e.codigo }}</div>
+                        <div v-else class="qr qr-vacio">{{ e.codigo }}</div>
                     </div>
                 </template>
 
-                <!-- ---------- Versión VENTA ---------- -->
+                <!-- ---------- VENTA ---------- -->
                 <template v-else>
-                    <span class="venta-tag" aria-hidden="true">VENTA</span>
-
-                    <div class="venta-qr">
-                        <img v-if="qr[e.codigo]" :src="qr[e.codigo]" :alt="`QR ${e.codigo}`" class="qr-grande">
-                        <div v-else class="qr-vacio qr-vacio-grande">{{ e.codigo }}</div>
-                    </div>
-
-                    <div class="venta-pie">
-                        <div class="venta-producto">
-                            <span class="emoji" aria-hidden="true">{{ e.emoji }}</span>
-                            <b>{{ e.producto }}</b>
-                        </div>
-                        <div class="venta-codigo">{{ e.codigo }}</div>
-                    </div>
+                    <span class="venta-tag">VENTA</span>
+                    <img v-if="qr[e.codigo]" :src="qr[e.codigo]" :alt="`QR ${e.codigo}`" class="qr-venta">
+                    <div v-else class="qr-venta qr-vacio">{{ e.codigo }}</div>
+                    <b class="venta-producto">{{ e.producto }}</b>
+                    <div class="venta-codigo">{{ e.codigo }}</div>
                 </template>
             </article>
         </div>
@@ -227,11 +224,17 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { lotesService } from '@/features/lotes/services/lotes.service'
+import { mostradorService } from '@/features/ventas/services/mostrador.service'
 
-const FORMATOS = [
-    { valor: 'chica', corto: 'Chica', filas: '4 por fila' },
-    { valor: 'media', corto: 'Media', filas: '3 por fila' },
-    { valor: 'grande', corto: 'Grande', filas: '2 por fila' }
+/* Medidas de rollo habituales en Zebra de escritorio (ancho × alto, mm).
+   57×32 y 51×25 son 2.25"×1.25" y 2"×1", los más comunes. */
+const TAMANOS = [
+    { valor: '51x25', ancho: 51, alto: 25, sub: '2″ × 1″' },
+    { valor: '50x30', ancho: 50, alto: 30, sub: 'mm' },
+    { valor: '57x32', ancho: 57, alto: 32, sub: '2¼″ × 1¼″' },
+    { valor: '60x40', ancho: 60, alto: 40, sub: 'mm' },
+    { valor: '76x51', ancho: 76, alto: 51, sub: '3″ × 2″' },
+    { valor: '102x51', ancho: 102, alto: 51, sub: '4″ × 2″' }
 ]
 
 const TIPOS = [
@@ -240,11 +243,31 @@ const TIPOS = [
     { valor: 'ambas', emoji: '🔀', titulo: 'Ambas', sub: '2 por lote' }
 ]
 
+/* Lo que se elige una vez y queda: el rollo no cambia de un día a otro. */
+const CLAVE_PREFERENCIAS = 'colibri.etiquetas'
+
+const leerPreferencias = () => {
+    try {
+        return JSON.parse(localStorage.getItem(CLAVE_PREFERENCIAS)) || {}
+    } catch {
+        return {}
+    }
+}
+
+const guardarPreferencias = (p) => {
+    try {
+        localStorage.setItem(CLAVE_PREFERENCIAS, JSON.stringify(p))
+    } catch {
+        /* Modo privado o almacenamiento bloqueado: se usa lo de la sesión. */
+    }
+}
+
 export default {
     name: 'EtiquetasView',
 
     setup() {
         const route = useRoute()
+        const pref = leerPreferencias()
 
         const etiquetas = ref([])
         const qr = ref({})
@@ -252,10 +275,74 @@ export default {
         const error = ref('')
         const imprimiendo = ref(false)
 
-        const formato = ref('media')
+        const tamano = ref(TAMANOS.some(t => t.valor === pref.tamano) ? pref.tamano : '50x30')
         const tipo = ref('balde')            // balde | venta | ambas
-        const conVencimiento = ref(true)
-        const conProveedor = ref(true)
+        const conVencimiento = ref(pref.conVencimiento ?? true)
+        const conProveedor = ref(pref.conProveedor ?? true)
+
+        watch([tamano, conVencimiento, conProveedor], ([t, v, p]) =>
+            guardarPreferencias({ tamano: t, conVencimiento: v, conProveedor: p })
+        )
+
+        /* Lo que entra por compra va al balde de bodega, siempre. */
+        const esCompra = computed(() => !!route.params.compraId)
+
+        /* La partida que se acaba de bajar al mesón: una sola etiqueta, con
+           el mismo diseño que la del balde pero con el precio. */
+        const esPartida = computed(() => !!route.params.codigo)
+
+        const tipoEfectivo = computed(() =>
+            esCompra.value || esPartida.value ? 'balde' : tipo.value
+        )
+
+        const origen = computed(() =>
+            esPartida.value ? { ruta: 'InventarioBodega', texto: 'Inventario Bodega' }
+                : esCompra.value ? { ruta: 'Compras', texto: 'Compras' }
+                    : { ruta: 'Lotes', texto: 'Lotes' }
+        )
+        const muestraBalde = computed(() => tipoEfectivo.value !== 'venta')
+
+        const medida = computed(() => TAMANOS.find(t => t.valor === tamano.value) || TAMANOS[1])
+
+
+        /*
+         * Todo el diseño de la etiqueta cuelga de estas variables. El QR se
+         * lleva lo que deja el alto (con 2mm de margen arriba y abajo) sin
+         * pasar del 40% del ancho, para que al texto le quede espacio. La
+         * escala agranda las letras en los rollos grandes sin tocar el CSS.
+         */
+        const estiloHoja = computed(() => {
+            const { ancho, alto } = medida.value
+            const escala = Math.min(1.8, Math.max(1, Math.min(ancho / 50, alto / 30)))
+            return {
+                '--w': `${ancho}mm`,
+                '--h': `${alto}mm`,
+                '--qr': `${Math.min(alto - 4, Math.round(ancho * 0.40))}mm`,
+                '--qr-venta': `${Math.max(12, Math.min(alto - 13, ancho - 10))}mm`,
+                '--esc': escala
+            }
+        })
+
+        /*
+         * El tamaño de página no se puede poner en el CSS scoped: @page es
+         * global, y print.css ya fija 80mm para la boleta del POS. Se inyecta
+         * una regla al final del <head> —gana por venir después— y se retira
+         * al salir, así el POS sigue imprimiendo su ticket.
+         */
+        let estiloPagina = null
+
+        const aplicarPagina = () => {
+            if (!estiloPagina) {
+                estiloPagina = document.createElement('style')
+                estiloPagina.dataset.origen = 'etiquetas'
+                document.head.appendChild(estiloPagina)
+            }
+            const { ancho, alto } = medida.value
+            estiloPagina.textContent =
+                `@media print { @page { size: ${ancho}mm ${alto}mm; margin: 0; } }`
+        }
+
+        watch(medida, aplicarPagina)
 
         let control = null
 
@@ -269,7 +356,18 @@ export default {
 
             try {
                 const compraId = route.params.compraId
-                if (compraId) {
+                if (route.params.codigo) {
+                    const p = await mostradorService.escanear(String(route.params.codigo), señal)
+                    etiquetas.value = p ? [{
+                        loteId: p.id,
+                        codigo: p.codigo,
+                        producto: p.producto,
+                        emoji: p.emoji,
+                        fechaVencimiento: p.fechaVencimiento,
+                        precio: p.precioUnitario,
+                        esPartida: true
+                    }] : []
+                } else if (compraId) {
                     etiquetas.value = await lotesService.etiquetasDeCompra(Number(compraId), señal)
                 } else {
                     const ids = String(route.query.ids || '')
@@ -290,7 +388,9 @@ export default {
 
         const cargarQr = async (señal) => {
             const resultados = await Promise.allSettled(
-                etiquetas.value.map(e => lotesService.qr(e.codigo, señal))
+                etiquetas.value.map(e => e.esPartida
+                    ? mostradorService.qr(e.codigo, señal)
+                    : lotesService.qr(e.codigo, señal))
             )
 
             const mapa = {}
@@ -307,25 +407,23 @@ export default {
 
         const qrListos = computed(() => Object.keys(qr.value).length)
         const faltanQr = computed(() => Math.max(0, etiquetas.value.length - qrListos.value))
-        const muestraBalde = computed(() => tipo.value !== 'venta')
 
         /*
-         * Expandimos la lista según el tipo elegido. "Ambas" duplica cada lote:
-         * primero la de balde, inmediatamente después la de venta, así al cortar
-         * la tira quedan juntas y es fácil separarlas por destino.
+         * "Ambas" duplica cada lote: primero la de balde y enseguida la de
+         * venta, así al cortar el rollo quedan juntas.
          *
-         * La `clave` distingue ambas copias del mismo lote en el v-for; sin ella
-         * Vue reusaría el nodo y no re-renderizaría la segunda variante.
+         * La `clave` distingue las dos copias del mismo lote en el v-for; sin
+         * ella Vue reusaría el nodo y no re-renderizaría la segunda variante.
          */
         const listas = computed(() => {
             if (cargando.value) return []
 
             const salida = []
             for (const e of etiquetas.value) {
-                if (tipo.value === 'balde' || tipo.value === 'ambas') {
+                if (tipoEfectivo.value !== 'venta') {
                     salida.push({ ...e, venta: false, clave: `${e.loteId}-b` })
                 }
-                if (tipo.value === 'venta' || tipo.value === 'ambas') {
+                if (tipoEfectivo.value !== 'balde') {
                     salida.push({ ...e, venta: true, clave: `${e.loteId}-v` })
                 }
             }
@@ -333,26 +431,48 @@ export default {
         })
 
         onMounted(() => {
-            document.body.classList.add('modo-etiquetas')
+            /* En <html> y no en <body>: print.css tiene que poder anular el
+               ancho de 80mm que le pone a los dos. */
+            document.documentElement.classList.add('modo-etiquetas')
+            aplicarPagina()
             cargar()
         })
 
         watch(
-            () => [route.params.compraId, route.query.ids],
+            () => [route.params.compraId, route.params.codigo, route.query.ids],
             () => cargar()
         )
 
         onUnmounted(() => {
-            document.body.classList.remove('modo-etiquetas')
+            document.documentElement.classList.remove('modo-etiquetas')
+            estiloPagina?.remove()
             control?.abort()
             liberar()
         })
 
+        /*
+         * Si en el diálogo quedaron activos "Encabezados y pies de página",
+         * Chrome estampa el título de la pestaña en cada etiqueta. La página
+         * no puede apagar esa opción, pero sí dejar el título vacío mientras
+         * imprime. window.print() bloquea hasta que se cierra el diálogo, y
+         * afterprint cubre a los navegadores que no bloquean.
+         */
         const imprimir = async () => {
             imprimiendo.value = true
+            aplicarPagina()
             await nextTick()
+
+            const titulo = document.title
+            const restaurar = () => {
+                document.title = titulo
+                window.removeEventListener('afterprint', restaurar)
+            }
+            window.addEventListener('afterprint', restaurar)
+            document.title = ' '
+
             requestAnimationFrame(() => {
                 window.print()
+                restaurar()
                 imprimiendo.value = false
             })
         }
@@ -360,6 +480,11 @@ export default {
         const fmtFecha = new Intl.DateTimeFormat('es-CL', {
             day: '2-digit', month: '2-digit', year: '2-digit'
         })
+        const fmtClp = new Intl.NumberFormat('es-CL', {
+            style: 'currency', currency: 'CLP', maximumFractionDigits: 0
+        })
+        const clp = (n) => fmtClp.format(Math.round(n || 0))
+
         const fecha = (v) => {
             if (!v) return '—'
             const d = /^\d{4}-\d{2}-\d{2}$/.test(v)
@@ -369,11 +494,12 @@ export default {
         }
 
         return {
-            FORMATOS, TIPOS,
+            TAMANOS, TIPOS,
             etiquetas, listas, qr, cargando, error, cargar,
-            qrListos, faltanQr, imprimiendo, muestraBalde,
-            formato, tipo, conVencimiento, conProveedor,
-            imprimir, fecha
+            qrListos, faltanQr, imprimiendo,
+            esCompra, esPartida, origen, tipo, tipoEfectivo, muestraBalde,
+            tamano, medida, estiloHoja, conVencimiento, conProveedor,
+            imprimir, fecha, clp
         }
     }
 }
@@ -726,6 +852,15 @@ export default {
     font-weight: 500;
 }
 
+.ajustes-dialogo ul {
+    margin: 4px 0 6px;
+    padding-left: 18px;
+}
+
+.ajustes-dialogo li {
+    margin: 2px 0;
+}
+
 .nota-suave {
     color: var(--text-faint);
     padding: 0 2px;
@@ -812,268 +947,166 @@ export default {
     border-radius: var(--r-lg);
 }
 
-/* ═══════════ La hoja (medidas en mm: NO tocar) ═══════════
-   Impresión térmica/láser B/N: SIEMPRE negro sobre blanco,
-   independiente del tema. Colores hardcodeados a propósito. */
+/* ═══════════ Las etiquetas ═══════════
+   Impresora térmica: solo imprime negro o nada. Sin grises, sin colores,
+   sin emoji —se imprimen como una mancha— y sin bordes, que en un rollo
+   troquelado salen corridos respecto del corte. Los colores van fijos a
+   propósito, sin importar el tema.
+
+   Las medidas salen de las variables que pone la vista (--w, --h, --qr,
+   --esc): cambiar de rollo no obliga a tocar esto. */
 .hoja {
-    display: grid;
-    gap: 4mm;
-    background: #fff;
-    border-radius: 8px;
-    box-shadow: var(--shadow-md);
-    padding: 6mm;
-}
-
-.formato-chica {
-    grid-template-columns: repeat(4, 1fr);
-}
-
-.formato-media {
-    grid-template-columns: repeat(3, 1fr);
-}
-
-.formato-grande {
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5mm;
 }
 
 .etiqueta {
+    position: relative;
+    width: var(--w);
+    height: var(--h);
+    overflow: hidden;
+    padding: 1.6mm 2mm;
     background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 2mm;
-    break-inside: avoid;
-    page-break-inside: avoid;
+    color: #000;
+    font-family: Arial, Helvetica, sans-serif;
+    /* Sin esto el navegador se salta los fondos negros al imprimir. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    /* Solo en pantalla: marca el troquel. outline no ocupa espacio, así la
+       vista previa mide lo mismo que la impresión. */
+    outline: 1px dashed #9aa4b2;
+    outline-offset: 0;
+    border-radius: 1.5mm;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
 }
 
-/* ---------- Etiqueta BALDE ---------- */
+/* ---------- BALDE ---------- */
 .etiqueta-balde {
-    display: flex;
-    align-items: stretch;
-    gap: 2.5mm;
-    padding: 2.5mm;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 2mm;
 }
 
 .et-izq {
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    gap: calc(.5mm * var(--esc));
     min-width: 0;
-    flex: 1;
 }
 
 .et-producto {
-    display: flex;
-    align-items: center;
-    gap: 1.5mm;
-    min-width: 0;
-}
-
-.et-producto .emoji {
-    font-size: 3.6mm;
-    flex-shrink: 0;
-}
-
-.et-producto b {
-    font-size: 3mm;
-    line-height: 1.2;
-    color: #000;
-    overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: calc(3.1mm * var(--esc));
+    font-weight: 800;
+    line-height: 1.1;
+    text-transform: uppercase;
+    word-break: break-word;
 }
 
+/* Grande y grueso: es lo que se lee a mano si el lector no toma el QR. */
 .et-codigo {
-    margin: 1.5mm 0;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 4.2mm;
+    font-size: calc(3.3mm * var(--esc));
+    font-weight: 800;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+/* Negrita siempre: un trazo fino en térmica sale cortado. */
+.et-linea {
+    font-size: calc(2.5mm * var(--esc));
     font-weight: 700;
-    letter-spacing: 0.05em;
-    color: #000;
-}
-
-.et-datos {
-    margin: auto 0 0;
-    font-size: 2.4mm;
-    line-height: 1.35;
-}
-
-.et-datos>div {
-    display: flex;
-    gap: 1.5mm;
-}
-
-.et-datos dt {
-    color: #555;
-    min-width: 9mm;
-    flex-shrink: 0;
-}
-
-.et-datos dd {
-    margin: 0;
-    color: #000;
-    font-weight: 600;
-    min-width: 0;
-}
-
-.corta {
+    line-height: 1.2;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+}
+
+/* Lo que decide qué balde sale primero: un punto más grande. */
+.et-vence {
+    font-size: calc(2.7mm * var(--esc));
+    font-weight: 800;
 }
 
 .et-der {
     display: flex;
     align-items: center;
-    flex-shrink: 0;
 }
 
+/* pixelated: el QR se agranda sin suavizar. El suavizado deja bordes
+   grises que la térmica convierte en ruido y el lector no toma. */
 .qr {
-    width: 20mm;
-    height: 20mm;
     display: block;
+    width: var(--qr);
+    height: var(--qr);
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
 }
 
 .qr-vacio {
     display: grid;
     place-items: center;
-    padding: 1mm;
-    border: 1px dashed #999;
-    border-radius: 1mm;
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: 2.4mm;
+    padding: .8mm;
+    border: .3mm dashed #000;
+    font-size: 2.2mm;
+    font-weight: 700;
     text-align: center;
     word-break: break-all;
-    color: #000;
-    width: 20mm;
-    height: 20mm;
 }
 
-/* ---------- Etiqueta VENTA ---------- */
-/*
- * El QR manda: se escanea al vender, a veces con la mano ocupada, así que
- * va centrado y grande. El nombre debajo confirma que el vendedor escaneó lo
- * correcto; el código chico es el respaldo para tipear si el lector falla.
- * B/N hardcodeado para impresión térmica.
- */
+/* ---------- VENTA ---------- */
 .etiqueta-venta {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2mm;
-    padding: 3mm 2.5mm;
-    position: relative;
-    border-color: #93c5fd;
-    background: #fff;
+    gap: .8mm;
+    text-align: center;
 }
 
+/* Bloque negro con letras blancas: se distingue de la de balde sin color. */
 .venta-tag {
     position: absolute;
-    top: 1.5mm;
-    right: 1.5mm;
-    font-size: 1.9mm;
+    top: 1.2mm;
+    left: 1.2mm;
+    padding: .3mm 1.2mm;
+    background: #000;
+    color: #fff;
+    font-size: 2.1mm;
     font-weight: 800;
-    letter-spacing: 0.12em;
-    color: #1d4ed8;
-    background: #dbeafe;
-    padding: 0.5mm 1.5mm;
-    border-radius: 1mm;
+    letter-spacing: .1em;
 }
 
-.venta-qr {
-    display: grid;
-    place-items: center;
-}
-
-.qr-grande {
-    width: 30mm;
-    height: 30mm;
+.qr-venta {
     display: block;
-}
-
-.qr-vacio-grande {
-    width: 30mm;
-    height: 30mm;
-    font-size: 3mm;
-}
-
-.venta-pie {
-    text-align: center;
-    max-width: 100%;
-    min-width: 0;
+    width: var(--qr-venta);
+    height: var(--qr-venta);
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
 }
 
 .venta-producto {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5mm;
-    min-width: 0;
-}
-
-.venta-producto .emoji {
-    font-size: 4mm;
-    flex-shrink: 0;
-}
-
-.venta-producto b {
-    font-size: 3.4mm;
-    line-height: 1.15;
-    color: #000;
+    max-width: 100%;
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    font-size: calc(2.9mm * var(--esc));
+    font-weight: 800;
+    line-height: 1.1;
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 .venta-codigo {
-    margin-top: 1mm;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 3mm;
+    font-size: calc(2.5mm * var(--esc));
     font-weight: 700;
-    letter-spacing: 0.05em;
-    color: #334155;
-}
-
-/* ---------- Ajustes por formato (balde) ---------- */
-.formato-chica .et-datos {
-    display: none;
-}
-
-.formato-chica .qr,
-.formato-chica .qr-vacio {
-    width: 16mm;
-    height: 16mm;
-}
-
-.formato-chica .et-codigo {
-    font-size: 3.4mm;
-}
-
-.formato-grande .qr,
-.formato-grande .qr-vacio {
-    width: 26mm;
-    height: 26mm;
-}
-
-.formato-grande .et-codigo {
-    font-size: 5mm;
-}
-
-/* ---------- QR de venta según ancho ---------- */
-.formato-chica .qr-grande,
-.formato-chica .qr-vacio-grande {
-    width: 24mm;
-    height: 24mm;
-}
-
-.formato-grande .qr-grande,
-.formato-grande .qr-vacio-grande {
-    width: 38mm;
-    height: 38mm;
-}
-
-.formato-grande .venta-producto b {
-    font-size: 4mm;
+    letter-spacing: .04em;
 }
 
 /* ═══════════ Responsive ═══════════ */
@@ -1099,14 +1132,22 @@ export default {
         justify-content: center;
     }
 
+    /* Seis tamaños no caben en una fila del celular: tres por fila. */
+    .segmento-tamano {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+    }
+
     .btn-imprimir {
         width: 100%;
     }
 
-    .formato-chica,
-    .formato-media,
-    .formato-grande {
-        grid-template-columns: repeat(2, 1fr);
+    .mesa {
+        padding: 12px;
+    }
+
+    .hoja {
+        justify-content: center;
     }
 }
 
@@ -1123,13 +1164,9 @@ export default {
     }
 }
 
-/* ═══════════ Impresión: solo la hoja ═══════════ */
+/* ═══════════ Impresión: una etiqueta por página ═══════════
+   El tamaño de página lo inyecta la vista (ver aplicarPagina). */
 @media print {
-    .controles,
-    .mesa {
-        /* la mesa mantiene la hoja; ocultamos su decorado */
-    }
-
     .controles {
         display: none !important;
     }
@@ -1138,23 +1175,28 @@ export default {
         margin: 0;
         padding: 0;
         background: none !important;
-        border: none !important;
+        border: 0 !important;
         border-radius: 0;
     }
 
     .hoja {
-        box-shadow: none !important;
-        padding: 0;
-        border-radius: 0;
+        display: block;
     }
 
     .etiqueta {
+        outline: none;
+        border-radius: 0;
+        box-shadow: none;
+        break-after: page;
+        page-break-after: always;
         break-inside: avoid;
         page-break-inside: avoid;
     }
-}
 
-@page {
-    margin: 0;
+    /* Sin esto sale una etiqueta en blanco al final del lote. */
+    .etiqueta:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
 }
 </style>

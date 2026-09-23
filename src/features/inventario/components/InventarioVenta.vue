@@ -2,6 +2,9 @@
   <div class="inv-venta">
     <EncabezadoSeccion titulo="Inventario Venta" :volver-a="{ name: 'Inventario' }" />
 
+    <!-- El mesón: qué hay adelante para vender. La única acción es devolver
+         a bodega lo que sobró (admin y bodega); bajar se hace desde Bodega.
+         Para quien vende es solo lectura. -->
     <TablaProductos
       foco="venta"
       :items="items"
@@ -11,9 +14,12 @@
       :error="error"
       @filtrar="filtrar"
       @recargar="cargar"
-      @traspasar="pedirTraspaso"
+      @retornar="p => retorno = p"
     />
 
+    <ModalRetorno v-if="retorno" :producto="retorno" @cerrar="retorno = null" @retornado="alRetornar" />
+
+    <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
   </div>
 </template>
 
@@ -22,7 +28,9 @@
 import { ref, onMounted } from 'vue'
 import TablaProductos from './TablaProductos.vue'
 import EncabezadoSeccion from '@/shared/components/EncabezadoSeccion.vue'
+import ModalRetorno from './modales/ModalRetorno.vue'
 import { useProductos } from '../composables/useProductos'
+import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
 /* El mostrador mira el mismo catálogo que bodega pero con otra pregunta:
    qué hay adelante para vender. No comparte estado con la vista de bodega
@@ -30,44 +38,36 @@ import { useProductos } from '../composables/useProductos'
    compartían el filtro de una aparecía en la otra al navegar. */
 export default {
   name: 'InventarioVenta',
-  components: { TablaProductos, EncabezadoSeccion },
+  components: { TablaProductos, EncabezadoSeccion, ModalRetorno },
 
   setup() {
+    const { usarAviso } = useTemporizadores()
+    const { aviso, avisar } = usarAviso()
+
     const { items, filtros, total, cargando, error, cargar, filtrar } = useProductos({
       /* La tabla esconde el paginador cuando foco es 'venta', así que lo que
          no venga en esta primera carga no se puede alcanzar desde la interfaz.
-         Con el límite por defecto el mostrador vería solo la primera página. */
+         Con el tamaño por defecto el mostrador vería solo la primera página. */
       tamano: 200,
       activo: true,
       soloEnVenta: true
     })
 
-    /* Desde el mostrador esto no baja varas: pide que las bajen. El botón de
-       la tabla es 🔑, no ↓, y el emit viene con requiereAutorizacion en true.
-       Se guarda el flag tal como llegó en vez de asumirlo por el rol: quien
-       decide si hace falta firma es la tabla, que es la que conoce el permiso,
-       y mañana un supervisor en el mesón podría no necesitarla. */
-    const pedido = ref(null)
+    /* ---------------- Devolver a bodega ---------------- */
+    const retorno = ref(null)
 
-    const pedirTraspaso = (producto, opciones = {}) => {
-      pedido.value = {
-        producto,
-        requiereAutorizacion: opciones.requiereAutorizacion === true
-      }
-    }
-
-    const cerrarPedido = () => { pedido.value = null }
-
-    const alConfirmarPedido = async () => {
-      pedido.value = null
-      await cargar()   // el stock de mesón cambió; se relee, no se parchea la fila
+    const alRetornar = async (r) => {
+      retorno.value = null
+      avisar(`${r.devuelto ?? r.cantidad} de ${r.producto ?? 'producto'} de vuelta en bodega`)
+      await cargar()
     }
 
     onMounted(cargar)
 
     return {
       items, filtros, total, cargando, error, cargar, filtrar,
-      pedido, pedirTraspaso, cerrarPedido, alConfirmarPedido
+      retorno, alRetornar,
+      aviso
     }
   }
 }
@@ -79,5 +79,27 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.aviso {
+  position: fixed;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  max-width: 90vw;
+  padding: 12px 20px;
+  border-radius: var(--r-sm, 10px);
+  background: var(--text);
+  color: var(--bg);
+  font-size: .875rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.aviso.malo {
+  background: var(--danger);
+  color: var(--surface);
 }
 </style>

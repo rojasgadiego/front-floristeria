@@ -75,19 +75,21 @@
         <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
       </div>
 
-      <select class="campo campo-corto" :value="filtro.estado ?? ''"
-        @change="filtrar({ estado: $event.target.value || null })" aria-label="Estado">
-        <option value="">Todos los estados</option>
-        <option v-for="(e, k) in ESTADOS" :key="k" :value="k">{{ e.texto }}</option>
-      </select>
+      <div class="filtros-linea">
+        <select class="campo-select" :class="{ on: filtro.estado }" :value="filtro.estado ?? ''"
+          @change="filtrar({ estado: $event.target.value || null })" aria-label="Estado">
+          <option value="">Estado</option>
+          <option v-for="(e, k) in ESTADOS" :key="k" :value="k">{{ e.texto }}</option>
+        </select>
 
-      <label class="check">
-        <input type="checkbox" :checked="filtro.soloVencidas"
-          @change="filtrar({ soloVencidas: $event.target.checked })">
-        <span>Solo con saldo vencido</span>
-      </label>
+        <label class="check" :class="{ on: filtro.soloVencidas }">
+          <input type="checkbox" :checked="filtro.soloVencidas"
+            @change="filtrar({ soloVencidas: $event.target.checked })">
+          <span>Saldo vencido</span>
+        </label>
 
-      <button v-if="hayFiltro" class="enlace-boton" @click="limpiarFiltros">Quitar filtros</button>
+        <button v-if="hayFiltro" class="limpiar" @click="limpiarFiltros">Quitar filtros</button>
+      </div>
     </div>
 
     <!-- ================= LISTADO ================= -->
@@ -358,7 +360,8 @@
 
           <template v-if="detalle.estado === 'borrador'">
             <button v-if="puedeEditar" class="btn btn-linea" @click="abrirEdicion(detalle)">✏️ Editar</button>
-            <button v-if="puedeEditar" class="btn" :disabled="guardando" @click="aprobar">Aprobar</button>
+            <!-- Aprobar compromete al local con el cliente: solo administración. -->
+            <button v-if="esAdmin" class="btn" :disabled="guardando" @click="aprobar">Aprobar</button>
           </template>
 
           <template v-else-if="detalle.estado === 'aprobada'">
@@ -717,20 +720,16 @@
             -->
             <div class="nota alerta">
               <b>El cobro se completa en el punto de venta.</b>
-              Estas líneas son una sugerencia: si la flor que realmente salió
-              fue otra, se ajusta ahí antes de cobrar. Cobrar a ciegas lo
-              cotizado dejaría el inventario diciendo que salió otra cosa.
-              <br><br>
-              <span class="mini">
-                Esa pantalla todavía no está migrada. Por ahora esto sirve para
-                revisar el cobro antes de hacerlo.
-              </span>
+              La flor se puede ajustar ahí a lo que realmente salió: cobrar a
+              ciegas lo cotizado dejaría el inventario diciendo que salió otra
+              cosa. Lo hecho a medida, el traslado y el montaje van con su
+              precio cotizado, y lo abonado se descuenta solo.
             </div>
           </template>
         </div>
         <div class="modal-pie">
           <button class="btn btn-linea" @click="volverAFicha">Cerrar</button>
-          <button class="btn" disabled title="Requiere el punto de venta">
+          <button class="btn" :disabled="!preparacion || detalle.estado !== 'aprobada'" @click="irACobrar">
             Ir a cobrar
           </button>
         </div>
@@ -779,6 +778,7 @@
 <script>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
+import { useRouter } from 'vue-router'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import {ESTADOS, MEDIOS_PAGO, TIPOS_EVENTO, textoEstado, claseEstado} from '@/features/cotizaciones/store/cotizaciones.modules'
 import { aDateOnly } from '@/core/utils/fechas'
@@ -818,7 +818,13 @@ export default {
 
     const nombreProducto = (id) => store.getters['productos/porId'](id)?.nombre || `#${id}`
     const precioDe = (id) => store.getters['productos/porId'](id)?.precio || 0
-    const disponibleDe = (id) => store.getters['productos/porId'](id)?.disponible ?? null
+    /* La grilla de productos no trae `disponible`: se suma lo de bodega y
+       lo del mesón, que es lo que se puede comprometer para el evento. */
+    const disponibleDe = (id) => {
+      const p = store.getters['productos/porId'](id)
+      if (!p) return null
+      return p.disponible ?? ((p.enBodega ?? 0) + (p.enVenta ?? 0))
+    }
 
     /* ---------------- Carga ---------------- */
     let control = null
@@ -828,9 +834,12 @@ export default {
       const señal = { signal: control.signal }
       store.dispatch('cotizaciones/cargar', señal)
       store.dispatch('cotizaciones/cargarSeguimiento', señal)
-      if (!store.getters['productos/productos'].length) {
-        store.dispatch('productos/cargar', señal)
-      }
+      /* El catálogo completo: el POS deja el store filtrado a "solo lo del
+         mesón", y un presupuesto puede llevar flor que hoy está en bodega. */
+      store.dispatch('productos/filtrar', {
+        buscar: '', categoriaId: null, tipo: null, activo: true,
+        bajoMinimo: false, controlaLotes: null, soloEnVenta: false
+      })
       if (!store.getters['clientes/clientes'].length) {
         store.dispatch('clientes/cargar', señal)
       }
@@ -1193,6 +1202,15 @@ export default {
     }
 
     /* ---------------- Cobro ---------------- */
+    const router = useRouter()
+
+    /* El cobro se hace en el POS, que carga el evento desde la URL. */
+    const irACobrar = () => {
+      const id = detalle.value.id
+      cerrarModal()
+      router.push({ name: 'PuntoDeVenta', query: { cotizacion: id } })
+    }
+
     const abrirCobro = async () => {
       modal.value = { tipo: 'cobro', f: { error: '' } }
       try {
@@ -1227,6 +1245,7 @@ export default {
     }
 
     return {
+      irACobrar,
       ESTADOS, MEDIOS_PAGO, TIPOS_EVENTO, Math, Number, textoEstado, claseEstado,
       esAdmin, puedeEditar,
       cotizaciones, total, totalPaginas, hayAnterior, haySiguiente, filtro,
@@ -1249,9 +1268,13 @@ export default {
 </script>
 
 <style scoped>
+/* Todo con los tokens de src/assets/tokens.css: la pantalla sigue al tema
+   claro/oscuro igual que el resto de la aplicación. Nada de hex sueltos. */
+
 .cabecera,
 .cabecera *,
 .paneles *,
+.barra-filtros *,
 .tabla-envoltura *,
 .fondo * {
   box-sizing: border-box;
@@ -1278,8 +1301,7 @@ export default {
 }
 
 @keyframes resalta {
-  0% { background: #d1fae5; }
-  70% { background: #ecfdf5; }
+  0% { background: var(--success-soft); }
   100% { background: transparent; }
 }
 
@@ -1290,15 +1312,15 @@ export default {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--accent-contrast) 35%, transparent);
+  border-top-color: var(--accent-contrast);
   border-radius: 50%;
   animation: girar 0.8s linear infinite;
 }
 
 @keyframes girar { to { transform: rotate(360deg); } }
 
-/* ---------- Encabezado ---------- */
+/* ═════════════ Encabezado ═════════════ */
 .cabecera {
   display: flex;
   justify-content: space-between;
@@ -1311,13 +1333,13 @@ export default {
 .cabecera h2 {
   margin: 0;
   font-size: clamp(1.25rem, 4.5vw, 1.5rem);
-  color: #0f172a;
+  color: var(--text);
 }
 
 .pista {
   margin: 4px 0 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-muted);
   max-width: 64ch;
   line-height: 1.5;
 }
@@ -1328,35 +1350,40 @@ export default {
   gap: 11px;
   flex-wrap: wrap;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: var(--r-sm);
   margin-bottom: 16px;
   font-size: 0.875rem;
 }
 
 .banda-error {
-  background: #fee2e2;
-  border: 1px solid #fca5a5;
-  color: #991b1b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
 }
 
 .banda .btn { margin-left: auto; }
 
-/* ---------- Paneles de seguimiento ---------- */
+/* ═════════════ Paneles de seguimiento ═════════════ */
 .paneles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  /* min(100%, …): en un celular angosto la tarjeta no desborda. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 14px;
   margin-bottom: 18px;
 }
 
 .panel {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   padding: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
-.panel.urgente { border-color: #fca5a5; }
+.panel.urgente {
+  border-color: var(--danger-border);
+  background: color-mix(in srgb, var(--danger-soft) 45%, var(--surface));
+}
 
 .panel-cab {
   display: flex;
@@ -1366,9 +1393,11 @@ export default {
   margin-bottom: 10px;
 }
 
-.panel h3 { margin: 0; font-size: 0.95rem; color: #0f172a; }
+.panel h3 { margin: 0; font-size: 0.95rem; color: var(--text); }
 
-/* ---------- Filtros ---------- */
+/* ═════════════ Filtros ═════════════
+   En pantalla ancha, una fila con el buscador estirado. En el celular, una
+   card con todo en columna (ver el @media). Igual que Clientes e Inventario. */
 .barra-filtros {
   display: flex;
   flex-wrap: wrap;
@@ -1381,19 +1410,20 @@ export default {
   display: flex;
   align-items: center;
   gap: 9px;
-  flex: 1 1 230px;
+  flex: 1 1 240px;
   min-width: 0;
   min-height: 44px;
   padding: 0 12px;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 9px;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .buscador:focus-within {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .buscador input {
@@ -1402,31 +1432,152 @@ export default {
   border: 0;
   outline: 0;
   background: none;
+  color: var(--text);
   font-family: inherit;
   font-size: max(0.9rem, 16px);
 }
 
+.filtros-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* El select vestido de pastilla: se marca cuando está filtrando. */
+.campo-select {
+  min-height: 44px;
+  max-width: 220px;
+  padding: 0 34px 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background:
+    var(--surface)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 13px center;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: max(0.85rem, 16px);
+  font-weight: 600;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.campo-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.campo-select.on {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* El checkbox como pastilla, igual que en Clientes e Inventario. `margin: 0`
+   porque la regla de label de los formularios le agrega uno abajo. */
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+
+.check.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.check input {
+  appearance: none;
+  -webkit-appearance: none;
+  display: grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.check input::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid var(--accent-contrast);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) scale(0);
+  transition: transform .12s ease;
+}
+
+.check input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.check input:checked::after { transform: rotate(45deg) scale(1); }
+
+.check input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.limpiar {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.limpiar:hover { border-color: var(--accent); color: var(--accent-text); }
+
+/* ═════════════ Campos de formulario ═════════════ */
 .campo {
   width: 100%;
   min-height: 44px;
   padding: 0.6rem 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
   font-size: max(0.9rem, 16px);
-  color: #0f172a;
   outline: none;
-  transition: border-color 0.18s, box-shadow 0.18s;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 
 .campo:focus {
-  border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .campo.chico {
-  min-height: 38px;
+  min-height: 40px;
   padding: 0.4rem 0.6rem;
   font-size: max(0.85rem, 16px);
 }
@@ -1435,37 +1586,19 @@ export default {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--surface-2);
+  color: var(--text-muted);
 }
 
-.campo-corto { width: auto; flex: 0 1 190px; }
+textarea.campo { min-height: 72px; resize: vertical; line-height: 1.5; }
 
-textarea.campo { min-height: 72px; resize: vertical; }
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 0.85rem;
-  color: #475569;
-  cursor: pointer;
-}
-
-.check input {
-  width: 17px;
-  height: 17px;
-  accent-color: #059669;
-  cursor: pointer;
-}
-
-/* ---------- Tabla ---------- */
+/* ═════════════ Tabla ═════════════ */
 .tabla-envoltura {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
   overflow-x: auto;
+  box-shadow: var(--shadow-sm);
   transition: opacity 0.14s ease;
 }
 
@@ -1476,38 +1609,39 @@ table { width: 100%; border-collapse: collapse; }
 th {
   text-align: left;
   padding: 11px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
   font-size: 0.64rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 td {
   padding: 11px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border);
   font-size: 0.875rem;
+  color: var(--text);
   vertical-align: middle;
 }
 
 tbody tr:last-child td { border-bottom: 0; }
 tr.clic { cursor: pointer; }
 tr.anulada { opacity: 0.5; }
-.fila td { transition: background-color 0.16s ease; }
-tr.clic:hover td { background: #f8fafc; }
+.fila td { transition: background-color var(--t-fast); }
+tr.clic:hover td { background: color-mix(in srgb, var(--accent) 4%, var(--surface)); }
 
-/* Un saldo vencido tiene que verse en la fila, no solo en la columna */
-tr.vencida td { background: #fef2f2; }
-tr.vencida:hover td { background: #fee2e2; }
+/* Un saldo vencido tiene que verse en la fila, no solo en la columna. */
+tr.vencida td { background: color-mix(in srgb, var(--danger-soft) 55%, var(--surface)); }
+tr.vencida:hover td { background: var(--danger-soft); }
 
 .der { text-align: right; }
-.suave { color: #64748b; }
+.suave { color: var(--text-muted); }
 .mini { font-size: 0.76rem; }
-.rojo { color: #dc2626; }
-.verde { color: #047857; }
+.rojo { color: var(--danger); }
+.verde { color: var(--success); }
 
 .dato { font-variant-numeric: tabular-nums; font-weight: 600; }
 .dato.grande { font-size: 1.2rem; }
@@ -1521,28 +1655,28 @@ tr.vencida:hover td { background: #fee2e2; }
 
 .acciones-col { width: 1%; white-space: nowrap; }
 
-.flecha { color: #cbd5e1; font-size: 1.1rem; }
+.flecha { color: var(--text-faint); font-size: 1.1rem; }
 
 .riel-mini {
   height: 4px;
   margin-top: 4px;
-  background: #f1f5f9;
-  border-radius: 99px;
+  background: var(--surface-2);
+  border-radius: var(--r-full);
   overflow: hidden;
 }
 
 .riel-mini i {
   display: block;
   height: 100%;
-  background: #059669;
-  border-radius: 99px;
+  background: var(--success);
+  border-radius: var(--r-full);
   transition: width 0.4s ease;
 }
 
 .etiqueta {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-full);
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1550,17 +1684,18 @@ tr.vencida:hover td { background: #fee2e2; }
   white-space: nowrap;
 }
 
-.et-verde { background: #d1fae5; color: #047857; }
-.et-azul { background: #dbeafe; color: #1d4ed8; }
-.et-rojo { background: #fee2e2; color: #991b1b; }
-.et-gris { background: #f1f5f9; color: #64748b; }
+/* Las clases vienen de ESTADOS, en el store. */
+.et-verde { background: var(--success-soft); color: var(--success); }
+.et-azul { background: var(--info-soft); color: var(--info); }
+.et-rojo { background: var(--danger-soft); color: var(--danger); }
+.et-gris { background: var(--surface-2); color: var(--text-muted); }
 
 .chip {
   display: inline-block;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #475569;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 0.68rem;
   font-weight: 600;
   margin-left: 6px;
@@ -1572,23 +1707,24 @@ tr.vencida:hover td { background: #fee2e2; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
-.cuando.pronto { background: #fef3c7; color: #92400e; }
+.cuando.pronto { background: var(--warn-soft); color: var(--warn); }
 
 .paginador {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 14px;
   margin: 14px 0 0;
 }
 
-/* ---------- Listas ---------- */
+/* ═════════════ Listas ═════════════ */
 .lista { list-style: none; margin: 0; padding: 0; }
 
 .lista li {
@@ -1596,20 +1732,24 @@ tr.vencida:hover td { background: #fee2e2; }
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  min-height: 44px;
   padding: 8px 0;
-  border-bottom: 1px dotted #e2e8f0;
+  border-bottom: 1px dotted var(--border);
   font-size: 0.85rem;
+  color: var(--text);
 }
 
 .lista li:last-child { border-bottom: 0; }
-.lista li.clic { cursor: pointer; }
-.lista li.clic:hover { background: #f8fafc; }
+.lista li.clic { cursor: pointer; border-radius: var(--r-sm); }
+.lista li.clic:hover { background: var(--surface-2); }
 .lista li.anulado { opacity: 0.5; }
-.lista li b { color: #0f172a; }
+.lista li b { color: var(--text); }
+/* El monto atrasado en rojo: sin esto la regla de arriba lo deja negro. */
+.lista li b.rojo { color: var(--danger); }
 
 .min0 { min-width: 0; }
 
-/* ---------- Cuotas ---------- */
+/* ═════════════ Cuotas ═════════════ */
 .cuotas { list-style: none; margin: 0; padding: 0; }
 
 .cuotas li {
@@ -1618,13 +1758,13 @@ tr.vencida:hover td { background: #fee2e2; }
   gap: 11px;
   padding: 9px 11px;
   margin-bottom: 6px;
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
-  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
 }
 
-.cuotas li.cubierta { border-color: #86efac; background: #f0fdf4; }
-.cuotas li.atrasada { border-color: #fca5a5; background: #fef2f2; }
+.cuotas li.cubierta { border-color: var(--success); background: var(--success-soft); }
+.cuotas li.atrasada { border-color: var(--danger-border); background: var(--danger-soft); }
 
 .num {
   display: inline-flex;
@@ -1633,9 +1773,9 @@ tr.vencida:hover td { background: #fee2e2; }
   width: 24px;
   height: 24px;
   flex-shrink: 0;
-  border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 700;
 }
@@ -1649,9 +1789,9 @@ tr.vencida:hover td { background: #fee2e2; }
   margin-bottom: 7px;
 }
 
-.cuota-fila .campo { flex: 1; }
+.cuota-fila .campo { flex: 1; min-width: 0; }
 
-/* ---------- Cifras ---------- */
+/* ═════════════ Cifras ═════════════ */
 .cifras {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
@@ -1664,8 +1804,8 @@ tr.vencida:hover td { background: #fee2e2; }
   flex-direction: column;
   gap: 2px;
   padding: 11px 12px;
-  background: #f8fafc;
-  border-radius: 9px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
 }
 
 .cifras span {
@@ -1673,17 +1813,19 @@ tr.vencida:hover td { background: #fee2e2; }
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--text-faint);
 }
 
-.cifras b { font-size: 1.05rem; color: #0f172a; }
-.cifras em { font-style: normal; color: #94a3b8; }
+.cifras b { font-size: 1.05rem; color: var(--text); }
+.cifras b.verde { color: var(--success); }
+.cifras b.rojo { color: var(--danger); }
+.cifras em { font-style: normal; color: var(--text-faint); }
 
-/* ---------- Secciones del detalle ---------- */
+/* ═════════════ Secciones del detalle ═════════════ */
 .seccion {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--border);
 }
 
 .seccion-cab {
@@ -1699,12 +1841,14 @@ h4 {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 table.interna {
-  border: 1px solid #e2e8f0;
-  border-radius: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  border-collapse: separate;
+  border-spacing: 0;
   overflow: hidden;
 }
 
@@ -1716,21 +1860,21 @@ table.interna td {
 .notas {
   margin: 12px 0 0;
   padding: 9px 11px;
-  background: #f8fafc;
-  border-left: 3px solid #6ee7b7;
-  border-radius: 0 7px 7px 0;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   font-size: 0.8rem;
-  color: #475569;
+  color: var(--text-muted);
   font-style: italic;
   line-height: 1.5;
 }
 
 .faltantes { margin: 8px 0; padding-left: 18px; }
 
-/* ---------- Constructor de líneas ---------- */
+/* ═════════════ Constructor de líneas ═════════════ */
 .constructor {
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
   overflow: hidden;
   margin-bottom: 15px;
 }
@@ -1738,14 +1882,14 @@ table.interna td {
 .constructor-vacio {
   padding: 22px;
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-faint);
   font-size: 0.85rem;
 }
 
 .linea {
   padding: 12px 13px;
-  border-bottom: 1px solid #f1f5f9;
-  background: #fff;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .linea:last-child { border-bottom: 0; }
@@ -1757,7 +1901,7 @@ table.interna td {
   margin-bottom: 9px;
 }
 
-.linea-cab .crece { flex: 1; min-width: 0; font-size: 0.9rem; color: #0f172a; }
+.linea-cab .crece { flex: 1; min-width: 0; font-size: 0.9rem; color: var(--text); }
 
 .linea-campos {
   display: grid;
@@ -1767,27 +1911,30 @@ table.interna td {
 
 .linea-campos label { font-size: 0.6rem; margin-bottom: 3px; }
 
-/* ---------- Modales ---------- */
+/* ═════════════ Modales ═════════════ */
 .fondo {
   position: fixed;
   inset: 0;
-  z-index: 60;
-  display: grid;
-  place-items: center;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--overlay);
 }
 
 .modal {
   width: 100%;
   max-width: 500px;
-  max-height: 90vh;
-  max-height: 90dvh;
+  max-height: 92dvh;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .modal.ancho { max-width: 720px; }
@@ -1798,11 +1945,11 @@ table.interna td {
   justify-content: space-between;
   gap: 12px;
   padding: 18px 20px 14px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
-.modal-cab h3 { margin: 0; font-size: 1.1rem; color: #0f172a; }
-.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: #64748b; }
+.modal-cab h3 { margin: 0; font-size: 1.1rem; color: var(--text); }
+.modal-cab p { margin: 4px 0 0; font-size: 0.82rem; color: var(--text-muted); }
 
 .modal-cuerpo { padding: 18px 20px; overflow-y: auto; }
 
@@ -1812,7 +1959,7 @@ table.interna td {
   justify-content: flex-end;
   flex-wrap: wrap;
   padding: 14px 20px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 label {
@@ -1822,14 +1969,14 @@ label {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-muted);
 }
 
 .grupo { margin-bottom: 15px; }
 
 .rejilla {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 13px;
 }
 
@@ -1838,7 +1985,7 @@ label {
 .ayuda {
   margin: 5px 0 0;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-faint);
   line-height: 1.5;
   text-transform: none;
   letter-spacing: 0;
@@ -1848,65 +1995,63 @@ label {
 .error {
   padding: 10px 13px;
   margin-bottom: 14px;
-  border-radius: 8px;
-  border-left: 4px solid #dc2626;
-  background: #fee2e2;
-  color: #991b1b;
+  border-radius: var(--r-sm);
+  border-left: 4px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
   font-size: 0.85rem;
 }
 
 .nota {
   padding: 11px 13px;
   margin: 14px 0 0;
-  border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  border-left: 3px solid var(--success);
+  background: var(--success-soft);
   font-size: 0.83rem;
-  color: #475569;
+  color: var(--text);
   line-height: 1.6;
 }
 
 .nota.alerta {
-  border-color: #f59e0b;
-  background: #fffbeb;
-  color: #78350f;
+  border-color: var(--warn);
+  background: var(--warn-soft);
 }
 
 .generador {
   padding: 14px;
-  background: #f8fafc;
-  border: 1px dashed #cbd5e1;
-  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-sm);
   margin-bottom: 16px;
 }
 
 .generador .btn { margin-top: 12px; }
 
 .opciones-fila {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
   gap: 7px;
-  flex-wrap: wrap;
 }
 
 .opcion-chica {
-  flex: 1 1 auto;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 9px;
-  background: #fff;
-  color: #475569;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
   font-family: inherit;
   font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  transition: border-color var(--t-fast), background-color var(--t-fast), color var(--t-fast);
 }
 
 .opcion-chica.on {
-  border-color: #059669;
-  background: #059669;
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
 }
 
 .atajos-monto {
@@ -1917,20 +2062,21 @@ label {
 }
 
 .chip-boton {
-  padding: 5px 11px;
-  border: 1px solid #e2e8f0;
-  border-radius: 999px;
-  background: #fff;
-  color: #475569;
+  min-height: 36px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-muted);
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.chip-boton:hover { border-color: #059669; color: #047857; }
+.chip-boton:hover { border-color: var(--accent); color: var(--accent-text); }
 
-/* ---------- Botones ---------- */
+/* ═════════════ Botones ═════════════ */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1939,32 +2085,31 @@ label {
   min-height: 44px;
   padding: 0.65rem 1.15rem;
   border: none;
-  border-radius: 0.5rem;
-  background: #059669;
-  color: #fff;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
   font-family: inherit;
   font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.1s;
+  transition: background-color var(--t-fast), transform 0.1s;
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
-.btn:disabled { background: #a7c9bb; cursor: not-allowed; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-linea {
   background: transparent;
-  border: 1px solid #cbd5e1;
-  color: #475569;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
 }
 
-.btn-linea:hover:not(:disabled) { background: #f8fafc; border-color: #94a3b8; }
-.btn-linea:disabled { background: transparent; color: #cbd5e1; }
+.btn-linea:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 
-.btn-rojo { background: #dc2626; }
-.btn-rojo:hover:not(:disabled) { background: #b91c1c; }
+.btn-rojo { background: var(--danger); color: var(--surface); }
+.btn-rojo:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 85%, var(--text)); }
 
 .btn-mini {
   min-height: 34px;
@@ -1976,76 +2121,81 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #64748b;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--t-fast), color var(--t-fast);
 }
 
-.btn-icono:hover { border-color: #dc2626; color: #dc2626; }
-.btn-icono.chico { width: 28px; height: 28px; }
+.btn-icono:hover { border-color: var(--danger); color: var(--danger); }
+.btn-icono.chico { width: 30px; height: 30px; }
 
 .enlace-boton {
+  min-height: 32px;
   padding: 0;
   border: none;
   background: none;
-  color: #059669;
+  color: var(--accent-text);
   font-family: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .ancho { width: 100%; }
 
-/* ---------- Varios ---------- */
+/* ═════════════ Varios ═════════════ */
 .vacio {
   text-align: center;
   padding: 44px 20px;
-  color: #64748b;
-  background: #fff;
-  border: 1px dashed #cbd5e1;
-  border-radius: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
 }
 
 .vacio strong {
   display: block;
-  color: #0f172a;
+  color: var(--text);
   font-size: 1.05rem;
   margin-bottom: 5px;
 }
 
 .aviso {
   position: fixed;
-  bottom: 22px;
+  bottom: max(22px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 80;
+  z-index: 120;
   max-width: 90vw;
   padding: 12px 20px;
-  border-radius: 10px;
-  background: #064e3b;
-  color: #fff;
+  border-radius: var(--r-sm);
+  background: var(--text);
+  color: var(--bg);
   font-size: 0.875rem;
   font-weight: 600;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-lg);
   text-align: center;
 }
 
-.aviso.malo { background: #b91c1c; }
+.aviso.malo { background: var(--danger); color: var(--surface); }
 
-/* ---------- Móvil ---------- */
+/* ═════════════ Tablet / móvil ═════════════ */
 @media (max-width: 900px) {
-  .linea-campos { grid-template-columns: 1fr; }
+  .linea-campos { grid-template-columns: 1fr 1fr; }
+  .linea-campos > div:last-child { grid-column: 1 / -1; }
 
+  /* La grilla pasa a tarjetas: una por presupuesto. */
   .tabla-envoltura {
     border: none;
     background: transparent;
+    box-shadow: none;
     overflow: visible;
   }
 
@@ -2058,11 +2208,16 @@ label {
   table:not(.interna) thead { display: none; }
 
   table:not(.interna) tbody tr {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    margin-bottom: 11px;
-    padding: 12px;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 12px;
+    margin-bottom: 10px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-sm);
   }
 
   table:not(.interna) td {
@@ -2070,9 +2225,10 @@ label {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    padding: 6px 0;
+    padding: 5px 0;
     border: none;
     text-align: right;
+    background: transparent !important;
   }
 
   table:not(.interna) td::before {
@@ -2081,35 +2237,103 @@ label {
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #94a3b8;
+    color: var(--text-faint);
     text-align: left;
     flex-shrink: 0;
   }
 
-  td[data-label="Folio"], td[data-label="Cliente"], td[data-label="Evento"] {
-    display: block;
-    text-align: left;
-  }
+  /* Cabecera de la tarjeta: folio a la izquierda, estado a la derecha.
+     Con el prefijo `table:not(.interna)`: sin él, la regla general de td
+     pesa más y pisa estas. */
+  table:not(.interna) td[data-label="Folio"] { grid-column: 1; grid-row: 1; display: block; text-align: left; }
+  table:not(.interna) td[data-label="Estado"] { grid-column: 2; grid-row: 1; display: block; }
+  table:not(.interna) td[data-label="Cliente"],
+  table:not(.interna) td[data-label="Evento"] { grid-column: 1 / -1; display: block; text-align: left; }
+  table:not(.interna) td[data-label="Total"],
+  table:not(.interna) td[data-label="Abonado"],
+  table:not(.interna) td[data-label="Cobro"] { grid-column: 1 / -1; }
 
-  td[data-label="Folio"]::before,
-  td[data-label="Cliente"]::before,
-  td[data-label="Evento"]::before { content: none; }
+  table:not(.interna) td[data-label="Folio"]::before,
+  table:not(.interna) td[data-label="Estado"]::before,
+  table:not(.interna) td[data-label="Cliente"]::before,
+  table:not(.interna) td[data-label="Evento"]::before { content: none; }
 
-  tr.clic:hover td { background: transparent; }
-  tr.vencida td { background: transparent; }
-  tr.vencida { border-color: #fca5a5; }
+  table:not(.interna) td[data-label="Cliente"] { padding-top: 8px; }
+  table:not(.interna) td[data-label="Total"] { margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+  /* Rótulo y monto en una línea, la barra de avance debajo a todo el ancho. */
+  table:not(.interna) td[data-label="Abonado"] { flex-wrap: wrap; row-gap: 6px; }
+  table:not(.interna) td[data-label="Abonado"] .riel-mini { flex-basis: 100%; margin-top: 0; }
+
+  /* La flecha no hace falta: la tarjeta entera se toca. */
+  table:not(.interna) td.acciones-col { display: none; }
+
+  tr.vencida { border-color: var(--danger-border) !important; }
   .fila.resaltada { animation: resalta 1400ms ease-out; }
   .fila.resaltada td { animation: none; }
 
-  .campo-corto { flex: 1 1 100%; width: 100%; }
   .corta { max-width: none; }
 }
 
+@media (max-width: 720px) {
+  .cabecera { flex-direction: column; align-items: stretch; }
+  .cabecera .btn { width: 100%; }
+
+  /* Filtros en una card, en columna, cada control a todo el ancho. */
+  .barra-filtros {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+
+  .buscador { flex: 0 0 auto; }
+
+  .filtros-linea { flex-direction: column; align-items: stretch; }
+  .filtros-linea > * { width: 100%; max-width: none; }
+  .check { justify-content: center; }
+
+  /* Modales a pantalla completa: en el celular un modal centrado deja
+     márgenes que no sirven y achica lo que hay que escribir. */
+  .fondo { align-items: stretch; padding: 0; }
+
+  .modal,
+  .modal.ancho {
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .modal-cab { padding: 16px 16px 12px; }
+  .modal-cuerpo { padding: 16px; flex: 1; }
+
+  .modal-pie {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Los botones del pie se reparten el ancho; el principal queda al final,
+     bajo el pulgar. */
+  .modal-pie .btn { flex: 1 1 calc(50% - 5px); }
+
+  .cifras { grid-template-columns: 1fr 1fr; }
+
+  .cuota-fila { flex-wrap: wrap; }
+  .cuota-fila .campo { flex: 1 1 calc(50% - 30px); }
+
+  .opciones-fila { grid-template-columns: 1fr 1fr; }
+
+  table.interna td { padding: 8px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .btn, .btn-icono, .campo, .buscador, .opcion-chica,
+  .btn, .btn-icono, .campo, .buscador, .opcion-chica, .check,
   .tabla-envoltura, .riel-mini i, .fila td { transition: none; }
 
-  .al-entrar, .fila, .fila.resaltada, .fila.resaltada td, .spinner { animation: none; }
+  .al-entrar, .fila, .fila.resaltada, .fila.resaltada td, .spinner,
+  .check input::after { animation: none; transition: none; }
 
   .tabla-envoltura.atenuada { opacity: 1; }
 }

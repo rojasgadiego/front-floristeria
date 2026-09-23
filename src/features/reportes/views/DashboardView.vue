@@ -54,12 +54,16 @@
         <span>Nada urgente por ahora.</span>
       </div>
 
-      <!-- ═══ RESUMEN DEL DÍA ═══ -->
-      <section class="seccion">
-        <SectionHeader titulo="Resumen del día" />
+      <!-- ═══ RESUMEN DEL DÍA ═══
+           El backend decide de quién son los números (panel.alcance): el
+           admin ve el local, un vendedor solo sus boletas, y quien no vende
+           no recibe ventas. Acá solo se rotula en consecuencia. -->
+      <section v-if="veVentas" class="seccion">
+        <SectionHeader :titulo="esPersonal ? 'Tus ventas de hoy' : 'Resumen del día'" />
 
         <div class="grid-kpi">
-          <Kpi :destacado="hoyDia.vendido > 0" rotulo="Ingresos de hoy" :valor="clp(hoyDia.vendido)">
+          <Kpi :destacado="hoyDia.vendido > 0" :rotulo="esPersonal ? 'Lo que vendiste hoy' : 'Ingresos de hoy'"
+            :valor="clp(hoyDia.vendido)">
             <!-- <template #pie>
               <template v-if="hoyDia.boletas === 0">Aún no hay ventas hoy</template>
               <template v-else>
@@ -71,7 +75,7 @@
             </template> -->
           </Kpi>
 
-          <Kpi rotulo="Boletas" :valor="hoyDia.boletas">
+          <Kpi :rotulo="esPersonal ? 'Tus boletas' : 'Boletas'" :valor="hoyDia.boletas">
             <!-- <template #pie>Ticket promedio {{ clp(hoyDia.ticketPromedio) }}</template> -->
           </Kpi>
 
@@ -119,8 +123,8 @@
       </section>
 
       <!-- ═══ COMPARACIÓN ═══ -->
-      <section class="seccion">
-        <SectionHeader titulo="Comparación semanal" />
+      <section v-if="veVentas" class="seccion">
+        <SectionHeader :titulo="esPersonal ? 'Tu comparación semanal' : 'Comparación semanal'" />
         <EmptyState v-if="!semanaPasada.vendido && !semanaPasada.boletas" :icono="IconTrendingUp"
           texto="Aún no hay suficientes datos para comparar esta semana." />
         <div v-else class="comparacion">
@@ -173,6 +177,11 @@ const router = useRouter()
 const panel = computed(() => store.getters['reportes/panel'])
 const hoyDia = computed(() => store.getters['reportes/hoy'] || {})
 const semanaPasada = computed(() => store.getters['reportes/semanaPasada'])
+
+/* "local" | "personal" | "ninguno": lo fija el backend según el rol. */
+const alcance = computed(() => panel.value?.alcance || 'local')
+const esPersonal = computed(() => alcance.value === 'personal')
+const veVentas = computed(() => alcance.value !== 'ninguno')
 // const variacionSemanal = computed(() => store.getters['reportes/variacionSemanal'])
 // const caja              = computed(() => store.getters['reportes/caja'])
 const alertasRaw = computed(() => store.getters['reportes/alertas'] || [])

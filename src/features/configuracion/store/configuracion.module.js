@@ -27,7 +27,8 @@ const configInicial = () => ({
   },
   venta: {
     iva: 19,
-    descuentoSinAutorizacion: 5000
+    descuentoSinAutorizacion: 5000,
+    mermaSinAutorizacion: 15000
   },
   club: {
     activo: true,

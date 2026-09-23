@@ -58,7 +58,7 @@
       </div>
 
       <article v-for="m in pagina" :key="m.id" class="mov" :class="{ 'sin-usuario': !esAdmin }">
-        <div class="c-fecha dato mini suave">{{ fechaHora(m.fecha) }}</div>
+        <div class="c-fecha dato mini suave">{{ fechaHora(m.creadoEn) }}</div>
 
         <div class="c-tipo">
           <span class="etiqueta" :class="claseMovimiento(m.tipo)">{{ m.tipo }}</span>
@@ -85,6 +85,15 @@
         <div class="c-motivo suave">{{ m.motivo }}</div>
 
         <div v-if="esAdmin" class="c-usuario mini suave">{{ m.usuario || '—' }}</div>
+
+        <!-- Solo en el celular: fecha, lugar, lote y usuario en una línea.
+             Como celdas sueltas de la grilla se dibujaban una encima de otra. -->
+        <div class="c-meta mini suave">
+          <span class="dato">{{ fechaHora(m.creadoEn) }}</span>
+          <span>{{ m.ubicacion === 'venta' ? 'mostrador' : 'bodega' }}</span>
+          <span v-if="m.loteCodigo" class="mono">{{ m.loteCodigo }}</span>
+          <span v-if="esAdmin && m.usuario">{{ m.usuario }}</span>
+        </div>
       </article>
     </div>
 
@@ -314,7 +323,7 @@ export default {
         if (fUsuario.value && m.usuario !== fUsuario.value) return false
 
         if (desde || hasta) {
-          const t = new Date(m.fecha).getTime()
+          const t = new Date(m.creadoEn).getTime()
           if (desde && t < desde) return false
           if (hasta && t > hasta) return false
         }
@@ -861,6 +870,9 @@ export default {
   .cab > span:nth-child(5) { display: none; }
 }
 
+/* La línea de metadatos es solo para el celular (ver abajo). */
+.c-meta { display: none; }
+
 /* ─── Móvil ─── */
 /* Sin acordeón: los ocho campos pesan lo mismo y ninguno es "detalle". Lo
    que sobraba era repetir "Producto:", "Lote:", "Motivo:" en cada tarjeta. */
@@ -884,31 +896,26 @@ export default {
   .c-prod { grid-area: prod; }
   .c-cant { grid-area: cant; font-size: 1rem; }
 
-  /* Fecha, dónde, lote y usuario en una sola línea de metadatos */
+  /* Fecha, dónde, lote y usuario van en .c-meta, una sola línea. Las celdas
+     sueltas se ocultan: en la misma área de la grilla se encimaban. */
   .c-fecha,
   .c-donde,
   .c-lote,
-  .c-usuario {
+  .c-usuario { display: none; }
+
+  .c-meta {
     grid-area: meta;
-    display: inline;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    min-width: 0;
   }
 
-  .c-fecha::after,
-  .c-donde::after,
-  .c-lote::after {
-    content: " · ";
+  .c-meta > span + span::before {
+    content: "·";
+    margin: 0 6px;
     color: var(--text-faint);
   }
-
-  .c-donde .etiqueta {
-    padding: 0;
-    background: none;
-    color: var(--text-faint);
-    font-size: .74rem;
-    letter-spacing: 0;
-  }
-
-  .c-lote { display: none; }
 
   .c-motivo {
     grid-area: motivo;

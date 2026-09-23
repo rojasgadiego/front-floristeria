@@ -76,12 +76,38 @@ export const mermasService = {
 
     /**
      * Las cantidades de cada componente deben sumar exactamente lo que dice
-     * la receta: cada vara tiene que tener un destino.
+     * la receta: cada vara tiene que tener un destino. Sobre el umbral
+     * necesita `autorizacion` ({ email, password } de una administradora),
+     * igual que una merma suelta.
      */
-    desarmar(productoId, { cantidad, motivo, detalle = null, lineas }) {
+    desarmar(productoId, { cantidad, motivo, detalle = null, lineas, autorizacion = null }) {
         return pedir(http.post(`${RUTA}/desarme/${productoId}`, {
-            cantidad, motivo, detalle, lineas
+            cantidad, motivo, detalle, lineas, autorizacion
         }))
+    },
+
+    /* ---------------- Escaneo y control ---------------- */
+
+    /**
+     * Lee un lote o una partida (el código o el QR completo). 200 aunque no
+     * se pueda mermar: viene `puedeMermar` y el porqué. 404 si no existe.
+     */
+    escanear(codigo, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/escanear/${encodeURIComponent(codigo)}`, { signal }))
+    },
+
+    /** Desde cuánto una merma necesita la firma de una administradora. */
+    umbral({ signal } = {}) {
+        return pedir(http.get(`${RUTA}/umbral`, { signal }))
+    },
+
+    /** Quién merma sin escanear, a qué hora, y las registradas a mano. Solo admin. */
+    patrones({ desde, hasta } = {}, { signal } = {}) {
+        const params = limpiar({
+            desde: desde ? aDateOnly(desde) : undefined,
+            hasta: hasta ? aDateOnly(hasta) : undefined
+        })
+        return pedir(http.get(`${RUTA}/patrones`, { params, signal }))
     },
 
     /* ---------------- Reporte ---------------- */
@@ -96,11 +122,22 @@ export const mermasService = {
     },
 
     /**
-     * Motivos habituales. Se ofrecen en un select en vez de dejar el campo
-     * libre: "marchita", "Marchita" y "se marchitó" serían tres categorías
-     * distintas en el reporte.
+     * El catálogo de motivos. Se ofrecen en un select en vez de dejar el
+     * campo libre: "marchita", "Marchita" y "se marchitó" serían tres
+     * categorías distintas en el reporte. `todos` incluye los apagados; la
+     * API solo lo respeta para una administradora.
      */
-    motivos({ signal } = {}) {
-        return pedir(http.get(`${RUTA}/motivos`, { signal }))
+    motivos({ todos = false, signal } = {}) {
+        return pedir(http.get(`${RUTA}/motivos`, { params: todos ? { todos } : undefined, signal }))
+    },
+
+    /** { nombre, categoria, requiereDetalle, destinoSugerido } */
+    crearMotivo(motivo) {
+        return pedir(http.post(`${RUTA}/motivos`, motivo))
+    },
+
+    /** Igual que crear, más `activo` y `orden`. Lo ya registrado no cambia. */
+    actualizarMotivo(id, motivo) {
+        return pedir(http.put(`${RUTA}/motivos/${id}`, motivo))
     }
 }

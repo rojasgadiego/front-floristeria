@@ -250,7 +250,10 @@
                   </div>
                 </dl>
 
+                <!-- En venta importa qué hay adelante; en bodega, de dónde sale. -->
+                <DetalleMostrador v-if="foco === 'venta'" :producto="p" />
                 <DetalleProducto
+                  v-else
                   :producto="p"
                   :puede-editar="puede.editar"
                   @editar="$emit('editar', $event)"
@@ -306,13 +309,14 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useStore } from 'vuex'
 import DetalleProducto from './DetalleProducto.vue'
+import DetalleMostrador from './DetalleMostrador.vue'
 
 /* El mismo valor que el @media del bloque de abajo. */
 const MOVIL = '(max-width: 860px)'
 
 export default {
   name: 'TablaProductos',
-  components: { DetalleProducto },
+  components: { DetalleProducto, DetalleMostrador },
 
   props: {
     items:      { type: Array,   default: () => [] },
@@ -339,13 +343,24 @@ export default {
     const esBodega = computed(() => tieneRol('bodega'))
     const esVenta  = computed(() => tieneRol('venta'))
 
+    /*
+     * Mover stock entre bodega y mesón exige la política Inventario (admin y
+     * bodega): el backend rechaza a un vendedor. Antes la tabla le ofrecía
+     * un 🔑 "solicitar bajada" que no llevaba a ninguna parte.
+     *
+     * Bajar al mostrador, editar, dar de baja y armar se hacen desde
+     * Inventario Bodega. En la vista del mesón la única acción es devolver
+     * a bodega lo que sobró adelante.
+     */
+    const enBodegaVista = computed(() => props.foco === 'bodega')
+
     const puede = computed(() => ({
-      traspasar: esAdmin.value || esBodega.value || esVenta.value,
+      traspasar: (esAdmin.value || esBodega.value) && enBodegaVista.value,
       retornar:  esAdmin.value || esBodega.value,
-      armar:     esAdmin.value || esBodega.value,
-      editar:    esAdmin.value,
-      baja:      esAdmin.value,
-      autorizar: esVenta.value && !esBodega.value && !esAdmin.value
+      armar:     (esAdmin.value || esBodega.value) && enBodegaVista.value,
+      editar:    esAdmin.value && enBodegaVista.value,
+      baja:      esAdmin.value && enBodegaVista.value,
+      autorizar: false
     }))
 
     const col = computed(() => {
@@ -361,9 +376,12 @@ export default {
       }
     })
 
+    /* Producto, Unidad y Venta siempre están; el resto según `col`. Contaba
+       2 fijas y la fila del detalle quedaba una columna más corta que la
+       tabla. */
     const columnas = computed(() => {
       if (esMovil.value) return 1
-      return 2 + Object.values(col.value).filter(Boolean).length
+      return 3 + Object.values(col.value).filter(Boolean).length
     })
 
     /* Búsqueda con rebote */

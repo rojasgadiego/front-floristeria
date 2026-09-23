@@ -68,12 +68,12 @@
 
     <div class="acciones">
       <button class="enlace-boton" @click="archivo.click()">Leer desde una foto</button>
-      <button class="enlace-boton" @click="abrirManual">Ingresar a mano</button>
+      <button v-if="conManual" class="enlace-boton" @click="abrirManual">Ingresar a mano</button>
     </div>
 
     <input ref="archivo" class="oculto" type="file" accept="image/*" @change="alElegirFoto">
 
-    <form v-if="manual" class="manual" @submit.prevent="enviarManual">
+    <form v-if="manual && conManual" class="manual" @submit.prevent="enviarManual">
       <input ref="campoManual" v-model="textoManual" class="campo chico"
              placeholder="Pegá o tipeá el código" autocomplete="off" enterkeyhint="done">
       <button class="btn btn-mini" type="submit" :disabled="!textoManual.trim()">Usar</button>
@@ -94,7 +94,10 @@ const props = defineProps({
   /* Validador sync o async. Si devuelve false no se emite y el visor
      sacude en rojo: el error se ve antes de mirar el carrito. */
   validar:   { type: Function, default: null },
-  autoiniciar: { type: Boolean, default: false }
+  autoiniciar: { type: Boolean, default: false },
+  /* false cuando quien lo usa ya tiene su propio campo para tipear (el
+     escáner de mermas): dos campos para lo mismo confunden. */
+  conManual: { type: Boolean, default: true }
 })
 const emit = defineEmits(['detectado', 'rechazado', 'error'])
 
@@ -113,6 +116,11 @@ const campoManual = ref(null)
 const archivo     = ref(null)
 
 /* ── Procesar una lectura ─────────────────────────────────────────── */
+/* De dónde vino la lectura, como segundo argumento de 'detectado':
+   'camara' | 'foto' | 'manual'. Mermas lo necesita para distinguir quien
+   tiene el balde en la mano de quien tipea el código. */
+let origen = 'camara'
+
 async function procesar (valor) {
   const codigo = valor.trim()
   if (!codigo) return
@@ -125,11 +133,14 @@ async function procesar (valor) {
   ultimo.value = codigo
   aceptar()
   anuncio.value = `Código leído: ${codigo}`
-  emit('detectado', codigo)
+  emit('detectado', codigo, origen)
   if (!props.continuo) pausar()
 }
 
 function rechazar (codigo) {
+  /* Sin esto, el acuse de la espera mostraba el ✓ del código anterior
+     mientras el visor sacudía en rojo por este. */
+  ultimo.value = ''
   emit('rechazado', codigo)
   anuncio.value = 'Código no reconocido'
   navigator.vibrate?.([25, 45, 25])
@@ -197,7 +208,12 @@ async function alElegirFoto (ev) {
   const f = ev.target.files?.[0]
   ev.target.value = ''
   if (!f) return
-  if (!(await leerImagen(f))) rechazar('')
+  origen = 'foto'
+  try {
+    if (!(await leerImagen(f))) rechazar('')
+  } finally {
+    origen = 'camara'
+  }
 }
 
 async function abrirManual () {
@@ -209,7 +225,12 @@ async function abrirManual () {
 async function enviarManual () {
   const v = textoManual.value.trim()
   if (!v) return
-  await procesar(v)
+  origen = 'manual'
+  try {
+    await procesar(v)
+  } finally {
+    origen = 'camara'
+  }
   textoManual.value = ''
 }
 

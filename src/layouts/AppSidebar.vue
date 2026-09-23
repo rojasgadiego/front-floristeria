@@ -686,3 +686,13 @@ function alPresionarTecla (e) {
 }
 </style>
 
+<style>
+/* Con un modal abierto el botón del menú se esconde, igual que con el cajón
+   abierto. Va fuera del scoped porque los modales viven en cada vista: el
+   botón (z-index 1250) quedaba encima de todos (100–200) y en el celular
+   tapaba el título del modal. */
+body:has(.fondo, .overlay) .sidebar-trigger {
+  opacity: 0;
+  pointer-events: none;
+}
+</style>

@@ -145,13 +145,25 @@
                   </div>
 
                   <div class="totales">
-                    <div><span>Neto</span><b class="dato">{{ clp(det.neto) }}</b></div>
-                    <div><span>IVA</span><b class="dato">{{ clp(det.iva) }}</b></div>
+                    <!-- Las compras se anotan con su valor final. Solo las que se
+                         registraron antes de ese cambio traen IVA aparte. -->
+                    <template v-if="det.iva">
+                      <div><span>Neto</span><b class="dato">{{ clp(det.neto) }}</b></div>
+                      <div><span>IVA</span><b class="dato">{{ clp(det.iva) }}</b></div>
+                    </template>
                     <div><span>Total</span><b class="dato grande">{{ clp(det.total) }}</b></div>
                   </div>
 
                   <div v-if="det.lotes.length" class="lotes">
-                    <h4>Lotes generados</h4>
+                    <div class="lotes-cab">
+                      <h4>Lotes generados</h4>
+                      <!-- La recepción ofrece imprimir una sola vez; si se cerró ese
+                           aviso, o se perdió una etiqueta, se vuelve por acá. -->
+                      <router-link v-if="puedeVerEtiquetas" class="btn btn-mini"
+                        :to="{ name: 'EtiquetasCompra', params: { compraId: c.id } }" @click.stop>
+                        🏷️ Etiquetas ({{ det.lotes.length }})
+                      </router-link>
+                    </div>
                     <div class="chips">
                       <span v-for="l in det.lotes" :key="l.id" class="chip">
                         <b>{{ l.codigo }}</b> · {{ l.producto }} · {{ l.varas }} varas
@@ -286,16 +298,9 @@
           </div>
         </div>
 
-        <div class="rejilla grupo">
-          <div>
-            <label for="c-doc">N° de factura o guía</label>
-            <input id="c-doc" class="campo dato" v-model="modal.f.documento" maxlength="60">
-          </div>
-          <div>
-            <label for="c-iva">IVA del documento (%)</label>
-            <input id="c-iva" class="campo dato" type="number" min="0" max="100" step="1"
-              v-model.number="modal.f.ivaTasa">
-          </div>
+        <div class="grupo">
+          <label for="c-doc">N° de factura o guía</label>
+          <input id="c-doc" class="campo dato" v-model="modal.f.documento" maxlength="60">
         </div>
 
         <!-- ---------- Líneas ---------- -->
@@ -321,7 +326,7 @@
                     {{ p.nombre }} — {{ p.varasTotales }} varas
                   </option>
                 </select>
-                <button class="enlace-boton" @click="abrirPresentacion(l.productoId)">
+                <button class="enlace-boton" @click="abrirPresentacion(l.productoId, l.uid)">
                   ＋ Nueva presentación
                 </button>
               </div>
@@ -333,7 +338,7 @@
               </div>
 
               <div>
-                <label :for="`l-costo-${l.uid}`">Costo por {{ tipoDe(l) }}</label>
+                <label :for="`l-costo-${l.uid}`">Valor final por {{ tipoDe(l) }}</label>
                 <input :id="`l-costo-${l.uid}`" class="campo chico dato" type="number" min="0" step="500"
                   v-model.number="l.costoUnitario">
               </div>
@@ -372,8 +377,6 @@
         </div>
 
         <div class="totales">
-          <div><span>Neto</span><b class="dato">{{ clp(neto) }}</b></div>
-          <div><span>IVA {{ modal.f.ivaTasa }}%</span><b class="dato">{{ clp(iva) }}</b></div>
           <div><span>Total</span><b class="dato grande">{{ clp(totalCompra) }}</b></div>
           <div><span>Varas</span><b class="dato">{{ varasTotales }}</b></div>
         </div>
@@ -388,7 +391,9 @@
       </div>
     </div>
 
-    <!-- Nueva presentación -->
+    <!-- Nueva presentación
+         Primero el tipo y los números, al final el nombre: el nombre se
+         arma solo con los números y en el celular casi nunca hay que tocarlo. -->
     <div v-else-if="modal.tipo === 'presentacion'" class="modal">
       <div class="modal-cab">
         <h3>Nueva presentación</h3>
@@ -398,51 +403,62 @@
         <div v-if="modal.f.error" class="error">{{ modal.f.error }}</div>
 
         <div class="grupo">
-          <label for="pr-nom">Nombre</label>
-          <input id="pr-nom" class="campo" v-model="modal.f.nombre" maxlength="120"
-            placeholder="Caja de 12 paquetes">
-        </div>
-
-        <div class="grupo">
           <label>Tipo</label>
-          <div class="segmentado ancho-total">
+          <div class="segmentado ancho-total" role="group" aria-label="Tipo de presentación">
             <button v-for="t in TIPOS_PRESENTACION" :key="t.valor"
-              :class="{ on: modal.f.tipo === t.valor }" @click="modal.f.tipo = t.valor">
+              :class="{ on: modal.f.tipo === t.valor }" @click="cambiarTipoPresentacion(t.valor)">
               {{ t.texto }}
             </button>
           </div>
+          <p class="ayuda">{{ ayudaTipoPresentacion }}</p>
         </div>
 
         <div class="rejilla grupo">
-          <div>
-            <label for="pr-paq">Paquetes que trae</label>
-            <input id="pr-paq" class="campo dato" type="number" min="1" max="1000"
-              v-model.number="modal.f.paquetes">
+          <!-- Un paquete es un solo atado: la cantidad de paquetes solo
+               existe cuando es caja. -->
+          <div v-if="modal.f.tipo === 'caja'">
+            <label for="pr-paq">Paquetes por caja</label>
+            <input id="pr-paq" class="campo dato" type="number" inputmode="numeric" min="1"
+              :max="MAX_PAQUETES" v-model.number="modal.f.paquetes" @keyup.enter="guardarPresentacion">
           </div>
           <div>
             <label for="pr-var">Varas por paquete</label>
-            <input id="pr-var" class="campo dato" type="number" min="1"
-              v-model.number="modal.f.varasPorPaquete">
+            <input id="pr-var" class="campo dato" type="number" inputmode="numeric" min="1"
+              v-model.number="modal.f.varasPorPaquete" @keyup.enter="guardarPresentacion">
           </div>
+        </div>
+
+        <div class="grupo">
+          <label for="pr-nom">Nombre</label>
+          <input id="pr-nom" class="campo" :class="{ malo: nombreRepetido }" v-model="modal.f.nombre"
+            maxlength="120" :placeholder="nombreSugerido || 'Ej: Caja 4x25'"
+            @input="modal.f.nombreAuto = !modal.f.nombre.trim()" @keyup.enter="guardarPresentacion">
+          <p v-if="nombreRepetido" class="ayuda rojo">
+            Este producto ya tiene una presentación con ese nombre.
+          </p>
+          <p v-else class="ayuda">Se completa solo con los números. Puedes cambiarlo.</p>
         </div>
 
         <label class="interruptor">
           <input type="checkbox" v-model="modal.f.predeterminada">
           <span>Usar por defecto para este producto</span>
         </label>
+        <p v-if="modal.f.predeterminada && predeterminadaActual" class="ayuda aviso-reemplazo">
+          Reemplaza a <b>{{ predeterminadaActual.nombre }}</b> como predeterminada.
+        </p>
 
         <div class="nota">
-          Equivale a <b class="dato">{{ (modal.f.paquetes || 0) * (modal.f.varasPorPaquete || 0) }}</b> varas.
-          <br>
-          <span class="mini">
-            La equivalencia depende de la especie —25 por paquete en rosas, 10 en
-            maule—, por eso vive en el producto y no como una constante del sistema.
-          </span>
+          = <b class="dato">{{ varasPresentacion }}</b> varas ·
+          <b class="dato">{{ etiquetasPresentacion }}</b>
+          {{ etiquetasPresentacion === 1 ? 'etiqueta QR' : 'etiquetas QR' }}
         </div>
       </div>
       <div class="modal-pie">
-        <button class="btn btn-linea" @click="volverACompra">Cancelar</button>
-        <button class="btn" @click="guardarPresentacion">Crear</button>
+        <button class="btn btn-linea" :disabled="guardandoPresentacion" @click="volverACompra">Cancelar</button>
+        <button class="btn" :disabled="!puedeCrearPresentacion" @click="guardarPresentacion">
+          <span v-if="guardandoPresentacion" class="spinner" aria-hidden="true"></span>
+          {{ guardandoPresentacion ? 'Creando…' : 'Crear' }}
+        </button>
       </div>
     </div>
 
@@ -533,6 +549,10 @@ import { aDateOnly, hoy } from '@/core/utils/fechas'
    otro: no hay forma de leer un breakpoint de CSS desde JS. */
 const MOVIL = '(max-width: 900px)'
 
+/* El mismo tope que sp_abs_i_presentacion: cada paquete es una etiqueta, y
+   más de doscientos por presentación es un dedo gordo tipeando. */
+const MAX_PAQUETES = 200
+
 const PRESETS = [
   { clave: 'todo', texto: 'Todo' },
   { clave: 'hoy', texto: 'Hoy' },
@@ -563,6 +583,8 @@ export default {
     const { usarResalte, usarAviso } = useTemporizadores()
 
     const puedeEditar = computed(() => store.getters['auth/tieneRol']('admin', 'bodega'))
+    /* El mismo permiso que pide la ruta de etiquetas: sin él el guard rebota. */
+    const puedeVerEtiquetas = computed(() => store.getters['auth/puede']('lotes'))
 
     /* ---------------- Datos ---------------- */
     const compras = computed(() => store.getters['compras/compras'])
@@ -789,7 +811,7 @@ export default {
         tipo: 'compra',
         f: {
           id: null, folio: '', proveedorId: null, fecha: hoy(),
-          documento: '', notas: '', ivaTasa: 19, items: [], error: ''
+          documento: '', notas: '', items: [], error: ''
         }
       }
     }
@@ -814,7 +836,6 @@ export default {
           notas: d.notas || '',
           /* La tasa guardada, no un 19 fijo: editar una compra con otra tasa
              la cambiaba en silencio. */
-          ivaTasa: d.ivaTasa ?? 19,
           items: d.items.map(it => ({
             uid: ++contador,
             productoId: it.productoId,
@@ -861,11 +882,9 @@ export default {
       (modal.value?.f?.items || []).reduce((t, l) => t + subtotalDe(l), 0)
     )
 
-    const iva = computed(() =>
-      Math.round(neto.value * ((modal.value?.f?.ivaTasa || 0) / 100))
-    )
 
-    const totalCompra = computed(() => neto.value + iva.value)
+    /* Lo que se anota ya es el valor final pagado: no se suma IVA encima. */
+    const totalCompra = computed(() => neto.value)
 
     const varasTotales = computed(() =>
       (modal.value?.f?.items || []).reduce((t, l) => t + varasDe(l), 0)
@@ -874,16 +893,115 @@ export default {
     /* ---------------- Presentación ---------------- */
     let compraEnEspera = null
 
-    const abrirPresentacion = (productoId) => {
+    /* Lo que el producto ya tiene sirve de punto de partida: las varas por
+       paquete dependen de la especie (25 en rosas, 10 en maule), así que
+       proponer 25 a todo obliga a corregirlo cada vez. */
+    const abrirPresentacion = (productoId, lineaUid = null) => {
       compraEnEspera = modal.value.f
-      modal.value = {
-        tipo: 'presentacion',
-        f: {
-          productoId, nombre: '', tipo: 'paquete',
-          paquetes: 1, varasPorPaquete: 25, predeterminada: true, error: ''
-        }
+      const existentes = presentacionesDe(productoId)
+      const referencia = existentes.find(p => p.predeterminada) || existentes[0]
+      const f = {
+        productoId,
+        lineaUid,
+        tipo: 'paquete',
+        paquetes: 1,
+        varasPorPaquete: referencia?.varasPorPaquete || 25,
+        nombre: '',
+        nombreAuto: true,
+        /* Solo viene marcado si no hay otra: marcarlo reemplaza la actual. */
+        predeterminada: !existentes.some(p => p.predeterminada),
+        error: ''
+      }
+      f.nombre = sugerirNombre(f)
+      modal.value = { tipo: 'presentacion', f }
+    }
+
+    /* Mismo formato que usa el backend en sus ejemplos: "Paquete 25 varas",
+       "Caja 4x25". Sin números no se sugiere nada. */
+    const sugerirNombre = (f) => {
+      const v = f.varasPorPaquete
+      if (!v || v < 1) return ''
+      if (f.tipo === 'caja') return f.paquetes >= 1 ? `Caja ${f.paquetes}x${v}` : ''
+      return `Paquete ${v} varas`
+    }
+
+    const formPresentacion = computed(() =>
+      modal.value?.tipo === 'presentacion' ? modal.value.f : null
+    )
+
+    const nombreSugerido = computed(() =>
+      formPresentacion.value ? sugerirNombre(formPresentacion.value) : ''
+    )
+
+    /* Mientras el usuario no escriba su propio nombre, sigue a los números. */
+    watch(nombreSugerido, (n) => {
+      const f = formPresentacion.value
+      if (f?.nombreAuto) f.nombre = n
+    })
+
+    const cambiarTipoPresentacion = (tipo) => {
+      const f = modal.value.f
+      if (f.tipo === tipo) return
+      f.tipo = tipo
+      if (tipo === 'paquete') {
+        f.paquetes = 1
+      } else {
+        /* Sin una caja anterior de la cual copiar, se deja vacío: inventar
+           cuántos paquetes trae es peor que pedirlo. */
+        const caja = presentacionesDe(f.productoId).find(p => p.tipo === 'caja')
+        f.paquetes = caja?.paquetes || null
       }
     }
+
+    const ayudaTipoPresentacion = computed(() => {
+      const f = formPresentacion.value
+      return TIPOS_PRESENTACION.find(t => t.valor === f?.tipo)?.ayuda || ''
+    })
+
+    const paquetesPresentacion = computed(() => {
+      const f = formPresentacion.value
+      if (!f) return 0
+      return f.tipo === 'caja' ? (f.paquetes || 0) : 1
+    })
+
+    const varasPresentacion = computed(() =>
+      paquetesPresentacion.value * (formPresentacion.value?.varasPorPaquete || 0)
+    )
+
+    /* Una etiqueta QR por paquete. */
+    const etiquetasPresentacion = computed(() => paquetesPresentacion.value)
+
+    const predeterminadaActual = computed(() => {
+      const f = formPresentacion.value
+      return f ? presentacionesDe(f.productoId).find(p => p.predeterminada) || null : null
+    })
+
+    /* La base compara sin mayúsculas y contra todas, activas o no. */
+    const nombreRepetido = computed(() => {
+      const f = formPresentacion.value
+      const n = f?.nombre.trim().toLowerCase()
+      if (!n) return false
+      return store.getters['presentaciones/de'](f.productoId)
+        .some(p => p.nombre.trim().toLowerCase() === n)
+    })
+
+    const guardandoPresentacion = computed(() => store.getters['presentaciones/guardando'])
+
+    const errorPresentacion = (f) => {
+      if (!f.varasPorPaquete || f.varasPorPaquete < 1) return 'Indica cuántas varas trae cada paquete.'
+      if (f.tipo === 'caja') {
+        if (!f.paquetes || f.paquetes < 1) return 'Indica cuántos paquetes trae la caja.'
+        if (f.paquetes > MAX_PAQUETES) return `Una caja no puede traer más de ${MAX_PAQUETES} paquetes.`
+      }
+      if (f.nombre.trim().length < 2) return 'El nombre debe tener al menos 2 caracteres.'
+      if (nombreRepetido.value) return 'Este producto ya tiene una presentación con ese nombre.'
+      return ''
+    }
+
+    const puedeCrearPresentacion = computed(() => {
+      const f = formPresentacion.value
+      return !!f && !guardandoPresentacion.value && !errorPresentacion(f)
+    })
 
     /* Sin borrador guardado no hay a dónde volver: cerrar y ya. */
     const volverACompra = () => {
@@ -894,26 +1012,27 @@ export default {
 
     const guardarPresentacion = async () => {
       const f = modal.value.f
-      f.error = ''
-      if (!f.nombre.trim() || f.nombre.trim().length < 2) {
-        return (f.error = 'El nombre debe tener al menos 2 caracteres.')
-      }
-      if (!f.varasPorPaquete || f.varasPorPaquete < 1) {
-        return (f.error = 'Indica cuántas varas trae cada paquete.')
-      }
+      /* Dos toques rápidos en el celular mandaban dos veces. */
+      if (guardandoPresentacion.value) return
+      f.error = errorPresentacion(f)
+      if (f.error) return
 
       try {
         const creada = await store.dispatch('presentaciones/crear', {
           productoId: f.productoId,
           nombre: f.nombre.trim(),
           tipo: f.tipo,
-          paquetes: f.paquetes || 1,
+          paquetes: paquetesPresentacion.value,
           varasPorPaquete: f.varasPorPaquete,
           predeterminada: f.predeterminada
         })
 
+        /* La línea desde la que se abrió se queda con la nueva aunque ya
+           tuviera otra elegida: para eso se tocó el botón. Las demás líneas
+           del mismo producto solo la reciben si estaban sin presentación. */
         compraEnEspera.items
-          .filter(l => l.productoId === f.productoId && !l.presentacionId)
+          .filter(l => l.productoId === f.productoId &&
+                       (l.uid === f.lineaUid || !l.presentacionId))
           .forEach(l => { l.presentacionId = creada.id })
 
         compraEnEspera.error = ''
@@ -943,7 +1062,8 @@ export default {
         fecha: f.fecha || null,
         documento: (f.documento || '').trim() || null,
         notas: (f.notas || '').trim() || null,
-        ivaTasa: f.ivaTasa,
+        /* Explícito: el backend asumía 19% cuando no venía. */
+        ivaTasa: 0,
         items: f.items.map(l => ({
           productoId: l.productoId,
           presentacionId: l.presentacionId,
@@ -1019,7 +1139,10 @@ export default {
     const fechaHora = (v) => (v ? fmtHora.format(new Date(v)) : '—')
 
     return {
-      TIPOS_PRESENTACION, PRESETS, textoEstado, claseEstado,
+      TIPOS_PRESENTACION, MAX_PAQUETES, PRESETS, textoEstado, claseEstado,
+      nombreSugerido, cambiarTipoPresentacion, ayudaTipoPresentacion,
+      varasPresentacion, etiquetasPresentacion, predeterminadaActual,
+      nombreRepetido, guardandoPresentacion, puedeCrearPresentacion,
       puedeEditar, esMovil,
       compras, filtro, totalPaginas, hayAnterior, haySiguiente,
       cargando, guardando, error, borradores, recepcion,
@@ -1030,10 +1153,10 @@ export default {
       modal, cerrarModal, intentarCerrar, confirmarDescarte, descartar,
       abrirNueva, abrirEdicion, agregarLinea,
       tipoDe, varasDe, costoPorVaraDe, subtotalDe,
-      neto, iva, totalCompra, varasTotales,
+      neto, totalCompra, varasTotales,
       abrirPresentacion, volverACompra, guardarPresentacion,
       guardarCompra, abrirRecepcion, confirmarRecepcion, cerrarRecepcion,
-      irAEtiquetas, anular,
+      irAEtiquetas, anular, puedeVerEtiquetas,
       resalte, aviso, clp, fecha, fechaHora
     }
   }
@@ -1367,6 +1490,11 @@ tr.clic:hover td, tr.clic.abierta td { background: var(--surface-2); }
 .suave { color: var(--text-soft); }
 .mini { font-size: 0.78rem; }
 .rojo { color: var(--danger); }
+
+.campo.malo { border-color: var(--danger); }
+
+/* Pegado al interruptor que lo provoca, no como párrafo suelto. */
+.aviso-reemplazo { margin: 2px 0 12px 27px; }
 .verde { color: var(--accent-text); }
 
 .dato {
@@ -1460,6 +1588,24 @@ tr.clic:hover td, tr.clic.abierta td { background: var(--surface-2); }
 .totales span { color: var(--text-soft); font-size: 0.72rem; }
 
 .lotes { margin-top: 16px; }
+
+/* Título y botón en la misma línea; en el celular el botón baja entero. */
+.lotes-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.lotes-cab h4 { margin: 0; }
+
+.lotes-cab .btn { text-decoration: none; }
+
+@media (max-width: 720px) {
+  .lotes-cab .btn { width: 100%; min-height: 44px; }
+}
 
 .lotes h4 {
   margin: 0 0 8px;

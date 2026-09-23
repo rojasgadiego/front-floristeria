@@ -42,7 +42,7 @@
             -->
           <div class="buscador buscador--codigo barra__codigo" :class="estadoCodigo">
             <span aria-hidden="true">🏷️</span>
-            <input ref="campoCodigo" v-model="codigo" placeholder="Escanea el balde o el código…"
+            <input ref="campoCodigo" v-model="codigo" placeholder="Código o QR…"
               aria-label="Código de partida o producto" autocomplete="off" spellcheck="false"
               @keyup.enter="buscarPorCodigo">
             <span v-if="buscandoCodigo" class="spinner oscuro" aria-hidden="true"></span>
@@ -68,6 +68,15 @@
               autocomplete="off">
             <button v-if="busqueda" class="btn-icono chico" @click="busqueda = ''" aria-label="Limpiar">✕</button>
           </div>
+
+          <!-- En el celular las pastillas no caben en la fila de la búsqueda:
+               se cambian por este selector (ver el @media). -->
+          <select class="filtro-categoria barra__filtro" :class="{ on: categoriaId !== null }"
+            :value="categoriaId ?? ''" aria-label="Categoría"
+            @change="categoriaId = $event.target.value ? Number($event.target.value) : null">
+            <option value="">Categoría</option>
+            <option v-for="c in categorias" :key="c.id" :value="c.id">{{ c.nombre }}</option>
+          </select>
 
           <div class="categorias" role="group" aria-label="Categorías">
             <button class="pastilla" :class="{ on: categoriaId === null }" @click="categoriaId = null">Todo</button>
@@ -156,6 +165,17 @@
             </template>
           </div>
 
+          <!-- Cobro final de un evento -->
+          <div v-if="cotizacion" class="banda-evento">
+            <div class="min0">
+              <b>Evento {{ cotizacion.folio }}</b>
+              <div class="mini suave">
+                {{ cotizacion.clienteNombre }} · ya abonó {{ clp(abonoPrevio) }}
+              </div>
+            </div>
+            <button class="btn btn-linea btn-mini" @click="vaciar">Cancelar</button>
+          </div>
+
           <!-- Líneas -->
           <div class="lineas">
             <p v-if="!hayCarrito" class="vacio-carrito">
@@ -174,7 +194,10 @@
                 </div>
               </div>
 
-              <div class="cantidad">
+              <!-- Lo del evento que no es flor va con su precio cotizado: no
+                   se cambia en el mesón. -->
+              <span v-if="l.deCotizacion" class="chip-evento">cotizado</span>
+              <div v-else class="cantidad">
                 <button class="paso" @click="cambiar(l, l.cantidad - 1)" aria-label="Menos">−</button>
                 <span class="dato">{{ l.cantidad }}</span>
                 <button class="paso" @click="cambiar(l, l.cantidad + 1)" aria-label="Más">+</button>
@@ -211,14 +234,18 @@
               <span>{{ promocionElegida?.nombre }}</span>
               <b class="dato">−{{ clp(descuentoPromo) }}</b>
             </div>
+            <div v-if="abonoPrevio" class="fila verde">
+              <span>Ya abonado</span>
+              <b class="dato">−{{ clp(abonoPrevio) }}</b>
+            </div>
             <div class="fila total">
-              <span>Total</span>
-              <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
+              <span>{{ cotizacion ? 'A cobrar ahora' : 'Total' }}</span>
+              <b class="dato">{{ clp(aPagar) }}</b>
             </div>
           </div>
 
           <button class="btn grande ancho" :disabled="!hayCarrito || haySinStock" @click="cobrando = true">
-            {{ haySinStock ? 'Revisa el stock' : `Cobrar ${clp(bruto - descuentoPromo)}` }}
+            {{ haySinStock ? 'Revisa el stock' : `Cobrar ${clp(aPagar)}` }}
           </button>
         </div>
       </aside>
@@ -228,7 +255,7 @@
     <button v-if="hayCarrito && !carritoAbierto && !escaneando" class="flotante" @click="carritoAbierto = true">
       <span class="globo claro">{{ unidades }}</span>
       <span class="flotante-texto">Ver venta</span>
-      <b class="dato">{{ clp(bruto - descuentoPromo) }}</b>
+      <b class="dato">{{ clp(aPagar) }}</b>
     </button>
 
     <!--
@@ -340,7 +367,18 @@
           </div>
         </template>
 
-        <!-- Después de cerrar -->
+        <!-- Después de cerrar: arqueo ciego para quien no es admin. El
+             esperado suma lo que cobró todo el equipo. -->
+        <template v-else-if="arqueoCiego">
+          <div class="resultado-cierre cuadrada">
+            <span class="rot">Caja cerrada</span>
+            <b class="val">{{ clp(cierre.contado) }}</b>
+          </div>
+          <p class="ayuda">
+            Es lo que contaste. El arqueo lo revisa un administrador.
+          </p>
+        </template>
+
         <template v-else>
           <div class="resultado-cierre" :class="claseDiferencia">
             <span class="rot">{{ textoDiferencia }}</span>
@@ -379,6 +417,7 @@
 <script>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
 import { useStore } from 'vuex'
+import { useRoute, useRouter } from 'vue-router'
 import ModalCobro from '@/features/ventas/components/Modalcobro.vue'
 import TicketBoleta from '@/features/ventas/components/TicketBoleta.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
@@ -464,6 +503,11 @@ export default {
         c.error = e.message
       }
     }
+
+    /* La API no manda la diferencia a quien no es admin. */
+    const arqueoCiego = computed(() =>
+      !!cierre.value?.resumen && cierre.value.resumen.diferencia == null
+    )
 
     const claseDiferencia = computed(() => {
       const d = cierre.value?.resumen?.diferencia ?? 0
@@ -738,6 +782,9 @@ export default {
     const hayCarrito = computed(() => store.getters['ventas/hayCarrito'])
     const unidades = computed(() => store.getters['ventas/unidades'])
     const bruto = computed(() => store.getters['ventas/bruto'])
+    const aPagar = computed(() => store.getters['ventas/aPagar'])
+    const abonoPrevio = computed(() => store.getters['ventas/abonoPrevio'])
+    const cotizacion = computed(() => store.getters['ventas/cotizacion'])
     const descuentoPromo = computed(() => store.getters['ventas/descuentoPromo'])
     const promociones = computed(() => store.getters['ventas/promocionesAplicables'])
     const promocionId = computed(() => store.getters['ventas/promocionId'])
@@ -804,7 +851,6 @@ export default {
       enfocarCodigo()
     }
 
-    const imprimir = () => window.print()
 
     /* Vaciar el carrito con la hoja abierta la deja sin motivo para seguir
        tapando la grilla. */
@@ -899,9 +945,30 @@ export default {
          catálogo. Traer los 17 productos incluiría cosas que están en
          bodega y que el vendedor no puede entregar. */
       store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true })
+        .then(() => cargarEvento())
 
       document.addEventListener('keydown', alTeclado)
     })
+
+    /* ---------------- Cobro de un evento ----------------
+       Desde la ficha de la cotización se llega con ?cotizacion=ID. Se carga
+       una vez y se saca de la URL: recargar la página no debe volver a
+       armar el carrito encima de lo que el vendedor ya ajustó. */
+    const route = useRoute()
+    const router = useRouter()
+
+    const cargarEvento = async () => {
+      const id = Number(route.query.cotizacion)
+      if (!id) return
+      router.replace({ query: { ...route.query, cotizacion: undefined } })
+      try {
+        const p = await store.dispatch('ventas/cargarCotizacion', id)
+        carritoAbierto.value = true
+        if (p.advertencias?.length) avisar(p.advertencias[0], true)
+      } catch (e) {
+        avisar(e.message, true)
+      }
+    }
 
     onUnmounted(() => {
       control?.abort()
@@ -932,16 +999,16 @@ export default {
     return {
       Math,
       caja, abierta, guardandoCaja, errorCaja, fondoInicial, abrirCaja, detalleCaja,
-      cierre, abrirCierre, cerrarCaja, claseDiferencia, textoDiferencia,
+      cierre, abrirCierre, cerrarCaja, arqueoCiego, claseDiferencia, textoDiferencia,
       categorias, clubActivo, busqueda, categoriaId, visibles, limpiarFiltros,
       codigo, buscandoCodigo, avisoCodigo, estadoCodigo, campoCodigo, buscarPorCodigo,
       escaneando, leidosCamara, escaner, puedeEscanear,
       abrirEscaner, cerrarEscaner, resolverEscaneo, alFallarCamara,
-      carrito, hayCarrito, unidades, bruto, descuentoPromo, promociones,
+      carrito, hayCarrito, unidades, bruto, aPagar, abonoPrevio, cotizacion, descuentoPromo, promociones,
       promocionId, promocionElegida, cliente, haySinStock, sinStock,
       agregar, cambiar, vaciar, elegirPromocion,
       rutCliente, buscandoCliente, buscarCliente, quitarCliente,
-      cobrando, ticket, carritoAbierto, campoContado, alCobrar, cerrarTicket, imprimir,
+      cobrando, ticket, carritoAbierto, campoContado, alCobrar, cerrarTicket,
       aviso, clp, hora
     }
   }
@@ -1320,6 +1387,15 @@ label {
   grid-area: caja;
 }
 
+.barra__filtro {
+  grid-area: filtro;
+}
+
+/* El selector de categoría es solo del celular. */
+.filtro-categoria {
+  display: none;
+}
+
 /* ─── Buscadores ─── */
 
 .buscador {
@@ -1454,7 +1530,9 @@ label {
   gap: 9px;
   min-height: 44px;
   padding: 3px 4px 3px 12px;
-  border-radius: var(--r-full);
+  /* El mismo radio que los campos de la barra: como píldora se veía de
+     otra familia al lado del escáner. */
+  border-radius: var(--r-sm);
   background: var(--success-soft);
   border: 1px solid color-mix(in srgb, var(--success) 38%, transparent);
   color: var(--success);
@@ -2145,35 +2223,72 @@ label {
   /* ─── Barra pegada arriba ───
      Al recorrer una grilla larga, el escáner tiene que seguir a mano. */
 
+  /* Dos filas: escanear junto a la caja, buscar junto a la categoría.
+     Antes eran cuatro y la grilla empezaba a media pantalla. */
   .barra {
     position: sticky;
     top: 0;
     z-index: 5;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "caja   caja"
-      "codigo codigo"
-      "buscar buscar"
-      "cats   cats";
-    row-gap: 8px;
+      "codigo caja"
+      "buscar filtro";
+    gap: 8px;
     padding: 8px 0;
     background: var(--bg, var(--surface));
   }
 
-  /* El chip se estira a lo ancho y recupera su segunda línea: acá el
-     ancho sobra y el detalle del turno se agradece. */
+  .barra .categorias {
+    display: none;
+  }
+
+  /* Categoría como botón con desplegable: mismo alto que la búsqueda, y se
+     pinta cuando está filtrando para que no se olvide puesto. */
+  .filtro-categoria {
+    display: block;
+    width: auto;
+    max-width: 40vw;
+    min-height: 44px;
+    padding: 0 30px 0 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    background:
+      var(--surface)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+      no-repeat right 10px center;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: max(.85rem, 16px);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    appearance: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+
+  .filtro-categoria.on {
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+    color: var(--accent-text, var(--accent));
+  }
+
+  .filtro-categoria:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* La caja, compacta al lado del escáner: el punto verde, lo vendido y
+     el candado para cerrar. El detalle del turno queda en el title. */
   .caja-chip {
-    display: flex;
-    min-height: 40px;
-    padding: 3px 4px 3px 12px;
+    display: inline-flex;
+    min-height: 44px;
+    gap: 7px;
+    padding: 3px 4px 3px 10px;
   }
 
   .caja-chip__txt span {
-    display: block;
-  }
-
-  .caja-chip__btn {
-    margin-left: auto;
+    display: none;
   }
 
   /* El botón de cierre se vuelve icono: es una acción de fin de turno,
@@ -2414,5 +2529,28 @@ label {
     transition: none;
     animation: none;
   }
+}
+
+/* ─── Cobro final de un evento ─── */
+.banda-evento {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm, 8px);
+  background: var(--accent-soft);
+}
+
+.chip-evento {
+  padding: 2px 8px;
+  border-radius: var(--r-full, 999px);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: .7rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 </style>

@@ -122,10 +122,21 @@ export default {
 
     /* ---------------- Rango compartido ---------------- */
 
-    async cambiarRango ({ commit, dispatch }, { desde, hasta }) {
-      commit('SET_RANGO', { desde, hasta })
+    /* Resultado, productos y equipo hablan del mismo periodo: se recargan
+       los tres juntos. Antes solo el resultado, y productos y equipo
+       quedaban mostrando el rango anterior. */
+    async cambiarRango ({ commit, dispatch }, cambios) {
+      commit('SET_RANGO', cambios)
       commit('INVALIDAR')
-      await dispatch('cargarResultado')
+      await dispatch('cargarPeriodo')
+    },
+
+    async cargarPeriodo ({ dispatch }, payload) {
+      await Promise.all([
+        dispatch('cargarResultado', payload),
+        dispatch('cargarProductos', payload),
+        dispatch('cargarEquipo', payload)
+      ])
     },
 
     /* ---------------- Reportes de administración ---------------- */

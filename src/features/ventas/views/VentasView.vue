@@ -151,7 +151,7 @@
            mira solo cuando la diferencia llama la atención. -->
       <div v-else class="tarjetas">
         <article v-for="c in turnos" :key="c.id" class="turno"
-          :class="{ abierto: turnoId === c.id, sinCerrar: c.diferencia === null }">
+          :class="{ abierto: turnoId === c.id, sinCerrar: c.estado === 'abierta' }">
 
           <button class="turno-cab" @click="turnoId = turnoId === c.id ? null : c.id"
             :aria-expanded="turnoId === c.id">
@@ -170,8 +170,10 @@
 
             <div class="turno-cifras">
               <b class="dato grande">{{ clp(c.totalVendido) }}</b>
-              <span v-if="c.diferencia === null" class="chip chico">abierta</span>
-              <span v-else class="chip chico" :class="claseDiferencia(c.diferencia)">
+              <span v-if="c.estado === 'abierta'" class="chip chico">abierta</span>
+              <!-- Un vendedor no recibe el arqueo (es de todo el turno): sin
+                   diferencia no hay nada que rotular. -->
+              <span v-else-if="c.diferencia != null" class="chip chico" :class="claseDiferencia(c.diferencia)">
                 {{ c.diferencia === 0 ? 'cuadró' : (c.diferencia > 0 ? '+' : '') + clp(c.diferencia) }}
               </span>
             </div>
@@ -182,7 +184,7 @@
           <div v-if="turnoId === c.id" class="turno-detalle">
             <!-- El arqueo primero: es la razón por la que alguien abre un
                  turno cerrado. -->
-            <div class="arqueo" :class="claseDiferencia(c.diferencia)">
+            <div v-if="c.diferencia != null" class="arqueo" :class="claseDiferencia(c.diferencia)">
               <div>
                 <span class="rot">Debía haber</span>
                 <b class="dato">{{ clp(c.efectivoEsperado) }}</b>
@@ -204,13 +206,18 @@
             <!-- Una diferencia sin ventas no es un error de conteo del día:
                  es plata que entró o salió del cajón sin pasar por una
                  boleta, y eso siempre tiene una explicación concreta. -->
-            <p v-if="c.diferencia !== 0 && c.boletas === 0" class="alerta-arqueo">
+            <p v-if="c.diferencia != null && c.diferencia !== 0 && c.boletas === 0" class="alerta-arqueo">
               El turno cerró {{ c.diferencia > 0 ? 'con plata de más' : 'faltando plata' }}
               sin haber vendido nada.
             </p>
 
+            <p v-if="!esAdmin" class="mini suave">
+              Estos son solo tus números en el turno. El arqueo lo revisa un
+              administrador.
+            </p>
+
             <div class="bloque">
-              <h4>Cómo pagaron</h4>
+              <h4>{{ esAdmin ? 'Cómo pagaron' : 'Cómo te pagaron' }}</h4>
               <div class="medios">
                 <div class="medio destacado">
                   <span class="rot">Efectivo</span>
@@ -384,6 +391,11 @@
               <div v-if="detalle.descuentoCanje" class="fila-num verde">
                 <span>{{ detalle.puntosCanjeados }} puntos</span>
                 <b class="dato">−{{ clp(detalle.descuentoCanje) }}</b>
+              </div>
+
+              <div v-if="detalle.abonoPrevio" class="fila-num verde">
+                <span>Abonado antes al evento</span>
+                <b class="dato">−{{ clp(detalle.abonoPrevio) }}</b>
               </div>
 
               <div class="fila-num"><span>Neto</span><b class="dato">{{ clp(detalle.neto) }}</b></div>

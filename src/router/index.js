@@ -28,7 +28,6 @@ const Proveedores = () => import('@/features/compras/views/ProveedoresView.vue')
 const Clientes = () => import('@/features/clientes/views/ClientesView.vue')
 const Usuarios = () => import('@/features/usuarios/views/UsuariosView.vue')
 const Configuracion = () => import('@/features/configuracion/views/ConfiguracionView.vue')
-// const Estado = () => import('@/features/caja/views/EstadoView.vue')
 const Reportes = () => import('@/features/reportes/views/ReportesView.vue')
 const Promociones = () => import('@/features/promociones/views/PromocionesView.vue')
 const Cotizaciones = () => import('@/features/cotizaciones/views/CotizacionesView.vue')
@@ -154,6 +153,14 @@ const routes = [
         name: 'EtiquetasCompra',
         component: Etiquetas,
         meta: { permiso: 'lotes', title: 'Etiquetas de la compra' }
+      },
+      {
+        /* La que se imprime al bajar de bodega al mesón: el vendedor la
+           escanea para vender. Permiso de inventario, que es quien baja. */
+        path: 'etiquetas/partida/:codigo',
+        name: 'EtiquetasPartida',
+        component: Etiquetas,
+        meta: { permiso: 'inventario', title: 'Etiqueta de la partida' }
       },
       {
         path: 'compras',

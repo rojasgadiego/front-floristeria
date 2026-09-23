@@ -40,14 +40,14 @@ export const MENU_COLIBRI = [
     roles: ['Admin', 'Vendedor'],
     icon: ico('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M6.5 12.5h3.5M6.5 16h3.5"/><rect x="14" y="12.5" width="3.5" height="3.5" rx="0.6"/>')
   },
-  // {
-  //   path: '/cotizaciones',
-  //   clave: 'cotizaciones',
-  //   name: 'Cotizaciones y Eventos',
-  //   seccion: 'Operación',
-  //   roles: ['Admin', 'Vendedor'],
-  //   icon: ico('<path d="M9 3.5h6v2.8H9z"/><path d="M15 4.9h3.5V21H5.5V4.9H9"/><path d="M8.8 11h6.4M8.8 14.5h6.4M8.8 18h4"/>')
-  // },
+  {
+    path: '/cotizaciones',
+    clave: 'cotizaciones',
+    name: 'Cotizaciones y Eventos',
+    seccion: 'Operación',
+    roles: ['Admin', 'Vendedor'],
+    icon: ico('<path d="M9 3.5h6v2.8H9z"/><path d="M15 4.9h3.5V21H5.5V4.9H9"/><path d="M8.8 11h6.4M8.8 14.5h6.4M8.8 18h4"/>')
+  },
   {
     path: '/ventas',
     clave: 'ventas',
@@ -79,7 +79,7 @@ export const MENU_COLIBRI = [
     clave: 'mermas',
     name: 'Mermas',
     seccion: 'Catálogo',
-    roles: ['Admin', 'Bodega'],
+    roles: ['Admin', 'Bodega', 'Vendedor'],
     icon: ico('<path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="M6.2 7l.9 13.5h9.8L17.8 7"/><path d="M10 11v6M14 11v6"/>')
   },
   {
@@ -99,15 +99,15 @@ export const MENU_COLIBRI = [
   //   icon: ico('<path d="M3.6 12.4l8.8-8.8H20v7.6l-8.8 8.8z"/><circle cx="16.4" cy="7.6" r="1.4"/>')
   // },
 
-  // // ---------------- Gestión ----------------
-  // {
-  //   path: '/reportes',
-  //   clave: 'reportes',
-  //   name: 'Reportes',
-  //   seccion: 'Gestión',
-  //   roles: ['Admin', 'Bodega'],
-  //   icon: ico('<path d="M4 20h16"/><path d="M7.5 20v-5.5M12 20V7M16.5 20v-9"/>')
-  // },
+  // ---------------- Gestión ----------------
+  {
+    path: '/reportes',
+    clave: 'reportes',
+    name: 'Reportes',
+    seccion: 'Gestión',
+    roles: ['Admin', 'Bodega'],
+    icon: ico('<path d="M4 20h16"/><path d="M7.5 20v-5.5M12 20V7M16.5 20v-9"/>')
+  },
   {
     path: '/usuarios',
     clave: 'usuarios',

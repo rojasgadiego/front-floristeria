@@ -80,6 +80,19 @@ export default {
       }
     },
 
+    /**
+     * La caja es una sola para todo el local: si otra persona la abre o la
+     * cierra, esta pantalla no se entera sola. Esto la relee sin tocar
+     * `cargando`, para que el refresco periódico no parpadee spinners.
+     */
+    async sincronizar ({ commit }) {
+      try {
+        commit('SET_ACTUAL', await cajaService.actual())
+      } catch {
+        /* Silencioso: el próximo intento lo corrige. */
+      }
+    },
+
     /** Refresca los totales del turno tras cada venta. */
     async refrescar ({ commit, state }) {
       if (!state.actual) return
@@ -117,7 +130,8 @@ export default {
     cajaId: state => state.actual?.id ?? null,
 
     /* Lo que debería haber físicamente en el cajón ahora mismo. */
-    enCajon: state => state.actual?.enCajon ?? 0,
+    /* Null para un vendedor: el cajón suma lo de todo el equipo. */
+    enCajon: state => state.actual?.enCajon ?? null,
     efectivo: state => state.actual?.efectivo ?? 0,
     fondoInicial: state => state.actual?.fondoInicial ?? 0,
     totalVendido: state => state.actual?.totalVendido ?? 0,

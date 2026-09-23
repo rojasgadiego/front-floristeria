@@ -70,6 +70,12 @@
             <span>{{ venta.puntosCanjeados }} puntos</span>
             <span>−{{ moneda(venta.descuentoCanje) }}</span>
           </div>
+          <!-- Cobro final de un evento: sin esta línea, el total no cuadra con
+               la suma de lo que se lista arriba. -->
+          <div v-if="venta.abonoPrevio" class="tot">
+            <span>Abonado antes</span>
+            <span>−{{ moneda(venta.abonoPrevio) }}</span>
+          </div>
 
           <div class="tot"><span>Neto</span><span>{{ moneda(venta.neto) }}</span></div>
           <div class="tot">
@@ -112,6 +118,23 @@
         </div>
       </div>
 
+      <!-- Cada equipo recuerda cómo imprime: el PC del mesón por el diálogo
+           (o directo, con Chrome en modo kiosco), el celular por Bluetooth. -->
+      <div class="impresion no-imprimir">
+        <label for="modo-impresion">Imprimir en</label>
+        <select id="modo-impresion" v-model="modo" class="campo-modo">
+          <option v-for="m in MODOS" :key="m.valor" :value="m.valor">{{ m.texto }}</option>
+        </select>
+        <p v-if="modo !== 'navegador'" class="ayuda-impresion">
+          Necesita la app <b>RawBT</b> en este celular, con la impresora térmica
+          vinculada por Bluetooth. Imprime directo, sin diálogo.
+        </p>
+        <p v-else-if="android" class="ayuda-impresion">
+          En Android conviene una impresora Bluetooth con RawBT: imprime sin
+          pasar por el diálogo.
+        </p>
+      </div>
+
       <div class="modal-pie no-imprimir">
         <button class="btn btn-linea" @click="cerrarModal">Listo</button>
         <button class="btn" @click="imprimir">🖨️ Imprimir</button>
@@ -121,7 +144,12 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { MODOS, leerModo, guardarModo, imprimirConRawBT, esAndroid } from '@/core/impresion/impresora'
+
+/* Ancho del rollo térmico. 80mm es el estándar del punto de venta; con una
+   impresora de 58mm, cambiar solo este número. */
+const ANCHO_MM = 80
 
 const MEDIOS = {
   efectivo: 'Efectivo',
@@ -180,7 +208,21 @@ export default {
      * Y el @page de 80mm sí se respeta: es el documento raíz del iframe,
      * no una regla dentro de un componente.
      */
+    const modo = ref(leerModo())
+    watch(modo, guardarModo)
+    const android = esAndroid()
+
+    /* Bluetooth: la boleta viaja en ESC/POS a RawBT. Si no, el diálogo del
+       navegador con la hoja del tamaño del ticket. */
     const imprimir = () => {
+      if (modo.value.startsWith('rawbt')) {
+        imprimirConRawBT(props.ticket, { ancho: modo.value === 'rawbt-58' ? 58 : 80 })
+        return
+      }
+      imprimirEnNavegador()
+    }
+
+    const imprimirEnNavegador = () => {
       const contenido = papel.value?.innerHTML
       if (!contenido) return
 
@@ -197,14 +239,19 @@ export default {
 <meta charset="utf-8">
 <title>${venta.value.folio ?? 'Boleta'}</title>
 <style>
-  /* Rollo térmico de 80mm, el estándar en punto de venta. Si la
-     impresora es de 58mm, cambiar los dos números. */
-  @page { size: 80mm auto; margin: 3mm; }
+  /* El tamaño de la hoja lo fija el script antes de imprimir: 80mm de
+     ancho por el alto real del ticket. "80mm auto" no es un valor válido
+     para size, el navegador descartaba la regla y usaba carta, con la
+     boleta en un rincón. Si la impresora es de 58mm, cambiar ANCHO_MM. */
+  @page { margin: 0; }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /* El aire va adentro del ticket y no como margen de la hoja: sin margen,
+     el navegador no tiene dónde estampar la fecha y la URL. */
   body {
-    width: 74mm;
+    width: ${ANCHO_MM}mm;
+    padding: 3mm;
     /* Monoespaciada: las columnas de precios se alinean solas, que es
        lo que hace legible un ticket angosto. */
     font-family: "Courier New", Courier, monospace;
@@ -278,18 +325,40 @@ export default {
 </html>`)
       doc.close()
 
-      /* onload en vez de llamar directo: sin esto Chrome imprime el
-         documento antes de aplicar los estilos, y sale en Times New Roman
-         a ancho carta. */
-      marco.onload = () => {
-        marco.contentWindow.focus()
-        marco.contentWindow.print()
+      const ventana = marco.contentWindow
 
-        /* El iframe se saca después de que el diálogo se cierra. Un
-           segundo alcanza; quitarlo antes cancela la impresión en
-           Firefox. */
-        setTimeout(() => marco.remove(), 1000)
+      /* El iframe se saca cuando termina la impresión. En el celular el
+         diálogo no bloquea: quitarlo al segundo cancelaba la impresión.
+         El minuto es la red por si el navegador no avisa `afterprint`. */
+      let quitado = false
+      const quitar = () => {
+        if (quitado) return
+        quitado = true
+        marco.remove()
       }
+      ventana.addEventListener('afterprint', () => setTimeout(quitar, 100))
+      setTimeout(quitar, 60_000)
+
+      /* La hoja mide lo que mide el ticket: se toma el alto ya dibujado y se
+         fija el @page con él. Así sale una tira del largo justo, no una
+         hoja carta con la boleta en una esquina. */
+      const lanzar = () => {
+        const altoMm = Math.ceil(doc.body.scrollHeight * 25.4 / 96) + 2
+        const pagina = doc.createElement('style')
+        pagina.textContent = `@page { size: ${ANCHO_MM}mm ${altoMm}mm; margin: 0; }`
+        doc.head.appendChild(pagina)
+
+        ventana.focus()
+        ventana.print()
+      }
+
+      /* Antes se esperaba `onload`, pero asignado DESPUÉS de doc.write() y
+         doc.close() ese evento ya había pasado: nunca se disparaba y el botón
+         no hacía nada. Los estilos van en línea, así que el documento está
+         listo apenas se cierra; el setTimeout deja que se aplique el layout
+         antes de abrir el diálogo. */
+      if (doc.readyState === 'complete') setTimeout(lanzar, 50)
+      else marco.addEventListener('load', lanzar, { once: true })
     }
 
     /* El emit sale del contexto: en setup no hay `this`, y usarlo deja el
@@ -300,7 +369,8 @@ export default {
       Number,
       papel,
       venta, local, configuracion,
-      moneda, formatFecha, textoMedio, imprimir, cerrarModal
+      moneda, formatFecha, textoMedio, imprimir, cerrarModal,
+      MODOS, modo, android
     }
   }
 }
@@ -582,5 +652,43 @@ export default {
   .modal-pie {
     padding-bottom: calc(14px + env(safe-area-inset-bottom, 0));
   }
+}
+
+/* ─── Cómo imprime este equipo ─── */
+.impresion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 20px 0;
+  border-top: 1px solid var(--border);
+}
+
+.impresion label {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.campo-modo {
+  flex: 1 1 200px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: max(.85rem, 16px);
+}
+
+.ayuda-impresion {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: .76rem;
+  line-height: 1.45;
+  color: var(--text-faint);
 }
 </style>
