@@ -4,6 +4,7 @@ import { MENU_COLIBRI } from '@/config/menuColibri'
 import { instalarGuards } from './guards'
 
 import Login from '@/features/auth/views/LoginView.vue'
+const Landing = () => import('@/features/landing/views/LandingView.vue')
 
 // Layout como componente diferido también
 const MainLayout = () => import('@/layouts/MainLayout.vue') // ⚠️ AJUSTA LA RUTA
@@ -33,7 +34,14 @@ const Promociones = () => import('@/features/promociones/views/PromocionesView.v
 const Cotizaciones = () => import('@/features/cotizaciones/views/CotizacionesView.vue')
 
 const routes = [
-  { path: '/', redirect: '/dashboard' },
+  /* Landing pública: la ven clientes y equipo. Va antes del shell, que
+     también cuelga de '/', para que la raíz exacta caiga acá. */
+  {
+    path: '/',
+    name: 'Inicio',
+    component: Landing,
+    meta: { publica: true, title: 'Floristería' }
+  },
 
   /* ---------------- Fuera del shell (sin sidebar/header) ---------------- */
   {

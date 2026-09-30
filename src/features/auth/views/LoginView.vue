@@ -81,7 +81,7 @@
 
       <!-- Enlaces adicionales -->
       <div class="additional-links">
-        <router-link to="/">Registrarse</router-link>
+        <router-link to="/">Volver al sitio</router-link>
       </div>
 
     </div>
