@@ -3,6 +3,9 @@
     <div v-if="cargando" class="cargando">Cargando…</div>
 
     <template v-else>
+      <!-- La foto, si tiene: en la tabla se ve en miniatura -->
+      <img v-if="foto" class="foto" :src="foto" :alt="producto.nombre" loading="lazy">
+
       <!-- ═══ La receta, si es armado ═══
            Es lo que define el costo y lo que permite armarlo y desarmarlo.
            Un armado sin receta no se puede montar ni recuperar. -->
@@ -156,6 +159,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import { productosService } from '@/features/inventario/services/productos.service'
 import { lotesService } from '@/features/lotes/services/lotes.service'
+import { useFotosProducto } from '@/shared/composables/useFotosProducto'
 
 export default {
   name: 'DetalleProducto',
@@ -166,6 +170,8 @@ export default {
   emits: ['editar', 'armar', 'traspasar'],
 
   setup (props) {
+    const { urlFoto } = useFotosProducto()
+    const foto = computed(() => urlFoto(props.producto.id))
     const store = useStore()
 
     const receta = ref([])
@@ -260,6 +266,7 @@ export default {
       : '—')
 
     return {
+      foto,
       Math,
       receta, lotes, movimientos, cargando,
       costoReceta, costoDesfasado, cuantosSePuedenArmar,
@@ -274,6 +281,17 @@ export default {
 .detalle {
   padding: 16px 18px;
   background: var(--surface-2);
+}
+
+.foto {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--r-md, 12px);
+  border: 1px solid var(--border);
+  margin-bottom: 16px;
 }
 
 .min0 { min-width: 0; }

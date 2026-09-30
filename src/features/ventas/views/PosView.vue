@@ -113,7 +113,9 @@
         <div v-else class="grilla">
           <button v-for="p in visibles" :key="p.id" class="producto" :class="{ agotado: p.enVenta <= 0 }"
             :disabled="p.enVenta <= 0" @click="agregar(p)">
-            <span class="producto__emoji" aria-hidden="true">{{ p.emoji }}</span>
+            <!-- La foto si la hay; si no, el emoji de siempre -->
+            <img v-if="urlFoto(p.id)" class="producto__foto" :src="urlFoto(p.id)" alt="" loading="lazy">
+            <span v-else class="producto__emoji" aria-hidden="true">{{ p.emoji }}</span>
             <span class="producto__nombre">{{ p.nombre }}</span>
             <span class="producto__pie">
               <b class="dato">{{ clp(p.precio) }}</b>
@@ -421,6 +423,7 @@ import { useRoute, useRouter } from 'vue-router'
 import ModalCobro from '@/features/ventas/components/Modalcobro.vue'
 import TicketBoleta from '@/features/ventas/components/TicketBoleta.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
+import { useFotosProducto } from '@/shared/composables/useFotosProducto'
 
 /* El escáner arrastra el worker de decodificación y no se usa en la mayoría
    de las ventas: se carga la primera vez que alguien toca la cámara, no al
@@ -934,7 +937,11 @@ export default {
     /* ---------------- Carga ---------------- */
     let control = null
 
+    /* Fotos de los productos: se piden una vez y quedan en caché */
+    const { cargar: cargarFotos, urlFoto } = useFotosProducto()
+
     onMounted(() => {
+      cargarFotos()
       control = new AbortController()
       const señal = { signal: control.signal }
       store.dispatch('caja/cargarActual', señal)
@@ -997,7 +1004,7 @@ export default {
     const hora = (v) => (v ? fmtHora.format(new Date(v)) : '—')
 
     return {
-      Math,
+      Math, urlFoto,
       caja, abierta, guardandoCaja, errorCaja, fondoInicial, abrirCaja, detalleCaja,
       cierre, abrirCierre, cerrarCaja, arqueoCiego, claseDiferencia, textoDiferencia,
       categorias, clubActivo, busqueda, categoriaId, visibles, limpiarFiltros,
@@ -1642,6 +1649,16 @@ label {
 .producto__emoji {
   font-size: 1.7rem;
   line-height: 1.1;
+}
+
+/* Del mismo alto aproximado que el emoji más su aire, para que una grilla
+   mezclada (con y sin foto) no quede desalineada. */
+.producto__foto {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--surface-2);
 }
 
 .producto__nombre {

@@ -161,6 +161,30 @@
         </ul>
       </section>
 
+      <!-- ============ Catálogo ============ -->
+      <!-- Lo activo y con foto: subir la foto en el inventario es lo que
+           decide qué ve el cliente. Sin productos con foto, la sección no
+           aparece. -->
+      <section v-if="catalogo.length" class="seccion catalogo" aria-labelledby="t-catalogo">
+        <h2 id="t-catalogo">Catálogo</h2>
+        <p class="catalogo__bajada">
+          Una muestra de lo que tenemos. Toca un producto para pedirlo por WhatsApp.
+        </p>
+        <ul class="catalogo__grilla">
+          <li v-for="p in catalogoVisible" :key="p.id">
+            <a class="tarjeta" :href="enlacePedido(p)" target="_blank" rel="noopener">
+              <img class="tarjeta__foto" :src="fotoCatalogo(p)" :alt="p.nombre" loading="lazy">
+              <span class="tarjeta__nombre">{{ p.nombre }}</span>
+              <span class="tarjeta__precio">{{ p.precio > 0 ? pesos(p.precio) : 'Consultar' }}</span>
+            </a>
+          </li>
+        </ul>
+        <button v-if="catalogo.length > catalogoVisible.length" class="btn btn-secundario catalogo__mas"
+          @click="verTodo = true">
+          Ver los {{ catalogo.length }} productos
+        </button>
+      </section>
+
       <!-- ============ Cómo pedir ============ -->
       <section class="seccion pedir" aria-labelledby="t-pedir">
         <div class="pedir-interior">
@@ -303,6 +327,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import { CONTACTO as c } from '../contacto'
+import { imagenesService } from '@/features/inventario/services/imagenes.service'
 
 const store = useStore()
 const autenticado = computed(() => store.getters['auth/isAuthenticated'])
@@ -324,6 +349,29 @@ const pasos = [
   { titulo: 'Elige', texto: 'Te enviamos fotos de opciones con su precio.' },
   { titulo: 'Recibe', texto: 'Lo retiras en el local o lo despachamos a la dirección que nos indiques.' }
 ]
+
+/* ---------------- Catálogo ----------------
+ * Lo pide sin sesión. Si falla o viene vacío la sección no se muestra: la
+ * landing funciona igual sin catálogo.
+ */
+const LIMITE_CATALOGO = 8
+const catalogo = ref([])
+const verTodo = ref(false)
+const catalogoVisible = computed(() =>
+  verTodo.value ? catalogo.value : catalogo.value.slice(0, LIMITE_CATALOGO))
+
+const fotoCatalogo = (p) => imagenesService.url(p.id, p.version)
+const enlacePedido = (p) =>
+  `https://wa.me/${c.whatsapp}?text=${encodeURIComponent(`Hola, me interesa: ${p.nombre}`)}`
+const pesos = (n) => '$' + Math.round(n).toLocaleString('es-CL')
+
+async function cargarCatalogo () {
+  try {
+    catalogo.value = (await imagenesService.catalogo()) || []
+  } catch {
+    catalogo.value = []
+  }
+}
 
 /* ---------------- Enredaderas ----------------
  * El trazado depende del alto real de cada sección (cambia con el ancho,
@@ -685,6 +733,7 @@ const reconstruir = () => {
 }
 
 onMounted(() => {
+  cargarCatalogo()
   /* En coordenadas del dibujo: no depende del ancho, se calcula una vez */
   armarRamaMovil()
   medirAlcance()
@@ -1017,6 +1066,43 @@ h3 {
   border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
 }
 .lista-servicios p { margin-top: 6px; max-width: var(--medida); color: var(--tallo-suave); }
+
+/* Catálogo: dos columnas en el teléfono, cuatro en escritorio */
+.catalogo { padding-top: 0; }
+.catalogo__bajada { margin: -16px 0 24px; max-width: var(--medida); color: var(--tallo-suave); }
+.catalogo__grilla {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+.tarjeta__foto {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--hoja) 60%, transparent);
+  margin-bottom: 6px;
+  transition: transform .2s ease;
+}
+.tarjeta:hover .tarjeta__foto { transform: scale(1.02); }
+.tarjeta__nombre { font-weight: 600; line-height: 1.3; }
+.tarjeta__precio { color: var(--fucsia); font-weight: 700; }
+.catalogo__mas { margin-top: 24px; }
+
+@media (min-width: 720px) {
+  .catalogo__grilla { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tarjeta__foto { transition: none; }
+}
 
 /* Cómo pedir: la única banda oscura */
 .pedir {

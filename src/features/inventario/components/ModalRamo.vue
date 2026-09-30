@@ -34,6 +34,14 @@
 
         <p class="paso-pista">{{ pasos[paso].pista }}</p>
 
+        <!-- La foto es parte del paso del nombre, pero va fuera de la cadena
+             con v-show: si se desmontara al cambiar de paso, se perdería la
+             foto elegida antes de guardar. -->
+        <div v-show="pasos[paso].clave === 'identidad'" class="grupo">
+          <label>Foto</label>
+          <CampoFoto ref="campoFoto" :producto-id="f.id" :emoji="f.emoji" />
+        </div>
+
         <!-- ═══════════ 1 · Qué lleva ═══════════ -->
         <template v-if="pasos[paso].clave === 'receta'">
           <div class="buscador">
@@ -315,6 +323,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useStore } from 'vuex'
 import { productosService } from '@/features/inventario/services/productos.service'
+import CampoFoto from '@/shared/components/CampoFoto.vue'
 
 /* Los tres márgenes habituales en el rubro. El de abajo es el mínimo
    defendible; el de arriba, lo que se cobra en un arreglo con trabajo. */
@@ -325,6 +334,7 @@ const EMOJIS = ['💐', '🌹', '🌷', '🌺', '🌿', '🧺', '🎀', '🎁']
 
 export default {
   name: 'ModalRamo',
+  components: { CampoFoto },
   props: {
     /* null = nuevo. Con producto = edición de un ramo existente. */
     producto: { type: Object, default: null }
@@ -334,11 +344,11 @@ export default {
   setup (props, { emit }) {
     const store = useStore()
 
-    const esNuevo = computed(() => !props.producto?.id)
     const error = ref('')
     const guardando = ref(false)
     const cargandoComponentes = ref(true)
     const confirmarSalida = ref(false)
+    const campoFoto = ref(null)
 
     const cuerpo = ref(null)
     const campoBusqueda = ref(null)
@@ -356,6 +366,10 @@ export default {
       precio: props.producto?.precio ?? 0,
       minimo: props.producto?.minimo ?? 0
     })
+
+    /* Sale de f y no de props: si el ramo se creó pero la foto no subió, el
+       modal pasa a edición en vez de ofrecer crearlo de nuevo. */
+    const esNuevo = computed(() => !f.id)
 
     /* ---------------- Receta ---------------- */
     const receta = ref([])
@@ -572,7 +586,8 @@ export default {
       f,
       receta: receta.value.map(l => [l.componenteId, cantDe(l)])
     })
-    const sucio = () => sello.value !== '' && foto() !== sello.value
+    const sucio = () =>
+      (sello.value !== '' && foto() !== sello.value) || !!campoFoto.value?.cambiada
 
     const intentarCerrar = () => {
       if (guardando.value) return
@@ -632,6 +647,20 @@ export default {
             cantidad: cantDe(l)
           }))
         })
+
+        /* Ficha y receta ya quedaron guardadas. Si la foto falla no se
+           pierde nada: el modal queda abierto, en edición, para reintentar. */
+        try {
+          await campoFoto.value?.aplicar(p.id)
+        } catch (e) {
+          if (esNuevo.value) {
+            f.id = p.id
+            f.codigo = p.codigo || f.codigo
+            paso.value = Math.max(0, pasos.value.findIndex(x => x.clave === 'identidad'))
+          }
+          error.value = `El ramo quedó guardado, pero la foto no se pudo subir: ${e.message}`
+          return
+        }
 
         emit('guardado', p)
       } catch (e) {
@@ -700,7 +729,7 @@ export default {
     return {
       MARGENES, EMOJIS,
       esNuevo, f, error, guardando, cargandoComponentes, categorias,
-      cuerpo, campoBusqueda, campoPrecio, campoNombre,
+      cuerpo, campoBusqueda, campoPrecio, campoNombre, campoFoto,
       receta, busqueda, sugerencias, costoReceta, agregar, cambiar, normalizar, cantDe,
       valorSuelto, pierdeArmando,
       pasos, paso, puedeIr, irA, siguiente, atras,

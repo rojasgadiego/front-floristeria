@@ -81,7 +81,8 @@
                   @click="alternar(p.id)"
                 >
                   <span class="chevron" :class="{ girado: abiertoId === p.id }" aria-hidden="true">›</span>
-                  <span class="emoji" aria-hidden="true">{{ p.emoji }}</span>
+                  <img v-if="urlFoto(p.id)" class="miniatura" :src="urlFoto(p.id)" alt="" loading="lazy">
+                  <span v-else class="emoji" aria-hidden="true">{{ p.emoji }}</span>
                   <span class="nombre">{{ p.nombre }}</span>
 
                   <template v-if="!esMovil">
@@ -309,6 +310,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useStore } from 'vuex'
 import DetalleProducto from './DetalleProducto.vue'
+import { useFotosProducto } from '@/shared/composables/useFotosProducto'
 import DetalleMostrador from './DetalleMostrador.vue'
 
 /* El mismo valor que el @media del bloque de abajo. */
@@ -407,7 +409,10 @@ export default {
     let mql = null
     const alCambiarAncho = (e) => { esMovil.value = e.matches }
 
+    const { cargar: cargarFotos, urlFoto } = useFotosProducto()
+
     onMounted(() => {
+      cargarFotos()
       mql = window.matchMedia(MOVIL)
       esMovil.value = mql.matches
       mql.addEventListener('change', alCambiarAncho)
@@ -495,7 +500,7 @@ export default {
     const clp = (n) => fmt.format(Math.round(n || 0))
 
     return {
-      Math,
+      Math, urlFoto,
       esAdmin, esBodega, esVenta, puede, col, columnas,
       busqueda, esMovil, abiertoId, alternar,
       pagina, totalPaginas, mensajeVacio,
@@ -1043,6 +1048,17 @@ tr.inactiva {
     font-size: 1.1rem;
     line-height: 1;
     flex-shrink: 0;
+}
+
+/* Del ancho del emoji con su aire: la columna de nombres no se corre
+   entre filas con foto y sin foto. */
+.cab .miniatura {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--surface-2);
 }
 
 .nombre {

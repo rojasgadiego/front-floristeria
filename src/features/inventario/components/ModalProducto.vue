@@ -35,6 +35,14 @@
 
         <p class="paso-pista">{{ pasos[paso].pista }}</p>
 
+        <!-- La foto es parte de "Qué es", pero va fuera de la cadena de pasos
+             con v-show: si se desmontara al avanzar, se perdería la foto
+             elegida antes de guardar. -->
+        <div v-show="pasos[paso].clave === 'identidad'" class="grupo">
+          <label>Foto</label>
+          <CampoFoto ref="campoFoto" :producto-id="f.id" :emoji="f.emoji" />
+        </div>
+
         <!-- ═══════════ 1 · Identidad ═══════════ -->
         <template v-if="pasos[paso].clave === 'identidad'">
           <div class="grupo">
@@ -331,6 +339,7 @@
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useStore } from 'vuex'
+import CampoFoto from '@/shared/components/CampoFoto.vue'
 
 /* Los tres márgenes habituales en el rubro. El de abajo es el mínimo
    defendible; el de arriba, lo que se cobra cuando hay poca competencia. */
@@ -341,6 +350,7 @@ const EMOJIS = ['🌹', '🌷', '🌻', '💐', '🌸', '🪴', '🎀', '💌']
 
 export default {
   name: 'ModalProducto',
+  components: { CampoFoto },
   props: {
     /* null = nuevo. Con producto = edición.
        Solo maneja productos SIMPLES: los armados tienen su propio flujo en
@@ -352,13 +362,13 @@ export default {
   setup (props, { emit }) {
     const store = useStore()
 
-    const esNuevo = computed(() => !props.producto?.id)
     const error = ref('')
     const guardando = ref(false)
     const campoNombre = ref(null)
     const cuerpo = ref(null)
     const verAlternativos = ref(false)
     const confirmarSalida = ref(false)
+    const campoFoto = ref(null)
 
     const categorias = computed(() => store.getters['inventario/categorias'])
 
@@ -378,12 +388,16 @@ export default {
       diasVida: props.producto?.diasVida ?? null
     })
 
+    /* Sale de f y no de props: si el producto se creó pero la foto no subió,
+       el modal pasa a edición en vez de ofrecer crearlo de nuevo. */
+    const esNuevo = computed(() => !f.id)
+
     /* Si el producto ya tiene alguno, el bloque arranca abierto: esconder un
        dato que existe hace que parezca que se perdió. */
     if (f.precioRamo || f.precioLiquidacion) verAlternativos.value = true
 
     const sello = JSON.stringify(f)
-    const sucio = () => JSON.stringify(f) !== sello
+    const sucio = () => JSON.stringify(f) !== sello || !!campoFoto.value?.cambiada
 
     /* ---------------- Pasos ---------------- */
     /* Al crear son cuatro; al editar, tres pestañas: no hay código que
@@ -569,6 +583,20 @@ export default {
           })
           : await store.dispatch('productos/actualizar', { id: f.id, ...datos })
 
+        /* La ficha ya quedó guardada. Si la foto falla no se pierde nada:
+           el modal queda abierto, en edición, para reintentar. */
+        try {
+          await campoFoto.value?.aplicar(p.id)
+        } catch (e) {
+          if (esNuevo.value) {
+            paso.value = 0
+            f.id = p.id
+            f.codigo = p.codigo || f.codigo
+          }
+          error.value = `El producto quedó guardado, pero la foto no se pudo subir: ${e.message}`
+          return
+        }
+
         emit('guardado', p)
       } catch (e) {
         /* El mensaje viene del RAISE: "Ya existe un producto con el código
@@ -597,7 +625,7 @@ export default {
 
     return {
       MARGENES, EMOJIS,
-      esNuevo, f, error, guardando, campoNombre, cuerpo, categorias, verAlternativos,
+      esNuevo, f, error, guardando, campoNombre, cuerpo, campoFoto, categorias, verAlternativos,
       pasos, paso, puedeIr, irA, siguiente, atras,
       precioPara, margen, margenMalo, margenBueno, nAlternativos, nombreCategoria,
       codigoSugerido, confirmarSalida, intentarCerrar,
