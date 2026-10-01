@@ -174,7 +174,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { MEDIOS_PAGO } from '@/features/ventas/store/ventas.module'
 
