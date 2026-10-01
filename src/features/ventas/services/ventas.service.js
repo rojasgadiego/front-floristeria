@@ -79,5 +79,13 @@ export const ventasService = {
    */
   anular (id, motivo) {
     return pedir(http.post(`${RUTA}/${id}/anular`, { motivo }))
+  },
+
+  /**
+   * Genera un código de 6 dígitos y lo envía por correo al administrador.
+   * El vendedor ingresa el código recibido para autorizar el descuento.
+   */
+  solicitarCodigoDescuento (descuento) {
+    return pedir(http.post(`${RUTA}/solicitar-codigo-descuento`, { descuento }))
   }
 }

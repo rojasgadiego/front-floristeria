@@ -250,6 +250,10 @@ export default {
       commit('SET_DESCUENTO', Math.max(0, Math.round(monto || 0)))
     },
 
+    async solicitarCodigoDescuento (_, descuento) {
+      await ventasService.solicitarCodigoDescuento(descuento)
+    },
+
     canjearPuntos ({ commit }, puntos) {
       commit('SET_PUNTOS', Math.max(0, Math.round(puntos || 0)))
     },
@@ -305,11 +309,10 @@ export default {
      * Cobra. Lo que viaja son partidas, productos y cantidades: los montos
      * los arma el servidor leyendo los precios de la base.
      *
-     * `autorizacion` solo se manda si el descuento supera el umbral
-     * (configuracion.venta.descuentoSinAutorizacion). La API verifica el
-     * correo y la clave contra la base y exige que sea una administradora.
+     * `autorizacion` solo se manda si el descuento supera el umbral.
+     * Lleva el código de 6 dígitos que el admin recibió por correo.
      */
-    async cobrar ({ state, commit, dispatch }, { medioPago, recibido = null, autorizacion = null }) {
+    async cobrar ({ state, commit, dispatch }, { medioPago, recibido = null, autorizacion = null, esDespacho = false, direccionDespacho = null }) {
       commit('SET_COBRANDO', true)
       commit('SET_ERROR', null)
 
@@ -330,7 +333,9 @@ export default {
           recibido: medioPago === 'efectivo' ? recibido : null,
           descuentoManual: state.descuentoManual,
           puntosCanjeados: state.puntosACanjear,
-          autorizacion
+          autorizacion,
+          esDespacho,
+          direccionDespacho: esDespacho ? direccionDespacho : null
         })
 
         commit('SET_ULTIMA', venta)

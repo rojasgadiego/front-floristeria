@@ -74,36 +74,58 @@
         </div>
 
         <!-- ================= Descuento manual ================= -->
-        <!-- <div class="grupo">
+        <div class="grupo">
           <div class="seccion-cab">
-            <label for="c-desc">Descuento a mano</label>
-            <span class="mini suave">
-              hasta {{ clp(umbral) }} sin autorización
-            </span>
+            <label for="c-desc">Descuento</label>
+            <span class="mini suave">hasta {{ clp(umbral) }} sin código</span>
           </div>
           <input id="c-desc" class="campo dato" type="number" min="0" step="500"
-            v-model.number="descuento">
-
-          <input v-if="descuento > 0" class="campo motivo" v-model="motivo" maxlength="200"
-            placeholder="Motivo del descuento">
+            v-model.number="descuento" @input="codigoEnviado = false; codigoAuth = ''">
 
           <div v-if="necesitaAutorizacion" class="autorizacion">
             <div class="auth-cab">
               <span aria-hidden="true">🔐</span>
               <b>Este descuento necesita autorización</b>
             </div>
-            <p class="ayuda">
-              Pídele a una administradora que ingrese sus credenciales. Se
-              verifican en el servidor y quedan registradas en la boleta.
-            </p>
-            <div class="rejilla">
-              <input class="campo" type="email" v-model="auth.email" placeholder="Correo"
-                autocomplete="off">
-              <input class="campo" type="password" v-model="auth.password" placeholder="Contraseña"
-                autocomplete="off" @keyup.enter="cobrar">
-            </div>
+            <template v-if="!codigoEnviado">
+              <p class="ayuda">
+                Se enviará un código al administrador por correo.
+                Cuando lo reciba, te lo dicta y lo ingresas acá.
+              </p>
+              <button class="btn btn-linea ancho" :disabled="enviandoCodigo" @click="solicitarCodigo">
+                <span v-if="enviandoCodigo" class="spinner" aria-hidden="true"></span>
+                {{ enviandoCodigo ? 'Enviando…' : 'Enviar código al administrador' }}
+              </button>
+            </template>
+            <template v-else>
+              <p class="ayuda">Código enviado. Ingresa el código que el administrador te dicte:</p>
+              <div class="fila-codigo">
+                <input class="campo dato codigo-input" type="text" maxlength="6"
+                  v-model="codigoAuth" placeholder="000000"
+                  autocomplete="off" spellcheck="false" @keyup.enter="cobrar">
+                <button class="btn btn-linea btn-mini" @click="codigoEnviado = false">
+                  Reenviar
+                </button>
+              </div>
+            </template>
           </div>
-        </div> -->
+        </div>
+
+        <!-- ================= Despacho a domicilio ================= -->
+        <div class="grupo">
+          <div class="seccion-cab">
+            <label>Despacho a domicilio</label>
+          </div>
+          <div class="fila-toggle">
+            <button type="button" class="toggle" :class="{ on: esDespacho }" @click="esDespacho = !esDespacho"
+              :aria-pressed="esDespacho">
+              <span class="toggle-thumb"></span>
+            </button>
+            <span class="mini">{{ esDespacho ? 'Sí, es despacho' : 'No, retira en tienda' }}</span>
+          </div>
+          <input v-if="esDespacho" class="campo motivo" v-model="direccionDespacho"
+            maxlength="300" placeholder="Dirección de entrega" />
+        </div>
 
         <!-- ================= Totales ================= -->
         <div class="totales">
@@ -187,8 +209,11 @@ export default {
     const recibido = ref(null)
     const puntos = ref(0)
     const descuento = ref(0)
-    const motivo = ref('')
-    const auth = reactive({ email: '', password: '' })
+    const codigoEnviado = ref(false)
+    const codigoAuth = ref('')
+    const enviandoCodigo = ref(false)
+    const esDespacho = ref(false)
+    const direccionDespacho = ref('')
     const error = ref('')
     const campoRecibido = ref(null)
 
@@ -239,8 +264,8 @@ export default {
     const puedeCobrar = computed(() => {
       if (!carrito.value.length) return false
       if (medioPago.value === 'efectivo' && recibido.value != null && vuelto.value < 0) return false
-      if (descuento.value > 0 && !motivo.value.trim()) return false
-      if (necesitaAutorizacion.value && (!auth.email || !auth.password)) return false
+      if (necesitaAutorizacion.value && codigoAuth.value.trim().length !== 6) return false
+      if (esDespacho.value && !direccionDespacho.value.trim()) return false
       if (puntos.value > 0 && puntos.value < canjeMinimo.value) return false
       return true
     })
@@ -250,15 +275,26 @@ export default {
       if (valor !== 'efectivo') recibido.value = null
     }
 
+    /* ---------------- Solicitar código ---------------- */
+    const solicitarCodigo = async () => {
+      if (enviandoCodigo.value) return
+      enviandoCodigo.value = true
+      error.value = ''
+      try {
+        await store.dispatch('ventas/solicitarCodigoDescuento', descuento.value)
+        codigoEnviado.value = true
+      } catch (e) {
+        error.value = e.message
+      } finally {
+        enviandoCodigo.value = false
+      }
+    }
+
     /* ---------------- Cobrar ---------------- */
     const cobrar = async () => {
       if (!puedeCobrar.value || cobrando.value) return
       error.value = ''
 
-      /* El motivo se pide en pantalla pero la API no lo guarda: `ventas` no
-         tiene columna para él. Queda como control de la persona que cobra
-         —tener que escribirlo hace pensar dos veces— y si algún día se
-         quiere auditar, hay que agregar la columna. */
       store.dispatch('ventas/aplicarDescuento', descuento.value || 0)
       store.dispatch('ventas/canjearPuntos', puntos.value || 0)
 
@@ -267,16 +303,15 @@ export default {
           medioPago: medioPago.value,
           recibido: medioPago.value === 'efectivo' ? recibido.value : null,
           autorizacion: necesitaAutorizacion.value
-            ? { email: auth.email.trim(), password: auth.password }
-            : null
+            ? { codigo: codigoAuth.value.trim().toUpperCase() }
+            : null,
+          esDespacho: esDespacho.value,
+          direccionDespacho: esDespacho.value ? direccionDespacho.value.trim() : null
         })
         emit('cobrada', venta)
       } catch (e) {
-        /* Los mensajes vienen redactados desde el servidor: credenciales
-           que no son de una administradora, partida sin stock, caja
-           cerrada. Se muestran tal cual. */
         error.value = e.message
-        auth.password = ''
+        codigoAuth.value = ''
       }
     }
 
@@ -293,10 +328,11 @@ export default {
       MEDIOS_PAGO,
       carrito, unidades, bruto, descuentoPromo, abonoPrevio, promocionElegida, cliente, cobrando,
       valorPunto, clubActivo, canjeMinimo, umbral, primerNombre,
-      medioPago, recibido, puntos, descuento, motivo, auth, error, campoRecibido,
+      medioPago, recibido, puntos, descuento, codigoEnviado, codigoAuth, enviandoCodigo,
+      esDespacho, direccionDespacho, error, campoRecibido,
       maxCanjeable, descuentoCanje, totalEstimado, vuelto, faltaEfectivo,
       billetesUtiles, necesitaAutorizacion, puedeCobrar,
-      elegirMedio, cobrar, clp
+      elegirMedio, solicitarCodigo, cobrar, clp
     }
   }
 }
@@ -524,6 +560,63 @@ label {
 }
 
 .fila-canje .campo { flex: 1; }
+
+/* ---------- Código de descuento ---------- */
+
+.fila-codigo {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 9px;
+}
+
+.fila-codigo .campo { flex: 1; }
+
+.codigo-input {
+  text-align: center;
+  font-size: 1.4rem !important;
+  font-weight: 700;
+  letter-spacing: .25em;
+}
+
+.ancho { width: 100%; margin-top: 10px; }
+
+/* ---------- Despacho ---------- */
+
+.fila-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border: none;
+  border-radius: 13px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background-color var(--t-med);
+  flex-shrink: 0;
+}
+
+.toggle.on { background: var(--accent); }
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  transition: transform var(--t-med);
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+
+.toggle.on .toggle-thumb { transform: translateX(18px); }
 
 /* ---------- Autorización ---------- */
 
