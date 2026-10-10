@@ -35,8 +35,8 @@ const ICONO_LOTES = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
    Esto es sólo la vista: quien corta de verdad es el guard de ruta. */
 const ACCESO = {
   admin:  ['bodega', 'venta', 'movimientos', 'lotes', 'conteo'],
-  bodega: ['bodega', 'venta', 'lotes'],
-  vendedor:  ['venta']
+  bodega: ['bodega', 'venta', 'lotes', 'conteo'],
+  vendedor:  ['venta', 'conteo']
 }
 
 export default {
@@ -120,7 +120,7 @@ export default {
         titulo: 'Conteo de stock',
         icono: ICONO_CONTEO,
         color: 'secundario',
-        dato: 'Cuadrar bodega con lo que hay'
+        dato: esAdmin.value ? 'Contar y ver el historial' : 'Cuadrar con lo que hay'
       }
     ])
 

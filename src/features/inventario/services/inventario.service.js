@@ -57,22 +57,32 @@ export const inventarioService = {
         return pedir(http.post(`${RUTA}/categorias`, { nombre, orden }))
     },
 
-    /* ---------------- Conteo de stock (solo admin) ---------------- */
+    /* ---------------- Conteo de stock ---------------- */
 
     /**
-     * La planilla para contar la bodega: una fila por producto sin lotes y
-     * una por balde activo de los que se manejan por lotes.
+     * La planilla para contar. Bodega: productos sin lotes, flores balde por
+     * balde y flores sin balde. Vitrina: partidas del mostrador y ramos
+     * armados. La vendedora solo puede pedir la vitrina.
      */
-    planillaConteo({ categoriaId = null } = {}, { signal } = {}) {
-        return pedir(http.get(`${RUTA}/conteo`, { params: limpiar({ categoriaId }), signal }))
+    planillaConteo({ ubicacion = 'bodega', categoriaId = null } = {}, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/conteo`, { params: limpiar({ ubicacion, categoriaId }), signal }))
     },
 
     /**
-     * Ajusta la bodega a lo contado: [{ productoId, loteId, contado }].
-     * La diferencia la calcula la base contra el stock del momento. Los
-     * faltantes quedan como merma "Faltante en conteo". Todo o nada.
+     * Ajusta a lo contado: [{ productoId, loteId, partidaId, contado }]. La
+     * diferencia la calcula la base contra el stock del momento; los
+     * faltantes quedan como merma. Devuelve el conteo con su detalle.
      */
-    aplicarConteo({ detalle = null, items }) {
-        return pedir(http.post(`${RUTA}/conteo`, { detalle, items }))
+    aplicarConteo({ ubicacion, detalle = null, items, autorizacion = null }) {
+        return pedir(http.post(`${RUTA}/conteo`, { ubicacion, detalle, items, autorizacion }))
+    },
+
+    /** Historial (solo admin): quién contó, cuándo, dónde y cuánto cambió. */
+    conteos({ signal } = {}) {
+        return pedir(http.get(`${RUTA}/conteos`, { signal }))
+    },
+
+    detalleConteo(id, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/conteos/${id}`, { signal }))
     }
 }
