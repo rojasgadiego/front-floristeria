@@ -233,14 +233,29 @@ export default {
             return state.filtro
         },
 
-        async registrar({ commit, dispatch }, peticion) {
+        /**
+         * Registra un reporte (puntual o incidente) con sus fotos. Devuelve
+         * { reporteId, mermas, valor, fotoRepetida, deshacibleHasta }.
+         */
+        async registrarReporte({ commit, dispatch }, peticion) {
             commit('SET_GUARDANDO', true)
             try {
-                const merma = await mermasService.registrar(peticion)
+                const r = await mermasService.registrarReporte(peticion)
                 /* El resumen es del servidor: recalcularlo a mano sería adivinar
                    cómo reparte costo perdido, recuperado y desvalorizado. */
                 await Promise.all([dispatch('cargar'), dispatch('cargarResumen')])
-                return merma
+                return r
+            } finally {
+                commit('SET_GUARDANDO', false)
+            }
+        },
+
+        /** Solo quien lo registró, dentro de 10 minutos. */
+        async deshacer({ commit, dispatch }, reporteId) {
+            commit('SET_GUARDANDO', true)
+            try {
+                await mermasService.deshacer(reporteId)
+                await Promise.all([dispatch('cargar'), dispatch('cargarResumen')])
             } finally {
                 commit('SET_GUARDANDO', false)
             }
@@ -268,23 +283,6 @@ export default {
          * registro de pérdida, y dentro de seis meses alguien va a querer saber
          * por qué.
          */
-        async revertir({ commit, dispatch }, { id, motivo }) {
-            const limpio = (motivo || '').trim()
-            if (limpio.length < 5) {
-                throw new Error('Explica por qué se revierte, con al menos 5 caracteres.')
-            }
-
-            commit('SET_GUARDANDO', true)
-            try {
-                const merma = await mermasService.revertir(id, limpio)
-                commit('UPSERT', merma)
-                await dispatch('cargarResumen')
-                return merma
-            } finally {
-                commit('SET_GUARDANDO', false)
-            }
-        },
-
         /* ---------------- Desarme ---------------- */
 
         async cargarPlanDesarme({ commit }, { productoId, cantidad = 1, signal } = {}) {

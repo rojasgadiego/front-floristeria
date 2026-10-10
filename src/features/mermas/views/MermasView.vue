@@ -29,6 +29,16 @@
       <button class="btn btn-mini" @click="recargar">Reintentar</button>
     </div>
 
+    <!-- Recién registrada: se puede deshacer durante 10 minutos. Pasado eso
+         queda; lo que esté mal se corrige con un conteo de stock. -->
+    <div v-if="ultimo && restante > 0" class="banda banda-deshacer" role="status">
+      <span aria-hidden="true">✅</span>
+      <span>{{ ultimo.texto }}</span>
+      <button class="btn btn-linea btn-mini" :disabled="guardando" @click="deshacerReporte(ultimo.reporteId)">
+        Deshacer · {{ reloj(restante) }}
+      </button>
+    </div>
+
     <!-- ═══════════════ REGISTRO ═══════════════ -->
     <template v-if="pestana === 'registro'">
 
@@ -125,7 +135,7 @@
           <label class="check" :class="{ on: filtro.revertida === null }">
             <input type="checkbox" :checked="filtro.revertida === null"
               @change="filtrar({ revertida: $event.target.checked ? null : false, pagina: 1 })">
-            <span>Con revertidas</span>
+            <span>Con deshechas</span>
           </label>
 
           <button v-if="hayFiltro" class="limpiar" @click="limpiarFiltros">Quitar filtros</button>
@@ -213,9 +223,15 @@
               </td>
 
               <td class="acciones-col der">
-                <span v-if="m.revertida" class="etiqueta" :title="m.motivoReversion || ''">revertida</span>
-                <button v-else-if="esAdmin" class="btn-icono" title="Revertir"
-                  @click="abrirReversa(m)">↩</button>
+                <span v-if="m.revertida" class="etiqueta" :title="m.motivoReversion || ''">
+                  {{ m.reporteId ? 'deshecha' : 'revertida' }}
+                </span>
+                <template v-else>
+                  <button v-if="m.fotos" class="btn-icono" :title="`Ver ${m.fotos} foto(s)`"
+                    :aria-label="`Ver fotos de ${m.producto}`" @click="verFotos(m)">📷</button>
+                  <button v-if="puedeDeshacer(m)" class="btn-icono" title="Deshacer"
+                    :aria-label="`Deshacer la merma de ${m.producto}`" @click="deshacerReporte(m.reporteId)">↶</button>
+                </template>
               </td>
             </tr>
           </tbody>
@@ -252,11 +268,14 @@
           </div>
 
           <div v-if="m.revertida" class="t-revertida">
-            Revertida<template v-if="m.motivoReversion"> · {{ m.motivoReversion }}</template>
+            {{ m.reporteId ? 'Deshecha' : 'Revertida' }}<template v-if="m.motivoReversion"> · {{ m.motivoReversion }}</template>
           </div>
-          <button v-else-if="esAdmin" class="btn btn-linea btn-mini" @click="abrirReversa(m)">
-            Revertir
-          </button>
+          <div v-else-if="m.fotos || puedeDeshacer(m)" class="t-acciones">
+            <button v-if="m.fotos" class="btn btn-linea btn-mini" @click="verFotos(m)">📷 {{ m.fotos }} foto(s)</button>
+            <button v-if="puedeDeshacer(m)" class="btn btn-linea btn-mini" @click="deshacerReporte(m.reporteId)">
+              Deshacer
+            </button>
+          </div>
         </article>
       </div>
 
@@ -388,56 +407,33 @@
     </template>
 
     <!-- ═══ Modales ═══ -->
-    <ModalMerma v-if="registrando" @cerrar="registrando = false" @registrada="alRegistrar" />
+    <ReporteMerma v-if="registrando" @cerrar="registrando = false" @registrada="alRegistrar" />
 
-    <div v-if="rev" class="fondo" @click.self="intentarCerrarReversa">
-      <div class="modal angosto" role="dialog" aria-modal="true" aria-labelledby="titulo-reversa">
+    <!-- Las fotos de un reporte. Llegan como Blob: la ruta pide la sesión y
+         un <img src> no manda el token. -->
+    <div v-if="visor" class="fondo" @click.self="cerrarVisor">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="titulo-visor">
         <div class="modal-cab">
-          <h3 id="titulo-reversa">{{ rev.desarmeGrupo ? 'Revertir desarme' : 'Revertir merma' }}</h3>
-          <p>{{ rev.cantidad }} × {{ rev.producto }} · {{ fecha(rev.creadoEn) }}</p>
+          <h3 id="titulo-visor">Evidencia</h3>
+          <p>{{ visor.producto }} · {{ fecha(visor.creadoEn) }} {{ hora(visor.creadoEn) }}
+            <template v-if="visor.usuario"> · {{ visor.usuario }}</template></p>
         </div>
-
         <div class="modal-cuerpo">
-          <div v-if="rev.error" class="error">{{ rev.error }}</div>
-
-          <!-- Un desarme deja una merma por componente: se revierte entero,
-               y el armado vuelve al stock listo. -->
-          <div v-if="rev.desarmeGrupo" class="nota">
-            Esta merma es parte de un desarme: se revierte <b>el desarme completo</b>.
-            El armado vuelve al stock y los lotes recuperados de todos sus
-            componentes se anulan. Si ya se vendió algo de alguno, la reversa
-            no se puede hacer.
-          </div>
-
-          <div v-else class="nota">
-            Las varas vuelven
-            <template v-if="rev.origenCodigo">
-              a <b class="mono">{{ rev.origenCodigo }}</b>
-            </template>
-            <template v-else>al stock</template>
-            con su costo y su vencimiento originales.
-            <template v-if="rev.loteRecuperacion">
-              <br><br>El lote recuperado <b class="mono">{{ rev.loteRecuperacion }}</b> se anula.
-              Si ya se vendió algo de ahí, la reversa no se puede hacer.
-            </template>
-          </div>
-
-          <div class="grupo">
-            <label for="r-motivo">¿Por qué se revierte?</label>
-            <input id="r-motivo" ref="campoMotivo" class="campo" v-model="rev.motivo" maxlength="200"
-              placeholder="Se registró el producto equivocado" @keyup.enter="revertir">
-            <p class="ayuda-campo">
-              Mínimo 5 caracteres. Dentro de seis meses alguien va a querer
-              saber por qué.
-            </p>
+          <div v-if="visor.error" class="error">{{ visor.error }}</div>
+          <div v-else-if="visor.cargando" class="vacio">Cargando fotos…</div>
+          <div v-else class="galeria">
+            <figure v-for="f in visor.fotos" :key="f.id">
+              <img :src="f.url" alt="Foto de la merma">
+              <!-- La misma foto en dos reportes: o un error, o alguien
+                   reusando evidencia. Lo decide quien revisa. -->
+              <figcaption v-if="f.repetida" class="repetida">
+                ⚠️ Esta foto también está en otro reporte
+              </figcaption>
+            </figure>
           </div>
         </div>
-
         <div class="modal-pie">
-          <button class="btn btn-linea" :disabled="guardando" @click="intentarCerrarReversa">Cancelar</button>
-          <button class="btn peligro" :disabled="guardando" @click="revertir">
-            {{ guardando ? 'Revirtiendo…' : 'Revertir' }}
-          </button>
+          <button class="btn btn-linea" @click="cerrarVisor">Cerrar</button>
         </div>
       </div>
     </div>
@@ -447,10 +443,11 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useStore } from 'vuex'
 import { DESTINOS, textoDestino, textoCalidad, textoCategoria } from '@/features/mermas/store/mermas.module'
-import ModalMerma from '@/features/mermas/components/ModalMerma.vue'
+import ReporteMerma from '@/features/mermas/components/ReporteMerma.vue'
+import { mermasService } from '@/features/mermas/services/mermas.service'
 import GestionMotivos from '@/features/mermas/components/GestionMotivos.vue'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 
@@ -481,7 +478,7 @@ const sumarDias = (d, n) => {
 
 export default {
   name: 'MermasView',
-  components: { ModalMerma, GestionMotivos },
+  components: { ReporteMerma, GestionMotivos },
 
   setup () {
     const store = useStore()
@@ -605,12 +602,80 @@ export default {
     /* ---------------- Registrar ---------------- */
     const registrando = ref(false)
 
-    const alRegistrar = (m) => {
+    const DIEZ_MIN = 10 * 60 * 1000
+
+    /* Lo recién registrado, para ofrecer deshacer. El plazo se cuenta con el
+       reloj del teléfono, con un margen: si el del servidor va adelantado,
+       mejor que el botón se apague antes que dé un error. */
+    const ultimo = ref(null)
+    const ahora = ref(Date.now())
+    let tic = null
+
+    const restante = computed(() =>
+      ultimo.value ? Math.max(0, ultimo.value.hasta - ahora.value) : 0
+    )
+
+    const reloj = (ms) => {
+      const s = Math.ceil(ms / 1000)
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+    }
+
+    const alRegistrar = (r) => {
       registrando.value = false
-      avisar(m.cantidadRecuperada
-        ? `${m.cantidadRecuperada} varas recuperadas en ${m.loteRecuperacion}`
-        : `${m.cantidad} de ${m.producto} · ${clp(m.costoPerdido)} de pérdida`)
+      ultimo.value = {
+        reporteId: r.reporteId,
+        hasta: Date.now() + DIEZ_MIN - 15000,
+        texto: r.mermas > 1 ? `Incidente registrado · ${r.mermas} cosas` : 'Merma registrada'
+      }
       store.dispatch('productos/cargar')
+    }
+
+    /* ---------------- Deshacer ---------------- */
+    const miId = computed(() => store.getters['auth/currentUser']?.id)
+
+    /* Solo quien registró, dentro de los 10 minutos. La base lo vuelve a
+       comprobar: esto es para no ofrecer un botón que va a fallar. */
+    const puedeDeshacer = (m) =>
+      !!m.reporteId && !m.revertida && m.usuarioId === miId.value &&
+      ahora.value - new Date(m.creadoEn).getTime() < DIEZ_MIN - 15000
+
+    const deshacerReporte = async (reporteId) => {
+      if (!window.confirm('¿Deshacer esta merma? Todo vuelve a su lugar y las fotos quedan como registro.')) return
+      try {
+        await store.dispatch('mermas/deshacer', reporteId)
+        if (ultimo.value?.reporteId === reporteId) ultimo.value = null
+        avisar('Merma deshecha · todo volvió a su lugar')
+        store.dispatch('productos/cargar')
+      } catch (e) {
+        avisar(e.message, true)
+      }
+    }
+
+    /* ---------------- Fotos ---------------- */
+    const visor = ref(null)
+
+    const verFotos = async (m) => {
+      visor.value = {
+        producto: m.producto, creadoEn: m.creadoEn, usuario: m.usuario,
+        fotos: [], cargando: true, error: ''
+      }
+      try {
+        const lista = await mermasService.evidencias(m.reporteId) || []
+        const fotos = await Promise.all(lista.map(async (e) => ({
+          id: e.id,
+          repetida: e.repetida,
+          url: URL.createObjectURL(await mermasService.evidenciaBlob(e.id))
+        })))
+        if (visor.value) Object.assign(visor.value, { fotos, cargando: false })
+        else fotos.forEach(f => URL.revokeObjectURL(f.url))
+      } catch (e) {
+        if (visor.value) Object.assign(visor.value, { error: e.message, cargando: false })
+      }
+    }
+
+    const cerrarVisor = () => {
+      visor.value?.fotos.forEach(f => URL.revokeObjectURL(f.url))
+      visor.value = null
     }
 
     /* ---------------- Control ---------------- */
@@ -659,61 +724,10 @@ export default {
       return `Mermas por hora del día. El máximo es a las ${pico.hora}:00, con ${pico.registros} registro(s).`
     })
 
-    /* ---------------- Revertir ---------------- */
-    const rev = ref(null)
-    const campoMotivo = ref(null)
-
-    const abrirReversa = async (m) => {
-      rev.value = {
-        id: m.id,
-        producto: m.producto,
-        cantidad: m.cantidad,
-        creadoEn: m.creadoEn,
-        origenCodigo: m.origenCodigo,
-        loteRecuperacion: m.loteRecuperacion,
-        desarmeGrupo: m.desarmeGrupo,
-        motivo: '',
-        error: ''
-      }
-      await nextTick()
-      campoMotivo.value?.focus()
-    }
-
-    /* Un clic al fondo borraba el motivo escrito sin preguntar */
-    const intentarCerrarReversa = () => {
-      if (guardando.value) return
-      if (rev.value?.motivo.trim()) {
-        rev.value.error = 'Toca Cancelar de nuevo para descartar, o completa el motivo.'
-        rev.value.motivo = ''
-        return
-      }
-      rev.value = null
-    }
-
-    const revertir = async () => {
-      const r = rev.value
-      r.error = ''
-
-      /* La ayuda decía "mínimo 5 caracteres" y nada lo comprobaba: la
-         validación quedaba entera en el SP. */
-      if (r.motivo.trim().length < 5) {
-        return (r.error = 'Explica el motivo, con al menos 5 caracteres.')
-      }
-
-      try {
-        await store.dispatch('mermas/revertir', { id: r.id, motivo: r.motivo.trim() })
-        rev.value = null
-        avisar(`${r.cantidad} de ${r.producto} volvieron al inventario`)
-        store.dispatch('productos/cargar')
-      } catch (e) {
-        r.error = e.message
-      }
-    }
-
     /* ---------------- Teclado ---------------- */
     const alTeclado = (e) => {
       if (e.key !== 'Escape') return
-      if (rev.value) intentarCerrarReversa()
+      if (visor.value) cerrarVisor()
     }
 
     /* ---------------- Carga ---------------- */
@@ -733,6 +747,7 @@ export default {
       esMovil.value = mql.matches
       mql.addEventListener('change', alCambiarAncho)
       document.addEventListener('keydown', alTeclado)
+      tic = setInterval(() => { ahora.value = Date.now() }, 1000)
     })
 
     onUnmounted(() => {
@@ -740,6 +755,8 @@ export default {
       clearTimeout(tmr)
       mql?.removeEventListener('change', alCambiarAncho)
       document.removeEventListener('keydown', alTeclado)
+      clearInterval(tic)
+      cerrarVisor()
     })
 
     /* ---------------- Utilidades ---------------- */
@@ -765,10 +782,10 @@ export default {
       motivoPrincipal, mermaAlta, motivosPorCategoria,
       busqueda, filtrar, recargar,
       presetActivo, aplicarPreset, limpiarFiltros,
-      registrando, alRegistrar,
+      registrando, alRegistrar, ultimo, restante, reloj,
+      puedeDeshacer, deshacerReporte, visor, verFotos, cerrarVisor,
       patrones, cargandoPatrones, errorPatrones, alertasControl, claseEscaneo,
       horasCompletas, alturaBarra, resumenHoras,
-      rev, campoMotivo, abrirReversa, intentarCerrarReversa, revertir,
       aviso, clp, fecha, hora
     }
   }
@@ -1767,5 +1784,24 @@ label {
 @media (prefers-reduced-motion: reduce) {
   .btn, .btn-icono, .campo, .buscador, .check, .check input::after,
   .barra-hora, .tabla-envoltura, .tarjetas { transition: none; }
+}
+
+/* ─── Deshacer y fotos ─── */
+.banda-deshacer {
+  background: var(--success-soft);
+  color: var(--success);
+  border-left: 4px solid var(--success);
+}
+
+.t-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+.galeria { display: flex; flex-direction: column; gap: 12px; }
+.galeria figure { margin: 0; }
+.galeria img { width: 100%; border-radius: var(--r-sm); display: block; }
+.galeria .repetida {
+  margin-top: 6px;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--danger);
 }
 </style>

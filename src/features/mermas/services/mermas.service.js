@@ -42,11 +42,29 @@ export const mermasService = {
     },
 
     /**
-     * El costo se congela al registrar: si el proveedor sube el precio la
-     * semana que viene, la pérdida de hoy sigue valiendo lo que valía hoy.
+     * Un reporte: una cosa (puntual) o varias (incidente), con 1 a 3 fotos
+     * en base64. El costo lo pone el sistema y se congela al registrar.
      */
-    registrar(peticion) {
-        return pedir(http.post(RUTA, peticion))
+    registrarReporte(peticion) {
+        return pedir(http.post(`${RUTA}/reportes`, peticion))
+    },
+
+    /** Solo quien lo registró, dentro de 10 minutos. */
+    deshacer(reporteId) {
+        return pedir(http.post(`${RUTA}/reportes/${reporteId}/deshacer`))
+    },
+
+    /** Las fotos de un reporte, sin los bytes. */
+    evidencias(reporteId, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/reportes/${reporteId}/evidencias`, { signal }))
+    },
+
+    /**
+     * La foto como Blob. No va directo en un <img src>: la ruta pide la
+     * sesión, y una etiqueta <img> no manda el token.
+     */
+    evidenciaBlob(id, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/evidencias/${id}`, { responseType: 'blob', signal }))
     },
 
     /**
@@ -63,15 +81,6 @@ export const mermasService = {
         return pedir(http.post(`${RUTA}/lote/${loteId}/descartar`, {
             motivo, detalle, esDevolucionProveedor
         }))
-    },
-
-    /**
-     * Las varas vuelven al lote del que salieron con su costo y su
-     * vencimiento. Si hubo reingreso y esas varas ya se vendieron, la API
-     * rechaza: no hay forma de deshacerlo sin inventar stock.
-     */
-    revertir(id, motivo) {
-        return pedir(http.post(`${RUTA}/${id}/revertir`, { motivo }))
     },
 
     /* ---------------- Desarme ---------------- */
