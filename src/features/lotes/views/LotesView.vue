@@ -249,6 +249,12 @@
                                         <button class="btn btn-linea btn-mini" @click.stop="imprimirUno(l)">
                                             🏷️ Imprimir etiqueta
                                         </button>
+                                        <!-- Lo vencido no se queda en la cámara: se da de baja
+                                             entero, con foto, desde donde se ve. -->
+                                        <button v-if="l.varasDisponibles > 0" class="btn btn-linea btn-mini"
+                                            :class="{ urgente: l.alerta === 'vencido' }" @click.stop="darDeBaja(l)">
+                                            🗑️ Dar de baja
+                                        </button>
                                     </div>
                                 </template>
                             </div>
@@ -329,6 +335,10 @@
     </div>
 
     <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+
+    <!-- Dar de baja: una merma puntual con el balde entero, con foto. -->
+    <ReporteMerma v-if="baja" :inicial="baja.lineas" :motivo-inicial="baja.motivo"
+        @cerrar="baja = null" @registrada="alDarDeBaja" />
 </template>
 
 <script>
@@ -338,6 +348,7 @@ import { useRouter } from 'vue-router'
 import { useTemporizadores } from '@/shared/composables/useTemporizadores'
 import { claseAlerta, textoAlerta } from '@/features/lotes/store/lotes.module'
 import EncabezadoSeccion from '@/shared/components/EncabezadoSeccion.vue'
+import ReporteMerma from '@/features/mermas/components/ReporteMerma.vue'
 
 const FILTRO_ALERTA = [
     { valor: null, texto: 'Todos' },
@@ -349,7 +360,7 @@ const FILTRO_ALERTA = [
 
 export default {
     name: 'LotesView',
-    components: { EncabezadoSeccion },
+    components: { EncabezadoSeccion, ReporteMerma },
 
     setup() {
         const store = useStore()
@@ -407,6 +418,31 @@ export default {
         })
 
         const recargar = () => store.dispatch('lotes/cargar')
+
+        /* ---------- Dar de baja ----------
+           Es una merma puntual con todo lo que queda del balde. Vencido, se
+           propone "No se alcanzó a vender": casi siempre es sobrecompra, no
+           un accidente, y separarlo es lo que dice si se compra de más. */
+        const baja = ref(null)
+
+        const darDeBaja = (l) => {
+            baja.value = {
+                motivo: l.alerta === 'vencido' ? 'No se alcanzó a vender' : '',
+                lineas: [{
+                    productoId: l.productoId, producto: l.producto, emoji: l.emoji,
+                    origen: 'lote', loteId: l.id, partidaId: null, codigo: l.codigo,
+                    disponible: l.varasDisponibles, cantidad: l.varasDisponibles,
+                    costoUnitario: Number(l.costoPorVara) || 0,
+                    precio: l.precioUnitario ?? l.precioVenta,
+                    controlaLotes: true, tipo: 'simple', escaneado: false
+                }]
+            }
+        }
+
+        const alDarDeBaja = () => {
+            baja.value = null
+            recargar()
+        }
         const filtrar = (cambios) => store.dispatch('lotes/filtrar', cambios)
 
         const busqueda = ref(filtro.value.buscar || '')
@@ -544,6 +580,7 @@ export default {
             modoSeleccion, seleccionados, clicFila, activarSeleccion, salirSeleccion,
             alternarUno, todosMarcados, alternarTodos, imprimirSeleccion, imprimirUno,
             modal, cerrarModal, abrirUbicacion, guardarUbicacion,
+            baja, darDeBaja, alDarDeBaja,
             aviso, clp, fecha, fechaHora
         }
     }
@@ -1820,5 +1857,11 @@ label {
     .tabla-envoltura.atenuada {
         opacity: 1;
     }
+}
+
+/* Un balde vencido pide que se dé de baja: el botón lo dice. */
+.btn.urgente {
+    border-color: var(--danger);
+    color: var(--danger);
 }
 </style>

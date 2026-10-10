@@ -261,12 +261,19 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
 import EscanerCodigo from './EscanerCodigo.vue'
 import { CALIDADES } from '@/features/mermas/store/mermas.module'
 import { lotesService } from '@/features/lotes/services/lotes.service'
-import { reducirImagen } from '@/core/utils/reducirImagen'
+import { useFotos, useCodigoAutorizacion } from '@/features/mermas/composables/useEvidencia'
+
+/* Se abre desde Mermas, el POS o Lotes. Desde Lotes llega con el balde ya
+   puesto ("Dar de baja"), y si está vencido, con el motivo propuesto. */
+const props = defineProps({
+  inicial: { type: Array, default: () => [] },
+  motivoInicial: { type: String, default: '' }
+})
 
 const emit = defineEmits(['cerrar', 'registrada'])
 const store = useStore()
@@ -284,18 +291,12 @@ const tipo = ref('puntual')
 const esIncidente = computed(() => tipo.value === 'incidente')
 
 const lineas = ref([])
-const motivo = ref('')
+const motivo = ref(props.motivoInicial)
 const detalle = ref('')
-const fotos = ref([])
-const procesandoFoto = ref(false)
 
 const escaner = ref(null)
 const modoManual = ref(false)
 const manual = reactive({ productoId: null, loteId: null, lotes: [] })
-
-const codigoEnviado = ref(false)
-const codigoAuth = ref('')
-const enviandoCodigo = ref(false)
 
 let contador = 0
 
@@ -315,7 +316,10 @@ const productosBodega = computed(() =>
   productos.value.filter(p => p.activo && p.tipo !== 'armado' && (p.enBodega ?? 0) > 0)
 )
 
+/* Lo necesita aunque se abra fuera de Mermas (POS, Lotes). */
 onMounted(() => {
+  store.dispatch('mermas/cargarMotivos')
+  store.dispatch('mermas/cargarUmbral')
   if (!productos.value.length) store.dispatch('productos/cargar')
 })
 
@@ -343,6 +347,9 @@ const agregar = (n) => {
 }
 
 const quitar = (l) => { lineas.value = lineas.value.filter(x => x.uid !== l.uid) }
+
+props.inicial.forEach(agregar)
+if (lineas.value.length > 1) tipo.value = 'incidente'
 
 const alEscanear = async ({ codigo, escaneado }) => {
   try {
@@ -448,37 +455,7 @@ const motivoValido = computed(() =>
 )
 
 /* ---------------- Paso 3: fotos ---------------- */
-const aBase64 = (blob) => new Promise((resolve, reject) => {
-  const r = new FileReader()
-  r.onload = () => resolve(String(r.result).split(',')[1])
-  r.onerror = () => reject(new Error('No se pudo leer la foto.'))
-  r.readAsDataURL(blob)
-})
-
-const alTomarFoto = async (e) => {
-  const archivo = e.target.files?.[0]
-  e.target.value = ''
-  if (!archivo) return
-  procesandoFoto.value = true
-  error.value = ''
-  try {
-    /* Reducida a ~200 KB: con datos móviles en el mesón, subir 5 MB por
-       foto es esperar, y en la base pesaría por años. */
-    const blob = await reducirImagen(archivo)
-    fotos.value.push({ url: URL.createObjectURL(blob), base64: await aBase64(blob), tipoMime: 'image/jpeg' })
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    procesandoFoto.value = false
-  }
-}
-
-const quitarFoto = (i) => {
-  URL.revokeObjectURL(fotos.value[i].url)
-  fotos.value.splice(i, 1)
-}
-
-onBeforeUnmount(() => fotos.value.forEach(f => URL.revokeObjectURL(f.url)))
+const { fotos, procesando: procesandoFoto, alTomarFoto, quitarFoto, paraEnviar } = useFotos(error)
 
 /* ---------------- Paso 4: valor y firma ---------------- */
 /* La misma regla que la base (sql/15): a costo; sin costo, a precio. */
@@ -487,20 +464,10 @@ const valorTotal = computed(() => lineas.value.reduce((s, l) => s + valorLinea(l
 const hayValorAPrecio = computed(() => lineas.value.some(l => !(l.costoUnitario > 0)))
 const necesitaAutorizacion = computed(() => !esAdmin.value && valorTotal.value > umbral.value)
 
-const solicitarCodigo = async () => {
-  if (enviandoCodigo.value) return
-  enviandoCodigo.value = true
-  error.value = ''
-  try {
-    await store.dispatch('mermas/solicitarCodigo', Math.round(valorTotal.value))
-    codigoEnviado.value = true
-    codigoAuth.value = ''
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    enviandoCodigo.value = false
-  }
-}
+const {
+  enviado: codigoEnviado, codigo: codigoAuth, enviando: enviandoCodigo,
+  solicitar: solicitarCodigo
+} = useCodigoAutorizacion(store, valorTotal, error)
 
 /* ---------------- Navegación ---------------- */
 const pasoListo = computed(() => ({
@@ -548,7 +515,7 @@ const registrar = async () => {
         codigoEscaneado: l.codigo,
         escaneado: l.escaneado
       })),
-      fotos: fotos.value.map(f => ({ base64: f.base64, tipoMime: f.tipoMime })),
+      fotos: paraEnviar(),
       autorizacion: necesitaAutorizacion.value ? { codigo: codigoAuth.value.trim() } : null
     })
     emit('registrada', r)

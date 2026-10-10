@@ -145,6 +145,12 @@
           @click="$emit('armar', producto)">
           Armar unidades
         </button>
+        <!-- El ramo que no se vendió: se desarma con foto, y lo que sirve
+             vuelve a su stock. -->
+        <button v-if="producto.tipo === 'armado' && (producto.stockListo ?? 0) > 0" class="btn btn-linea btn-mini"
+          @click="$emit('desarmar', producto)">
+          Desarmar
+        </button>
         <button v-if="producto.enBodega > 0" class="btn btn-linea btn-mini"
           @click="$emit('traspasar', producto)">
           Bajar al mostrador
@@ -167,7 +173,7 @@ export default {
     producto: { type: Object, required: true },
     puedeEditar: { type: Boolean, default: false }
   },
-  emits: ['editar', 'armar', 'traspasar'],
+  emits: ['editar', 'armar', 'desarmar', 'traspasar'],
 
   setup (props) {
     const { urlFoto } = useFotosProducto()

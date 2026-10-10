@@ -20,7 +20,7 @@
       </button>
       <button :class="{ on: pestana === 'control' }" @click="irAControl">
         Control
-        <span v-if="alertasControl" class="punto" aria-hidden="true"></span>
+        <span v-if="alertasControl || pendientes.length" class="punto" aria-hidden="true"></span>
       </button>
     </nav>
 
@@ -44,9 +44,15 @@
 
       <!-- El resumen separa lo botado de lo desvalorizado: un ramo
            desarmado con todas sus varas útiles no es una pérdida entera. -->
-      <section v-if="resumen" class="resumen">
+      <!-- Los indicadores de costo son de la administración. La vendedora y
+           bodega vienen a registrar y a ver lo suyo: el botón y la lista. -->
+      <p v-if="!esAdmin" class="pista-rol">
+        Acá están las mermas que registraste. Para una nueva, toca <b>Registrar merma</b>.
+      </p>
+
+      <section v-if="resumen && esAdmin" class="resumen">
         <div class="kpi principal" :class="{ alerta: mermaAlta }">
-          <span class="rot">Se perdió</span>
+          <span class="rot">Pérdida total</span>
           <b class="val">{{ clp(costoPerdido) }}</b>
           <span v-if="porcentajeSobreVentas !== null" class="pie">
             {{ Number(porcentajeSobreVentas).toFixed(1) }}% de lo vendido
@@ -56,25 +62,25 @@
         </div>
 
         <div class="kpi">
-          <span class="rot">Se botó</span>
+          <span class="rot">Botado</span>
           <b class="val">{{ clp(costoBotado) }}</b>
           <span class="pie">{{ unidadesPerdidas }} unidad(es)</span>
         </div>
 
         <div class="kpi">
-          <span class="rot">Bajó de precio</span>
+          <span class="rot">Rebaja por recuperar</span>
           <b class="val">{{ clp(costoDesvalorizado) }}</b>
           <span class="pie">{{ unidadesRecuperadas }} recuperada(s)</span>
         </div>
 
         <div class="kpi bueno">
-          <span class="rot">Sigue valiendo</span>
+          <span class="rot">Recuperado</span>
           <b class="val">{{ clp(costoRecuperado) }}</b>
           <span class="pie">volvió al inventario</span>
         </div>
       </section>
 
-      <div v-if="motivoPrincipal && motivoPrincipal.costoPerdido > 0" class="banda banda-aviso">
+      <div v-if="esAdmin && motivoPrincipal && motivoPrincipal.costoPerdido > 0" class="banda banda-aviso">
         <span aria-hidden="true">💡</span>
         <span>
           Lo que más cuesta es <b>{{ motivoPrincipal.motivo.toLowerCase() }}</b>:
@@ -85,7 +91,7 @@
 
       <!-- Por familia de motivo: separa lo que es de la flor de lo que es
            de cómo se trabaja o de cuánto se compra. -->
-      <div v-if="porCategoria.length" class="categorias" aria-label="Pérdida por categoría">
+      <div v-if="esAdmin && porCategoria.length" class="categorias" aria-label="Pérdida por categoría">
         <span v-for="c in porCategoria" :key="c.categoria" class="cat">
           {{ textoCategoria(c.categoria) }} <b class="dato">{{ clp(c.costoPerdido) }}</b>
         </span>
@@ -290,6 +296,41 @@
 
     <!-- ═══════════════ CONTROL ═══════════════ -->
     <template v-else>
+      <!-- Pedir foto sirve si alguien la mira. Lo que nadie revisó está
+           acá, con lo que hay que mirar marcado. -->
+      <section class="panel revision">
+        <h2>
+          Por revisar
+          <span v-if="pendientes.length" class="globo">{{ pendientes.length }}</span>
+        </h2>
+        <p v-if="!pendientes.length" class="suave">Todo revisado.</p>
+        <article v-for="r in pendientes" :key="r.reporteId" class="pendiente">
+          <div class="pend-cab">
+            <b>{{ r.lineas }}</b>
+            <b class="dato">{{ clp(r.costoPerdido) }}</b>
+          </div>
+          <div class="desglose">
+            {{ textoTipo(r.tipo) }} · {{ r.motivo }}
+            <template v-if="r.detalle"> · {{ r.detalle }}</template>
+          </div>
+          <div class="desglose">
+            {{ r.usuario || '—' }} · {{ fecha(r.creadoEn) }} {{ hora(r.creadoEn) }}
+            <span v-if="r.autorizadoPor" :title="`Firmado: ${r.autorizadoPor}`"> · 🔐</span>
+            <span v-if="r.fotoRepetida" class="marca malo">⚠️ foto repetida</span>
+            <span v-if="r.sinEscanear" class="marca">✎ {{ r.sinEscanear }} sin escanear</span>
+          </div>
+          <div class="pend-acciones">
+            <button v-if="r.fotos" class="btn btn-linea btn-mini"
+              @click="verFotos({ reporteId: r.reporteId, producto: r.lineas, creadoEn: r.creadoEn, usuario: r.usuario })">
+              📷 {{ r.fotos }} foto(s)
+            </button>
+            <button class="btn btn-mini" :disabled="revisando === r.reporteId" @click="marcarRevisado(r)">
+              ✓ Revisado
+            </button>
+          </div>
+        </article>
+      </section>
+
       <div v-if="cargandoPatrones && !patrones" class="vacio">Calculando…</div>
 
       <div v-else-if="errorPatrones" class="banda banda-error">
@@ -686,7 +727,35 @@ export default {
     const irAControl = () => {
       pestana.value = 'control'
       store.dispatch('mermas/cargarPatrones')
+      cargarPendientes()
     }
+
+    /* ---------------- Por revisar ---------------- */
+    const pendientes = ref([])
+    const revisando = ref(null)
+
+    const cargarPendientes = async () => {
+      if (!esAdmin.value) return
+      try {
+        pendientes.value = await mermasService.pendientes() || []
+      } catch (e) {
+        avisar(e.message, true)
+      }
+    }
+
+    const marcarRevisado = async (r) => {
+      revisando.value = r.reporteId
+      try {
+        await mermasService.marcarRevisado(r.reporteId)
+        pendientes.value = pendientes.value.filter(x => x.reporteId !== r.reporteId)
+      } catch (e) {
+        avisar(e.message, true)
+      } finally {
+        revisando.value = null
+      }
+    }
+
+    const textoTipo = (t) => ({ puntual: 'Merma', incidente: 'Incidente', desarme: 'Desarme' }[t] || t)
 
     /* Un punto en la pestaña cuando hay algo que mirar. No dice qué: eso lo
        decide quien entra, no un semáforo. */
@@ -748,6 +817,8 @@ export default {
       mql.addEventListener('change', alCambiarAncho)
       document.addEventListener('keydown', alTeclado)
       tic = setInterval(() => { ahora.value = Date.now() }, 1000)
+      /* El punto de la pestaña Control avisa que hay algo por revisar. */
+      cargarPendientes()
     })
 
     onUnmounted(() => {
@@ -785,6 +856,7 @@ export default {
       registrando, alRegistrar, ultimo, restante, reloj,
       puedeDeshacer, deshacerReporte, visor, verFotos, cerrarVisor,
       patrones, cargandoPatrones, errorPatrones, alertasControl, claseEscaneo,
+      pendientes, revisando, marcarRevisado, textoTipo,
       horasCompletas, alturaBarra, resumenHoras,
       aviso, clp, fecha, hora
     }
@@ -1804,4 +1876,30 @@ label {
   font-weight: 600;
   color: var(--danger);
 }
+
+/* ─── Según el rol y revisión ─── */
+.pista-rol {
+  margin: 0;
+  font-size: .88rem;
+  color: var(--text-muted);
+}
+
+.revision h2 { display: flex; align-items: center; gap: 8px; }
+.globo {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: .75rem;
+  text-align: center;
+}
+.pendiente {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pendiente:last-child { border-bottom: 0; }
+.pend-cab { display: flex; justify-content: space-between; gap: 12px; font-size: .9rem; }
+.pend-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.marca.malo { color: var(--danger); font-weight: 600; }
 </style>

@@ -259,6 +259,7 @@
                   :puede-editar="puede.editar"
                   @editar="$emit('editar', $event)"
                   @armar="$emit('armar', $event)"
+                  @desarmar="$emit('desarmar', $event)"
                   @traspasar="pedirTraspaso($event)"
                 />
 
@@ -331,7 +332,7 @@ export default {
     foco:       { type: String,  default: 'bodega', validator: v => ['bodega', 'venta'].includes(v) }
   },
 
-  emits: ['filtrar', 'recargar', 'editar', 'traspasar', 'retornar', 'armar', 'baja', 'estado'],
+  emits: ['filtrar', 'recargar', 'editar', 'traspasar', 'retornar', 'armar', 'desarmar', 'baja', 'estado'],
 
   setup (props, { emit }) {
     const store = useStore()

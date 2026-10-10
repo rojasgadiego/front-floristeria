@@ -54,6 +54,15 @@ export const mermasService = {
         return pedir(http.post(`${RUTA}/reportes/${reporteId}/deshacer`))
     },
 
+    /** Reportes que la administración todavía no revisa. */
+    pendientes({ signal } = {}) {
+        return pedir(http.get(`${RUTA}/revision`, { signal }))
+    },
+
+    marcarRevisado(reporteId, nota = null) {
+        return pedir(http.post(`${RUTA}/reportes/${reporteId}/revisado`, { nota }))
+    },
+
     /** Las fotos de un reporte, sin los bytes. */
     evidencias(reporteId, { signal } = {}) {
         return pedir(http.get(`${RUTA}/reportes/${reporteId}/evidencias`, { signal }))
@@ -98,9 +107,9 @@ export const mermasService = {
      * necesita `autorizacion` ({ codigo } que la administración recibió por correo),
      * igual que una merma suelta.
      */
-    desarmar(productoId, { cantidad, motivo, detalle = null, lineas, autorizacion = null }) {
+    desarmar(productoId, { cantidad, motivo, detalle = null, lineas, fotos, autorizacion = null }) {
         return pedir(http.post(`${RUTA}/desarme/${productoId}`, {
-            cantidad, motivo, detalle, lineas, autorizacion
+            cantidad, motivo, detalle, lineas, fotos, autorizacion
         }))
     },
 

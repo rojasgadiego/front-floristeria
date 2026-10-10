@@ -12,7 +12,7 @@
              usuario cambia un filtro. Una sola fuente de datos. -->
         <TablaProductos foco="bodega" :items="items" :filtros="filtros" :total="total" :cargando="cargando"
             :error="error" :categorias="categorias" :bajo-minimo="filtros.bajoMinimo" @filtrar="filtrar"
-            @recargar="cargar" @traspasar="abrirTraspaso" @retornar="p => retorno = p" @armar="p => armando = p"
+            @recargar="cargar" @traspasar="abrirTraspaso" @retornar="p => retorno = p" @armar="p => armando = p" @desarmar="p => desarmando = p"
             @editar="abrirEditar" @baja="p => baja = p" @estado="cambiarEstado" />
 
         <!-- Cada acción de la tabla abre su propio modal. Los modales piden
@@ -27,6 +27,7 @@
         <ModalRetorno v-if="retorno" :producto="retorno" @cerrar="retorno = null" @retornado="alRetornar" />
 
         <ModalArmado v-if="armando" :producto="armando" @cerrar="armando = null" @armado="alArmar" />
+        <DesarmeMerma v-if="desarmando" :producto="desarmando" @cerrar="desarmando = null" @desarmado="alDesarmar" />
 
         <ModalBaja v-if="baja" :producto="baja" @cerrar="baja = null" @confirmado="alDarDeBaja" />
 
@@ -46,6 +47,7 @@ import { useRouter } from 'vue-router'
 import TablaProductos from './TablaProductos.vue'
 import EncabezadoSeccion from '@/shared/components/EncabezadoSeccion.vue'
 import ModalArmado from './ModalArmado.vue'
+import DesarmeMerma from '@/features/mermas/components/DesarmeMerma.vue'
 import ModalProducto from './ModalProducto.vue'
 import ModalRamo from './ModalRamo.vue'
 import ModalTraspaso from './modales/ModalTraspaso.vue'
@@ -64,7 +66,7 @@ export default {
     name: 'InventarioBodega',
     components: {
         TablaProductos, EncabezadoSeccion,
-        ModalArmado, ModalProducto, ModalRamo,
+        ModalArmado, DesarmeMerma, ModalProducto, ModalRamo,
         ModalTraspaso, ModalPartida, ModalRetorno, ModalBaja
     },
     setup() {
@@ -122,6 +124,17 @@ export default {
 
         /* ---------------- Armado ---------------- */
         const armando = ref(null)
+
+        /* ---------------- Desarmar ---------------- */
+        const desarmando = ref(null)
+
+        const alDesarmar = async (r) => {
+            const id = desarmando.value?.id
+            desarmando.value = null
+            avisar(`${r.desarmados} desarmado(s) · ${r.recuperadas} vuelven al stock, ${r.perdidas} se pierden`)
+            if (id) resalte.marcar(id)
+            await cargar()
+        }
 
         const alArmar = async (resultado) => {
             armando.value = null
@@ -222,7 +235,7 @@ export default {
             items, total, cargando, error, filtros, categorias, cargar, filtrar,
             formularioAbierto, editando, abrirNuevo, abrirEditar, cerrarFormulario, alGuardarProducto,
             ramo, abrirRamo, alGuardarRamo,
-            armando, alArmar,
+            armando, alArmar, desarmando, alDesarmar,
             traspaso, partida, abrirTraspaso, alTraspasar, imprimirEtiqueta,
             retorno, alRetornar,
             baja, alDarDeBaja, cambiarEstado,

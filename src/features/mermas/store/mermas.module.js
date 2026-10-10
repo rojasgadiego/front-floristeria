@@ -298,11 +298,11 @@ export default {
 
         limpiarPlan({ commit }) { commit('SET_PLAN', null) },
 
-        async desarmar({ commit, dispatch }, { productoId, cantidad, motivo, detalle, lineas, autorizacion }) {
+        async desarmar({ commit, dispatch }, { productoId, cantidad, motivo, detalle, lineas, fotos, autorizacion }) {
             commit('SET_GUARDANDO', true)
             try {
                 const resultado = await mermasService.desarmar(productoId, {
-                    cantidad, motivo, detalle, lineas, autorizacion
+                    cantidad, motivo, detalle, lineas, fotos, autorizacion
                 })
                 await Promise.all([dispatch('cargar'), dispatch('cargarResumen')])
                 return resultado

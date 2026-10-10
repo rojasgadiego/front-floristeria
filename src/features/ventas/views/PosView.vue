@@ -86,11 +86,21 @@
             </button>
           </div>
 
+          <!-- Merma y caja comparten la celda "caja" de la grilla: así el
+               botón nuevo no obliga a rehacer las tres variantes de la barra. -->
+          <div class="barra__caja">
+          <!-- La flor que se cae o se marchita en la vitrina se registra
+               acá mismo, sin salir de la caja. -->
+          <button class="btn btn-linea btn-mini barra__merma" @click="registrandoMerma = true"
+            aria-label="Registrar merma" title="Registrar merma">
+            <span aria-hidden="true">🥀</span><span class="txt-ancho"> Merma</span>
+          </button>
+
           <!--
               El estado del turno vive acá y no en un banner propio: ocupaba
               una línea entera para decir algo que se lee de un vistazo.
             -->
-          <div class="caja-chip barra__caja" :title="detalleCaja">
+          <div class="caja-chip" :title="detalleCaja">
             <span class="punto" aria-hidden="true"></span>
             <span class="caja-chip__txt">
               <b class="dato">{{ clp(caja.totalVendido) }}</b>
@@ -100,6 +110,7 @@
               <span class="txt-ancho">Cerrar caja</span>
               <span class="txt-angosto" aria-hidden="true">🔒</span>
             </button>
+          </div>
           </div>
         </div>
 
@@ -414,6 +425,8 @@
   </div>
 
   <div v-if="aviso" class="aviso" :class="{ malo: aviso.malo }" role="status">{{ aviso.texto }}</div>
+
+  <ReporteMerma v-if="registrandoMerma" @cerrar="registrandoMerma = false" @registrada="alRegistrarMerma" />
 </template>
 
 
@@ -433,9 +446,15 @@ const EscanerQr = defineAsyncComponent(() =>
   import('@/features/ventas/components/EscanerQr.vue')
 )
 
+/* Igual que el escáner: se carga la primera vez que alguien registra una
+   merma, no al abrir el POS. */
+const ReporteMerma = defineAsyncComponent(() =>
+  import('@/features/mermas/components/ReporteMerma.vue')
+)
+
 export default {
   name: 'PosView',
-  components: { ModalCobro, TicketBoleta, EscanerQr },
+  components: { ModalCobro, TicketBoleta, EscanerQr, ReporteMerma },
 
   setup() {
     const store = useStore()
@@ -1011,8 +1030,20 @@ export default {
     const fmtHora = new Intl.DateTimeFormat('es-CL', { hour: '2-digit', minute: '2-digit' })
     const hora = (v) => (v ? fmtHora.format(new Date(v)) : '—')
 
+    /* ---------------- Merma ---------------- */
+    const registrandoMerma = ref(false)
+
+    const alRegistrarMerma = (r) => {
+      registrandoMerma.value = false
+      avisar(r.mermas > 1
+        ? `Incidente registrado · ${r.mermas} cosas · se puede deshacer en Mermas por 10 minutos`
+        : 'Merma registrada · se puede deshacer en Mermas por 10 minutos')
+      /* Lo mermado sale del mostrador: la grilla tiene que mostrarlo. */
+      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true })
+    }
+
     return {
-      Math, urlFoto,
+      Math, urlFoto, registrandoMerma, alRegistrarMerma,
       caja, abierta, guardandoCaja, errorCaja, fondoInicial, abrirCaja, detalleCaja,
       cierre, abrirCierre, cerrarCaja, arqueoCiego, claseDiferencia, textoDiferencia,
       categorias, clubActivo, busqueda, categoriaId, visibles, limpiarFiltros,
@@ -1400,6 +1431,15 @@ label {
 
 .barra__caja {
   grid-area: caja;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.barra__merma {
+  flex-shrink: 0;
+  min-height: 40px;
 }
 
 .barra__filtro {
@@ -2318,7 +2358,8 @@ label {
 
   /* El botón de cierre se vuelve icono: es una acción de fin de turno,
      no algo que se toque en medio de la venta. */
-  .caja-chip__btn .txt-ancho {
+  .caja-chip__btn .txt-ancho,
+  .barra__merma .txt-ancho {
     display: none;
   }
 
