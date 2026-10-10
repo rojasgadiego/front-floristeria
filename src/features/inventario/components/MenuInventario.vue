@@ -27,12 +27,14 @@ const ICONO_VENTA = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 
 const ICONO_MOVIMIENTOS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h13l-3-3"/><path d="M20 17H7l3 3"/></svg>`
 
+const ICONO_CONTEO = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5h6v3H9z"/><path d="m9 13 2 2 4-4"/></svg>`
+
 const ICONO_LOTES = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5 12 21l9-4.5"/></svg>`
 
 /* Qué ve cada rol. Si alguien tiene dos roles, se suman las claves.
    Esto es sólo la vista: quien corta de verdad es el guard de ruta. */
 const ACCESO = {
-  admin:  ['bodega', 'venta', 'movimientos', 'lotes'],
+  admin:  ['bodega', 'venta', 'movimientos', 'lotes', 'conteo'],
   bodega: ['bodega', 'venta', 'lotes'],
   vendedor:  ['venta']
 }
@@ -111,6 +113,14 @@ export default {
         dato: porVencer.value
           ? `${porVencer.value} por vencer`
           : 'Caducidades y trazabilidad'
+      },
+      {
+        clave: 'conteo',
+        ruta: 'InventarioConteo',
+        titulo: 'Conteo de stock',
+        icono: ICONO_CONTEO,
+        color: 'secundario',
+        dato: 'Cuadrar bodega con lo que hay'
       }
     ])
 

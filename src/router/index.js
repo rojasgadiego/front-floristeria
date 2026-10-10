@@ -19,6 +19,7 @@ const InventarioMenu = () => import('@/features/inventario/components/MenuInvent
 const InventarioBodega = () => import('@/features/inventario/components/InventarioBodega.vue')
 const InventarioVenta = () => import('@/features/inventario/components/InventarioVenta.vue')
 const InventarioMovimientos = () => import('@/features/inventario/components/Movimientos.vue')
+const InventarioConteo = () => import('@/features/inventario/components/ConteoStock.vue')
 
 const Lotes = () => import('@/features/lotes/views/LotesView.vue')
 const LoteDetalle = () => import('@/features/lotes/views/LotedetalleView.vue')
@@ -135,6 +136,12 @@ const routes = [
             name: 'InventarioMovimientos',
             component: InventarioMovimientos,
             meta: { permiso: 'inventario', title: 'Movimientos' }
+          },
+          {
+            path: 'conteo',
+            name: 'InventarioConteo',
+            component: InventarioConteo,
+            meta: { permiso: 'inventario', title: 'Conteo de stock' }
           }
         ]
       },

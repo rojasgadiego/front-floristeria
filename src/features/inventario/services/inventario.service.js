@@ -55,5 +55,24 @@ export const inventarioService = {
     /** Requiere política Inventario (admin o bodega). */
     crearCategoria({ nombre, orden = 0 }) {
         return pedir(http.post(`${RUTA}/categorias`, { nombre, orden }))
+    },
+
+    /* ---------------- Conteo de stock (solo admin) ---------------- */
+
+    /**
+     * La planilla para contar la bodega: una fila por producto sin lotes y
+     * una por balde activo de los que se manejan por lotes.
+     */
+    planillaConteo({ categoriaId = null } = {}, { signal } = {}) {
+        return pedir(http.get(`${RUTA}/conteo`, { params: limpiar({ categoriaId }), signal }))
+    },
+
+    /**
+     * Ajusta la bodega a lo contado: [{ productoId, loteId, contado }].
+     * La diferencia la calcula la base contra el stock del momento. Los
+     * faltantes quedan como merma "Faltante en conteo". Todo o nada.
+     */
+    aplicarConteo({ detalle = null, items }) {
+        return pedir(http.post(`${RUTA}/conteo`, { detalle, items }))
     }
 }
