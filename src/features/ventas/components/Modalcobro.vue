@@ -117,19 +117,49 @@
             <label>Despacho a domicilio</label>
           </div>
           <div class="fila-toggle">
-            <button type="button" class="toggle" :class="{ on: esDespacho }" @click="esDespacho = !esDespacho"
+            <button type="button" class="toggle" :class="{ on: esDespacho }" @click="alternarDespacho"
               :aria-pressed="esDespacho">
               <span class="toggle-thumb"></span>
             </button>
             <span class="mini">{{ esDespacho ? 'Sí, es despacho' : 'No, retira en tienda' }}</span>
           </div>
-          <input v-if="esDespacho" class="campo motivo" v-model="direccionDespacho"
-            maxlength="300" placeholder="Dirección de entrega" />
+
+          <div v-if="esDespacho" class="despacho">
+            <div class="rejilla">
+              <div>
+                <label for="d-recibe">Quién recibe</label>
+                <input id="d-recibe" class="campo" v-model="despacho.recibe"
+                  maxlength="120" autocomplete="off" placeholder="Nombre">
+              </div>
+              <div>
+                <label for="d-telefono">Teléfono</label>
+                <input id="d-telefono" class="campo" type="tel" inputmode="tel" v-model="despacho.telefono"
+                  maxlength="30" autocomplete="off" placeholder="+56 9 1234 5678">
+              </div>
+            </div>
+
+            <label for="d-direccion">Dirección</label>
+            <input id="d-direccion" class="campo" v-model="despacho.direccion"
+              maxlength="300" autocomplete="off" placeholder="Calle, número, depto, comuna">
+
+            <label for="d-valor">Valor despacho</label>
+            <input id="d-valor" class="campo dato" type="number" min="0" step="500"
+              inputmode="numeric" v-model.number="despacho.valor">
+            <p class="ayuda">
+              {{ despacho.valor > 0
+                ? 'Se suma a la boleta como línea "Despacho".'
+                : 'En $0 el despacho va gratis.' }}
+            </p>
+          </div>
         </div>
 
         <!-- ================= Totales ================= -->
         <div class="totales">
           <div class="linea"><span>Productos</span><b class="dato">{{ clp(bruto) }}</b></div>
+          <div v-if="valorDespacho" class="linea">
+            <span>Despacho</span>
+            <b class="dato">+{{ clp(valorDespacho) }}</b>
+          </div>
           <div v-if="descuentoPromo" class="linea verde">
             <span>{{ promocionElegida?.nombre }}</span>
             <b class="dato">−{{ clp(descuentoPromo) }}</b>
@@ -174,7 +204,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { MEDIOS_PAGO } from '@/features/ventas/store/ventas.module'
 
@@ -213,7 +243,7 @@ export default {
     const codigoAuth = ref('')
     const enviandoCodigo = ref(false)
     const esDespacho = ref(false)
-    const direccionDespacho = ref('')
+    const despacho = reactive({ recibe: '', telefono: '', direccion: '', valor: 0 })
     const error = ref('')
     const campoRecibido = ref(null)
 
@@ -235,11 +265,33 @@ export default {
 
     const descuentoCanje = computed(() => (puntos.value || 0) * valorPunto.value)
 
+    /* ---------------- Despacho ---------------- */
+    /* Con el cliente identificado, lo más probable es que sea para él: se
+       precarga lo que falte, sin pisar lo que ya se escribió. Si es un
+       regalo, se cambia el nombre y listo. */
+    const alternarDespacho = () => {
+      esDespacho.value = !esDespacho.value
+      const c = cliente.value
+      if (!esDespacho.value || !c) return
+      despacho.recibe ||= c.nombre || ''
+      despacho.telefono ||= c.telefono || ''
+      despacho.direccion ||= c.direccion || ''
+    }
+
+    const valorDespacho = computed(() =>
+      esDespacho.value ? Math.max(0, despacho.valor || 0) : 0
+    )
+
+    const despachoCompleto = computed(() =>
+      Boolean(despacho.recibe.trim() && despacho.telefono.trim() && despacho.direccion.trim()) &&
+      (despacho.valor || 0) >= 0
+    )
+
     /* ---------------- Totales ---------------- */
     const totalEstimado = computed(() => Math.max(
       0,
-      bruto.value - descuentoPromo.value - descuentoCanje.value - (descuento.value || 0) -
-      abonoPrevio.value
+      bruto.value + valorDespacho.value - descuentoPromo.value - descuentoCanje.value -
+      (descuento.value || 0) - abonoPrevio.value
     ))
 
     const vuelto = computed(() => (recibido.value || 0) - totalEstimado.value)
@@ -265,7 +317,7 @@ export default {
       if (!carrito.value.length) return false
       if (medioPago.value === 'efectivo' && recibido.value != null && vuelto.value < 0) return false
       if (necesitaAutorizacion.value && codigoAuth.value.trim().length !== 6) return false
-      if (esDespacho.value && !direccionDespacho.value.trim()) return false
+      if (esDespacho.value && !despachoCompleto.value) return false
       if (puntos.value > 0 && puntos.value < canjeMinimo.value) return false
       return true
     })
@@ -305,8 +357,14 @@ export default {
           autorizacion: necesitaAutorizacion.value
             ? { codigo: codigoAuth.value.trim().toUpperCase() }
             : null,
-          esDespacho: esDespacho.value,
-          direccionDespacho: esDespacho.value ? direccionDespacho.value.trim() : null
+          despacho: esDespacho.value
+            ? {
+                recibe: despacho.recibe.trim(),
+                telefono: despacho.telefono.trim(),
+                direccion: despacho.direccion.trim(),
+                valor: valorDespacho.value
+              }
+            : null
         })
         emit('cobrada', venta)
       } catch (e) {
@@ -329,7 +387,7 @@ export default {
       carrito, unidades, bruto, descuentoPromo, abonoPrevio, promocionElegida, cliente, cobrando,
       valorPunto, clubActivo, canjeMinimo, umbral, primerNombre,
       medioPago, recibido, puntos, descuento, codigoEnviado, codigoAuth, enviandoCodigo,
-      esDespacho, direccionDespacho, error, campoRecibido,
+      esDespacho, despacho, valorDespacho, alternarDespacho, error, campoRecibido,
       maxCanjeable, descuentoCanje, totalEstimado, vuelto, faltaEfectivo,
       billetesUtiles, necesitaAutorizacion, puedeCobrar,
       elegirMedio, solicitarCodigo, cobrar, clp
@@ -617,6 +675,15 @@ label {
 }
 
 .toggle.on .toggle-thumb { transform: translateX(18px); }
+
+.despacho {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.despacho label { margin-top: 8px; }
+.despacho .rejilla label { margin-top: 0; }
 
 /* ---------- Autorización ---------- */
 

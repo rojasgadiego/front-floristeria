@@ -312,7 +312,7 @@ export default {
      * `autorizacion` solo se manda si el descuento supera el umbral.
      * Lleva el código de 6 dígitos que el admin recibió por correo.
      */
-    async cobrar ({ state, commit, dispatch }, { medioPago, recibido = null, autorizacion = null, esDespacho = false, direccionDespacho = null }) {
+    async cobrar ({ state, commit, dispatch }, { medioPago, recibido = null, autorizacion = null, despacho = null }) {
       commit('SET_COBRANDO', true)
       commit('SET_ERROR', null)
 
@@ -334,8 +334,13 @@ export default {
           descuentoManual: state.descuentoManual,
           puntosCanjeados: state.puntosACanjear,
           autorizacion,
-          esDespacho,
-          direccionDespacho: esDespacho ? direccionDespacho : null
+          /* `despacho` es null si retira en tienda; si no, trae a quién,
+             dónde, su teléfono y cuánto se cobra (0 = gratis). */
+          esDespacho: Boolean(despacho),
+          direccionDespacho: despacho?.direccion ?? null,
+          despachoRecibe: despacho?.recibe ?? null,
+          despachoTelefono: despacho?.telefono ?? null,
+          despachoValor: despacho?.valor ?? 0
         })
 
         commit('SET_ULTIMA', venta)
