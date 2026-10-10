@@ -15,6 +15,7 @@ export function useProductos (filtrosIniciales = {}) {
         activo: true,
         soloEnVenta: false,
         bajoMinimo: false,
+        conStock: false,
         pagina: 1,
         tamano: 50,
         ...filtrosIniciales

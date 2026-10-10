@@ -27,6 +27,12 @@
           </option>
         </select>
 
+        <!-- Con 140 productos, la mayoría en 0, lo que sí hay se pierde. -->
+        <label class="check" :class="{ on: filtros.conStock }">
+          <input type="checkbox" :checked="filtros.conStock" @change="$emit('filtrar', { conStock: $event.target.checked })">
+          <span>Con stock</span>
+        </label>
+
         <label class="check" :class="{ on: bajoMinimo }">
           <input type="checkbox" :checked="bajoMinimo" @change="$emit('filtrar', { bajoMinimo: $event.target.checked })">
           <span>Bajo mínimo</span>
@@ -446,7 +452,7 @@ export default {
 
     const mensajeVacio = computed(() => {
       const f = props.filtros || {}
-      const filtrando = !!(f.buscar || f.busqueda || f.categoriaId || props.bajoMinimo)
+      const filtrando = !!(f.buscar || f.busqueda || f.categoriaId || props.bajoMinimo || f.conStock)
       return {
         titulo: filtrando ? 'Ningún producto coincide' : 'Catálogo vacío',
         detalle: filtrando
