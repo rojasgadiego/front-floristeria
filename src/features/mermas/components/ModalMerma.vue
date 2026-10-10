@@ -196,7 +196,8 @@
               <b>Esta merma necesita autorización</b>
             </div>
             <p class="ayuda">
-              Son {{ clp(costoTotal) }}, sobre el tope de {{ clp(umbral) }}.
+              Son {{ clp(valorAutorizacion) }}<template v-if="sinCosto"> a precio de
+              venta (el producto no tiene costo)</template>, sobre el tope de {{ clp(umbral) }}.
               Pídele a una administradora que ingrese sus credenciales; quedan
               registradas junto a la merma.
             </p>
@@ -338,7 +339,9 @@ export default {
         producto: p.nombre,
         emoji: p.emoji,
         disponible: l?.varasDisponibles ?? disponibleDe(p),
-        costoUnitario: p.costoEfectivo ?? 0,
+        /* El del balde si se eligió uno: es el que usa la base. */
+        costoUnitario: l?.costoPorVara ?? p.costoEfectivo ?? 0,
+        precio: l?.precioUnitario ?? p.precio,
         diasParaVencer: l?.diasParaVencer ?? null,
         ubicacion: null,
         proveedor: null,
@@ -359,7 +362,18 @@ export default {
       Math.round((f.cantidad || 0) * (origen.value?.costoUnitario || 0))
     )
 
-    const necesitaAutorizacion = computed(() => costoTotal.value > umbral.value)
+    /* La misma regla que la base (sql/15): sin costo cargado, la firma se
+       decide con el precio de venta. Si no, una merma de algo sin costo
+       valdría $0 y nunca la pediría. */
+    const sinCosto = computed(() => !(origen.value?.costoUnitario > 0))
+
+    const valorAutorizacion = computed(() =>
+      sinCosto.value
+        ? Math.round((f.cantidad || 0) * (origen.value?.precio || 0))
+        : costoTotal.value
+    )
+
+    const necesitaAutorizacion = computed(() => valorAutorizacion.value > umbral.value)
 
     /* Algunos motivos traen su destino natural: "Llegó en mal estado" casi
        siempre es devolución al proveedor. Se propone, no se impone. */
@@ -446,7 +460,7 @@ export default {
       f, auth, manual, guardando, motivosPorCategoria, detalleObligatorio, soloMostrador, umbral,
       productosConStock, disponibleDe,
       alEscanear, alElegirManual, confirmarManual,
-      costoTotal, necesitaAutorizacion, alElegirMotivo, elegirDestino, puedeRegistrar,
+      costoTotal, sinCosto, valorAutorizacion, necesitaAutorizacion, alElegirMotivo, elegirDestino, puedeRegistrar,
       reiniciar, registrar, clp
     }
   }
