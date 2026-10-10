@@ -187,9 +187,11 @@
           </div>
 
           <!-- ═══ Autorización ═══
-               Sobre el umbral hace falta la clave de una administradora. Es
-               el mismo mecanismo del descuento en la venta: quien se lleva
-               flor de a poco no puede escalar sin un cómplice. -->
+               Sobre el umbral hace falta un código que llega por correo a la
+               administración, igual que el descuento en la venta: quien se
+               lleva flor de a poco no puede escalar sin un cómplice. Antes se
+               escribía la contraseña de la admin en este teléfono. Una admin
+               no pide código: es ella quien lo dictaría. -->
           <div v-if="necesitaAutorizacion" class="autorizacion">
             <div class="auth-cab">
               <span aria-hidden="true">🔐</span>
@@ -198,14 +200,26 @@
             <p class="ayuda">
               Son {{ clp(valorAutorizacion) }}<template v-if="sinCosto"> a precio de
               venta (el producto no tiene costo)</template>, sobre el tope de {{ clp(umbral) }}.
-              Pídele a una administradora que ingrese sus credenciales; quedan
-              registradas junto a la merma.
             </p>
-            <div class="rejilla">
-              <input class="campo" type="email" v-model="auth.email" placeholder="Correo" autocomplete="off">
-              <input class="campo" type="password" v-model="auth.password" placeholder="Contraseña" autocomplete="off"
-                @keyup.enter="registrar">
-            </div>
+
+            <template v-if="!codigoEnviado">
+              <p class="ayuda">
+                Se enviará un código a la administración por correo. Cuando lo
+                reciban, te lo dictan y lo ingresas acá.
+              </p>
+              <button class="btn btn-linea ancho" :disabled="enviandoCodigo" @click="solicitarCodigo">
+                {{ enviandoCodigo ? 'Enviando…' : 'Enviar código a la administración' }}
+              </button>
+            </template>
+            <template v-else>
+              <p class="ayuda">Código enviado. Ingresa el que te dicten:</p>
+              <div class="fila-codigo">
+                <input class="campo dato codigo-input" type="text" inputmode="numeric" maxlength="6"
+                  v-model="codigoAuth" placeholder="000000" autocomplete="one-time-code" spellcheck="false"
+                  @keyup.enter="registrar">
+                <button class="btn btn-linea" @click="codigoEnviado = false">Reenviar</button>
+              </div>
+            </template>
           </div>
         </template>
       </div>
@@ -254,7 +268,9 @@ export default {
       calidad: null
     })
 
-    const auth = reactive({ email: '', password: '' })
+    const codigoEnviado = ref(false)
+    const codigoAuth = ref('')
+    const enviandoCodigo = ref(false)
     const manual = reactive({ productoId: null, loteId: null, lotes: [] })
 
     const guardando = computed(() => store.getters['mermas/guardando'])
@@ -266,6 +282,7 @@ export default {
        es para no ofrecerle un camino que termina en error. */
     const soloMostrador = computed(() => !store.getters['auth/tieneRol']('admin', 'bodega'))
     const umbral = computed(() => store.getters['mermas/umbralAutorizacion'])
+    const esAdmin = computed(() => store.getters['auth/esAdmin'])
 
     /* Solo lo que se puede mermar: sin existencias no hay nada que sacar, y
        ofrecerlo lleva a un error que se pudo evitar antes de elegir. */
@@ -375,7 +392,24 @@ export default {
         : costoTotal.value
     )
 
-    const necesitaAutorizacion = computed(() => valorAutorizacion.value > umbral.value)
+    const necesitaAutorizacion = computed(() =>
+      !esAdmin.value && valorAutorizacion.value > umbral.value
+    )
+
+    const solicitarCodigo = async () => {
+      if (enviandoCodigo.value) return
+      enviandoCodigo.value = true
+      error.value = ''
+      try {
+        await store.dispatch('mermas/solicitarCodigo', valorAutorizacion.value)
+        codigoEnviado.value = true
+        codigoAuth.value = ''
+      } catch (e) {
+        error.value = e.message
+      } finally {
+        enviandoCodigo.value = false
+      }
+    }
 
     /* "Vuelve al stock" crea un lote rebajado: solo existe para lo que se
        maneja por lotes. En una cinta o un ramo armado, lo que se salva
@@ -412,7 +446,7 @@ export default {
       if (!f.motivo) return false
       if (detalleObligatorio.value && !f.detalle.trim()) return false
       if (f.destino === 'reingreso' && (!f.cantidadRecuperada || !f.calidad)) return false
-      if (necesitaAutorizacion.value && (!auth.email || !auth.password)) return false
+      if (necesitaAutorizacion.value && codigoAuth.value.trim().length !== 6) return false
       return true
     })
 
@@ -447,7 +481,7 @@ export default {
           codigoEscaneado: origen.value.codigo,
           escaneado: escaneado.value,
           autorizacion: necesitaAutorizacion.value
-            ? { email: auth.email.trim(), password: auth.password }
+            ? { codigo: codigoAuth.value.trim() }
             : null
         })
 
@@ -456,7 +490,7 @@ export default {
         /* El mensaje viene del RAISE: "El lote LOT-000015 tiene 12 varas y
            estás mermando 30". Ya está redactado. */
         error.value = e.message
-        auth.password = ''
+        codigoAuth.value = ''
       }
     }
 
@@ -468,7 +502,7 @@ export default {
     return {
       Math, destinos, CALIDADES,
       origen, escaneado, modoManual, error, escaner, campoCantidad,
-      f, auth, manual, guardando, motivosPorCategoria, detalleObligatorio, soloMostrador, umbral,
+      f, codigoEnviado, codigoAuth, enviandoCodigo, solicitarCodigo, manual, guardando, motivosPorCategoria, detalleObligatorio, soloMostrador, umbral,
       productosConStock, disponibleDe,
       alEscanear, alElegirManual, confirmarManual,
       costoTotal, sinCosto, valorAutorizacion, necesitaAutorizacion, alElegirMotivo, elegirDestino, puedeRegistrar,
@@ -842,6 +876,23 @@ label {
 .autorizacion .rejilla {
   margin-bottom: 0;
 }
+
+.fila-codigo {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.fila-codigo .campo { flex: 1; }
+
+.codigo-input {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: .25em;
+}
+
+.ancho { width: 100%; }
 
 .ayuda {
   font-size: .78rem;

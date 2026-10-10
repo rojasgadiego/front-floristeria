@@ -49,6 +49,15 @@ export const mermasService = {
         return pedir(http.post(RUTA, peticion))
     },
 
+    /**
+     * Manda a la administración un código para autorizar una merma sobre el
+     * umbral. Solo sirve en esta sesión. `valor` va en el correo para que
+     * quien lo dicta sepa qué aprueba.
+     */
+    solicitarCodigo(valor) {
+        return pedir(http.post(`${RUTA}/solicitar-codigo`, { valor }))
+    },
+
     /** Da de baja el lote con lo que le quede. Es el destino de los rezagados. */
     descartarLote(loteId, { motivo, detalle = null, esDevolucionProveedor = false }) {
         return pedir(http.post(`${RUTA}/lote/${loteId}/descartar`, {
@@ -77,7 +86,7 @@ export const mermasService = {
     /**
      * Las cantidades de cada componente deben sumar exactamente lo que dice
      * la receta: cada vara tiene que tener un destino. Sobre el umbral
-     * necesita `autorizacion` ({ email, password } de una administradora),
+     * necesita `autorizacion` ({ codigo } que la administración recibió por correo),
      * igual que una merma suelta.
      */
     desarmar(productoId, { cantidad, motivo, detalle = null, lineas, autorizacion = null }) {

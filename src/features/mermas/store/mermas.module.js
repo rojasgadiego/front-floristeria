@@ -246,6 +246,10 @@ export default {
             }
         },
 
+        async solicitarCodigo(_, valor) {
+            await mermasService.solicitarCodigo(valor)
+        },
+
         async descartarLote({ commit, dispatch }, { loteId, motivo, detalle, esDevolucionProveedor }) {
             commit('SET_GUARDANDO', true)
             try {
