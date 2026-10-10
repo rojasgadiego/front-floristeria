@@ -133,7 +133,10 @@ export default {
         },
         RESET_FILTRO(state) { state.filtro = filtroInicial() },
         SET_RESUMEN(state, r) { state.resumen = r },
-        SET_MOTIVOS(state, m) { if (m?.length) state.motivos = m },
+        /* Una lista vacía de la API se respeta: el respaldo es para cuando
+           la API falla, no para tapar un catálogo sin cargar (la base
+           rechazaría cualquiera de los motivos de respaldo). */
+        SET_MOTIVOS(state, m) { if (Array.isArray(m)) state.motivos = m },
         SET_UMBRAL(state, u) { if (Number.isFinite(u)) state.umbral = u },
         SET_PATRONES(state, p) { state.patrones = p },
         SET_CARGANDO_PATRONES(state, v) { state.cargandoPatrones = v },

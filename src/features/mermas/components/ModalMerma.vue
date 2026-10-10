@@ -126,6 +126,10 @@
                   <option v-for="m in c.motivos" :key="m.motivo" :value="m.motivo">{{ m.motivo }}</option>
                 </optgroup>
               </select>
+              <p v-if="!motivosPorCategoria.length" class="ayuda rojo">
+                No hay motivos de merma configurados. Una administradora los
+                agrega en la pantalla de Mermas, sección de motivos.
+              </p>
             </div>
           </div>
 
@@ -820,6 +824,8 @@ label {
   line-height: 1.55;
   margin-top: 6px;
 }
+
+.ayuda.rojo { color: var(--danger); }
 
 .error {
   padding: 11px 13px;
