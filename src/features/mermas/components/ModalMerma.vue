@@ -144,7 +144,7 @@
           <div class="grupo">
             <label>¿Qué pasó con eso?</label>
             <div class="opciones">
-              <button v-for="d in DESTINOS" :key="d.valor" type="button" class="opcion"
+              <button v-for="d in destinos" :key="d.valor" type="button" class="opcion"
                 :class="{ on: f.destino === d.valor }" @click="elegirDestino(d.valor)">
                 <b>{{ d.texto }}</b>
                 <span>{{ d.descripcion }}</span>
@@ -342,6 +342,8 @@ export default {
         /* El del balde si se eligió uno: es el que usa la base. */
         costoUnitario: l?.costoPorVara ?? p.costoEfectivo ?? 0,
         precio: l?.precioUnitario ?? p.precio,
+        controlaLotes: p.controlaLotes,
+        tipo: p.tipo,
         diasParaVencer: l?.diasParaVencer ?? null,
         ubicacion: null,
         proveedor: null,
@@ -374,6 +376,15 @@ export default {
     )
 
     const necesitaAutorizacion = computed(() => valorAutorizacion.value > umbral.value)
+
+    /* "Vuelve al stock" crea un lote rebajado: solo existe para lo que se
+       maneja por lotes. En una cinta o un ramo armado, lo que se salva
+       queda donde está y se registra solo lo perdido (la base lo exige). */
+    const destinos = computed(() =>
+      origen.value?.controlaLotes && origen.value?.tipo !== 'armado'
+        ? DESTINOS
+        : DESTINOS.filter(d => d.valor !== 'reingreso')
+    )
 
     /* Algunos motivos traen su destino natural: "Llegó en mal estado" casi
        siempre es devolución al proveedor. Se propone, no se impone. */
@@ -455,7 +466,7 @@ export default {
     const clp = (n) => fmt.format(Math.round(n || 0))
 
     return {
-      Math, DESTINOS, CALIDADES,
+      Math, destinos, CALIDADES,
       origen, escaneado, modoManual, error, escaner, campoCantidad,
       f, auth, manual, guardando, motivosPorCategoria, detalleObligatorio, soloMostrador, umbral,
       productosConStock, disponibleDe,
