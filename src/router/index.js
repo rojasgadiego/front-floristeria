@@ -228,6 +228,20 @@ const router = createRouter({
 
 instalarGuards(router)
 
+/* Pestaña abierta desde antes de un despliegue: las vistas se cargan en
+   diferido y sus chunks viejos ya no están en el servidor. En vez de
+   quedarse pegado en la vista anterior, se entra directo a la ruta pedida
+   con la versión nueva. */
+router.onError((error, to) => {
+  if (!/Loading (CSS )?chunk|dynamically imported module/i.test(error?.message || '')) return
+  /* Una sola vez por minuto: si el chunk falta también en la versión nueva
+     (sin red, por ejemplo), recargar en bucle sería peor que el error. */
+  const ultimo = Number(sessionStorage.getItem('recarga-chunk') || 0)
+  if (Date.now() - ultimo < 60000) return
+  sessionStorage.setItem('recarga-chunk', String(Date.now()))
+  window.location.assign(to.fullPath)
+})
+
 if (process.env.NODE_ENV === 'development') {
   // Recorre rutas y children para armar la lista de paths absolutos
   const definidas = []

@@ -22,6 +22,8 @@
         <router-view />
       </main>
     </div>
+
+    <AvisoVersion />
   </div>
 </template>
 
@@ -32,6 +34,7 @@ import { useRouter, useRoute } from 'vue-router'
 
 import AppSidebar from './AppSidebar.vue'
 import AppHeader from './AppHeader.vue'
+import AvisoVersion from '@/shared/components/AvisoVersion.vue'
 import { useLayout } from '@/shared/composables/useLayout.js' 
 
 const store = useStore()
