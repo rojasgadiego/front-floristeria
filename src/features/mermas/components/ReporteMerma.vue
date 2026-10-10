@@ -266,6 +266,7 @@ import { useStore } from 'vuex'
 import EscanerCodigo from './EscanerCodigo.vue'
 import { CALIDADES } from '@/features/mermas/store/mermas.module'
 import { lotesService } from '@/features/lotes/services/lotes.service'
+import { productosService } from '@/features/inventario/services/productos.service'
 import { useFotos, useCodigoAutorizacion } from '@/features/mermas/composables/useEvidencia'
 
 /* Se abre desde Mermas, el POS o Lotes. Desde Lotes llega con el balde ya
@@ -307,7 +308,20 @@ const esAdmin = computed(() => store.getters['auth/esAdmin'])
 const soloVitrina = computed(() => !store.getters['auth/tieneRol']('admin', 'bodega'))
 const guardando = computed(() => store.getters['mermas/guardando'])
 const umbral = computed(() => store.getters['mermas/umbralAutorizacion'])
-const productos = computed(() => store.getters['productos/productos'] || [])
+/* Las listas son propias y completas. Antes salían del store de productos,
+   que guarda solo la página que esté viendo otra pantalla (100 de 140):
+   lo que caía fuera, no aparecía. */
+const productos = ref([])
+
+const todasLasPaginas = async (filtro) => {
+  const lista = []
+  for (let pagina = 1; pagina <= 20; pagina++) {
+    const r = await productosService.listar({ ...filtro, activo: true, pagina, tamano: 200 })
+    lista.push(...(r.items || []))
+    if ((r.items || []).length < 200) break
+  }
+  return lista
+}
 
 const ramosEnVitrina = computed(() =>
   productos.value.filter(p => p.activo && p.tipo === 'armado' && (p.stockListo ?? 0) > 0)
@@ -320,7 +334,9 @@ const productosBodega = computed(() =>
 onMounted(() => {
   store.dispatch('mermas/cargarMotivos')
   store.dispatch('mermas/cargarUmbral')
-  if (!productos.value.length) store.dispatch('productos/cargar')
+  todasLasPaginas({})
+    .then(l => { productos.value = l })
+    .catch(e => { error.value = e.message })
 })
 
 /* ---------------- Paso 1: líneas ---------------- */

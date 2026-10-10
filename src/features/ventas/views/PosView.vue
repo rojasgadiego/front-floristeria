@@ -978,7 +978,7 @@ export default {
       /* Solo lo que está en el mesón: el POS vende de la vitrina, no del
          catálogo. Traer los 17 productos incluiría cosas que están en
          bodega y que el vendedor no puede entregar. */
-      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true })
+      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true, tamano: 200 })
         .then(() => cargarEvento())
 
       document.addEventListener('keydown', alTeclado)
@@ -1039,7 +1039,7 @@ export default {
         ? `Incidente registrado · ${r.mermas} cosas · se puede deshacer en Mermas por 10 minutos`
         : 'Merma registrada · se puede deshacer en Mermas por 10 minutos')
       /* Lo mermado sale del mostrador: la grilla tiene que mostrarlo. */
-      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true })
+      store.dispatch('productos/filtrar', { soloEnVenta: true, activo: true, tamano: 200 })
     }
 
     return {

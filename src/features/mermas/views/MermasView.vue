@@ -221,7 +221,7 @@
                   {{ m.usuario || '—' }}
                   <!-- Quien registra con el balde en la mano escanea; quien
                        inventa la merma, tipea. La marca lo deja a la vista. -->
-                  <span v-if="!m.escaneado" class="marca" title="Registrada sin escanear">
+                  <span v-if="aMano(m)" class="marca" title="Registrada sin escanear">
                     ✎ a mano
                   </span>
                   <span v-if="m.autorizadoPor" class="marca ok" :title="`Autorizada por ${m.autorizadoPor}`">🔐</span>
@@ -270,7 +270,7 @@
             <template v-if="m.origenCodigo"> · <span class="mono">{{ m.origenCodigo }}</span></template>
             · {{ fecha(m.creadoEn) }}
             <template v-if="m.usuario"> · {{ m.usuario }}</template>
-            <span v-if="!m.escaneado" class="marca">✎ a mano</span>
+            <span v-if="aMano(m)" class="marca">✎ a mano</span>
           </div>
 
           <div v-if="m.revertida" class="t-revertida">
@@ -755,6 +755,12 @@ export default {
       }
     }
 
+    /* "A mano" solo si había etiqueta que leer (un balde o una partida) y
+       no salió de un conteo: un ramo o una cinta no se escanean, y marcarlos
+       hacía parecer sospechoso lo que no lo es. Mismo criterio que sql/28. */
+    const aMano = (m) =>
+      !m.escaneado && !!(m.loteId || m.partidaId) && m.motivo !== 'Faltante en conteo'
+
     const textoTipo = (t) => ({ puntual: 'Merma', incidente: 'Incidente', desarme: 'Desarme' }[t] || t)
 
     /* Un punto en la pestaña cuando hay algo que mirar. No dice qué: eso lo
@@ -856,7 +862,7 @@ export default {
       registrando, alRegistrar, ultimo, restante, reloj,
       puedeDeshacer, deshacerReporte, visor, verFotos, cerrarVisor,
       patrones, cargandoPatrones, errorPatrones, alertasControl, claseEscaneo,
-      pendientes, revisando, marcarRevisado, textoTipo,
+      pendientes, revisando, marcarRevisado, textoTipo, aMano,
       horasCompletas, alturaBarra, resumenHoras,
       aviso, clp, fecha, hora
     }
