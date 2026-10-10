@@ -111,14 +111,15 @@
         </div>
 
         <div v-else class="grilla">
-          <button v-for="p in visibles" :key="p.id" class="producto" :class="{ agotado: p.enVenta <= 0 }"
-            :disabled="p.enVenta <= 0" @click="agregar(p)">
+          <button v-for="p in visibles" :key="p.id" class="producto"
+            :class="{ agotado: p.enVenta <= 0 || p.precio <= 0 }"
+            :disabled="p.enVenta <= 0 || p.precio <= 0" @click="agregar(p)">
             <!-- La foto si la hay; si no, el emoji de siempre -->
             <img v-if="urlFoto(p.id)" class="producto__foto" :src="urlFoto(p.id)" alt="" loading="lazy">
             <span v-else class="producto__emoji" aria-hidden="true">{{ p.emoji }}</span>
             <span class="producto__nombre">{{ p.nombre }}</span>
             <span class="producto__pie">
-              <b class="dato">{{ clp(p.precio) }}</b>
+              <b class="dato">{{ p.precio > 0 ? clp(p.precio) : 'Sin precio' }}</b>
               <span class="producto__stock" :class="{ poco: p.enVenta <= 3 }">{{ p.enVenta }}</span>
             </span>
           </button>
@@ -666,6 +667,13 @@ export default {
 
         if (!producto) {
           mostrarAvisoCodigo(`No hay ninguna partida ni producto con el código ${texto}`, true)
+          return 'no'
+        }
+
+        /* $0 = precio por definir: no se vende (el servidor también lo
+           rechaza, pero acá se dice antes de llenar el carrito). */
+        if (!(producto.precio > 0)) {
+          mostrarAvisoCodigo(`${producto.nombre} no tiene precio. Defínelo en inventario.`, true)
           return 'no'
         }
 

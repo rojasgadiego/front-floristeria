@@ -125,6 +125,9 @@
                 Margen {{ margen }}% · deja {{ clp(f.precio - f.costo) }}
                 <template v-if="margenMalo"> · queda poco</template>
               </template>
+              <!-- $0 = por definir: se puede guardar, pero no baja al mesón
+                   ni se vende hasta tener precio (sql/11 en el back). -->
+              <template v-else-if="!f.precio">En $0 queda por definir: no se podrá vender hasta ponerle precio.</template>
               <template v-else>Escribe el costo y acá aparece el margen.</template>
             </p>
           </div>
@@ -445,7 +448,8 @@ export default {
         }
       }
       if (clave === 'precios') {
-        if (!f.precio || f.precio < 1) return 'Indica el precio de venta.'
+        if (f.precio === '' || f.precio == null) return 'Indica el precio de venta (0 si aún no lo tiene).'
+        if (f.precio < 0) return 'El precio no puede ser negativo.'
       }
       if (clave === 'inventario') {
         if (esNuevo.value && f.controlaLotes && !f.diasVida) {
