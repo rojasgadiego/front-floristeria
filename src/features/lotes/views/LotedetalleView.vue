@@ -387,7 +387,7 @@ export default {
 }
 
 .migas a {
-  color: #059669;
+  color: var(--accent);
   text-decoration: none;
   font-weight: 600;
 }
@@ -608,7 +608,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .suave { color: #64748b; }
 .mini { font-size: 0.76rem; }
 .rojo { color: #dc2626; }
-.verde { color: #047857; }
+.verde { color: var(--accent-hover); }
 
 .dato { font-variant-numeric: tabular-nums; font-weight: 600; }
 
@@ -628,7 +628,7 @@ tbody tr:last-child td { border-bottom: 0; }
   font-size: 0.72rem;
 }
 
-.et-verde { background: #d1fae5; color: #047857; }
+.et-verde { background: var(--accent-soft); color: var(--accent-hover); }
 .et-ambar { background: #fef3c7; color: #92400e; }
 .et-rojo { background: #fee2e2; color: #991b1b; }
 .et-gris { background: #f1f5f9; color: #64748b; }
@@ -643,7 +643,7 @@ tbody tr:last-child td { border-bottom: 0; }
   padding: 0.65rem 1.15rem;
   border: none;
   border-radius: 0.5rem;
-  background: #059669;
+  background: var(--accent);
   color: #fff;
   font-family: inherit;
   font-size: 0.92rem;
@@ -653,7 +653,7 @@ tbody tr:last-child td { border-bottom: 0; }
   transition: background-color 0.2s;
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 .btn:disabled { background: #a7c9bb; cursor: not-allowed; }
 
 .btn-linea {
@@ -734,7 +734,7 @@ label {
 
 .campo:focus {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .ayuda {
@@ -790,7 +790,7 @@ label {
   max-width: 90vw;
   padding: 12px 20px;
   border-radius: 10px;
-  background: #064e3b;
+  background: var(--colibri-verde-noche);
   color: #fff;
   font-size: 0.875rem;
   font-weight: 600;

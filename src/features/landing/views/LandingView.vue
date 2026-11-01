@@ -155,7 +155,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import { Clock, Flower2, Heart, Instagram, MapPin, MessageCircle, PartyPopper, Sprout } from 'lucide-vue-next'
 import { CONTACTO as c } from '../contacto'
-import LogoColibri from '../components/LogoColibri.vue'
+import LogoColibri from '@/shared/components/LogoColibri.vue'
 import enredadera from '@/assets/enredadera.svg'
 import { imagenesService } from '@/features/inventario/services/imagenes.service'
 

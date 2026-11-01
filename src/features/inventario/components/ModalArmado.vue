@@ -294,7 +294,7 @@ label {
 
 .campo:focus {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .grupo {
@@ -315,7 +315,7 @@ label {
 }
 
 .ok {
-  color: #047857;
+  color: var(--accent-hover);
 }
 
 .corto {
@@ -357,8 +357,8 @@ label {
   padding: 11px 13px;
   margin: 14px 0;
   border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
   font-size: 0.83rem;
   color: #475569;
   line-height: 1.6;
@@ -404,8 +404,8 @@ label {
 }
 
 .lote.marcado {
-  border-color: #059669;
-  background: #f0fdf4;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .lote.vencido {
@@ -417,7 +417,7 @@ label {
   height: 17px;
   margin-top: 2px;
   flex-shrink: 0;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -446,7 +446,7 @@ label {
   white-space: nowrap;
 }
 
-.et-verde { background: #d1fae5; color: #047857; }
+.et-verde { background: var(--accent-soft); color: var(--accent-hover); }
 .et-ambar { background: #fef3c7; color: #92400e; }
 .et-rojo { background: #fee2e2; color: #991b1b; }
 .et-gris { background: #f1f5f9; color: #64748b; }
@@ -460,7 +460,7 @@ label {
   padding: 0.65rem 1.15rem;
   border: none;
   border-radius: 0.5rem;
-  background: #059669;
+  background: var(--accent);
   color: #fff;
   font-family: inherit;
   font-size: 0.92rem;
@@ -470,7 +470,7 @@ label {
 }
 
 .btn:hover:not(:disabled) {
-  background: #047857;
+  background: var(--accent-hover);
 }
 
 .btn:disabled {

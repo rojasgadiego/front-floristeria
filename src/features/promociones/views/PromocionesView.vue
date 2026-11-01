@@ -660,7 +660,7 @@ export default {
 }
 
 @keyframes resalta {
-  0% { border-color: #059669; box-shadow: 0 0 0 3px #d1fae5; }
+  0% { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   100% { border-color: #e2e8f0; box-shadow: none; }
 }
 
@@ -758,7 +758,7 @@ export default {
 
 .buscador:focus-within {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .buscador input {
@@ -787,7 +787,7 @@ export default {
 
 .campo:focus {
   border-color: transparent;
-  box-shadow: 0 0 0 2px #10b981;
+  box-shadow: 0 0 0 2px var(--accent);
 }
 
 .campo-corto { width: auto; flex: 0 1 200px; }
@@ -804,7 +804,7 @@ export default {
 .check input {
   width: 17px;
   height: 17px;
-  accent-color: #059669;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -857,7 +857,7 @@ export default {
 .valor {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #059669;
+  color: var(--accent);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -889,7 +889,7 @@ export default {
   line-height: 1.4;
 }
 
-.estado.ok { background: #f0fdf4; color: #166534; }
+.estado.ok { background: var(--accent-soft); color: #166534; }
 .estado.dormida { background: #fffbeb; color: #78350f; }
 .estado.apagada { background: #f1f5f9; color: #64748b; }
 
@@ -933,7 +933,7 @@ export default {
   padding: 0.65rem 1.15rem;
   border: none;
   border-radius: 0.5rem;
-  background: #059669;
+  background: var(--accent);
   color: #fff;
   font-family: inherit;
   font-size: 0.92rem;
@@ -943,7 +943,7 @@ export default {
   -webkit-tap-highlight-color: transparent;
 }
 
-.btn:hover:not(:disabled) { background: #047857; }
+.btn:hover:not(:disabled) { background: var(--accent-hover); }
 .btn:active:not(:disabled) { transform: scale(0.97); }
 .btn:disabled { background: #a7c9bb; cursor: not-allowed; }
 
@@ -977,7 +977,7 @@ export default {
   transition: border-color 0.15s, color 0.15s;
 }
 
-.btn-icono:hover { border-color: #059669; color: #059669; }
+.btn-icono:hover { border-color: var(--accent); color: var(--accent); }
 .btn-icono.peligro:hover { border-color: #dc2626; color: #dc2626; }
 .btn-icono.chico { width: 28px; height: 28px; }
 
@@ -1071,8 +1071,8 @@ label {
   padding: 11px 13px;
   margin: 12px 0 0;
   border-radius: 0 8px 8px 0;
-  border-left: 3px solid #10b981;
-  background: #f0fdf4;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
   font-size: 0.83rem;
   color: #475569;
   line-height: 1.6;
@@ -1110,7 +1110,7 @@ label {
 
 .segmentado button.on {
   background: #fff;
-  color: #047857;
+  color: var(--accent-hover);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -1132,7 +1132,7 @@ label {
 
 .opcion b { font-size: 0.88rem; color: #0f172a; }
 .opcion span { font-size: 0.75rem; color: #64748b; line-height: 1.45; }
-.opcion.on { border-color: #059669; background: #f0fdf4; }
+.opcion.on { border-color: var(--accent); background: var(--accent-soft); }
 
 /* ---------- Días ---------- */
 .dias {
@@ -1159,8 +1159,8 @@ label {
 .dia:hover { border-color: #94a3b8; }
 
 .dia.on {
-  border-color: #059669;
-  background: #059669;
+  border-color: var(--accent);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -1278,7 +1278,7 @@ label {
   max-width: 90vw;
   padding: 12px 20px;
   border-radius: 10px;
-  background: #064e3b;
+  background: var(--colibri-verde-noche);
   color: #fff;
   font-size: 0.875rem;
   font-weight: 600;

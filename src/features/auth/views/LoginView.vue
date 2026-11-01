@@ -4,20 +4,13 @@
       <!-- Barrido de confirmación -->
       <span class="card-barrido" aria-hidden="true"></span>
 
-      <!-- Logo: colibrí dentro del círculo -->
-      <div class="brand-icon" :class="{ 'icon-exito': estado === 'exito' }">
-        <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-          <path d="M44 15 C50 15 53 19 52 23 C50 32 40 40 26 43 L8 47 L15 37 C22 29 30 17 44 15 Z"
-            fill="currentColor" />
-          <path class="ala" d="M30 27 C36 18 46 14 55 16 C50 25 41 31 32 32 Z" fill="currentColor"
-            opacity="0.55" />
-          <!-- El ojo va del color del fondo del círculo, no blanco fijo: sobre
-               tema oscuro el pájaro es claro y un punto blanco desaparece. -->
-          <circle cx="46" cy="21" r="1.7" fill="var(--accent-soft)" />
-        </svg>
-      </div>
-
-      <h1 class="brand-name">Colibrí</h1>
+      <!-- Logo de la marca. El colibrí llega volando al cargar y se va
+           volando al ingresar (clases en el SVG, ver .logo-ave abajo) -->
+      <h1 class="brand">
+        <LogoColibri class="brand-logo" :class="{ 'logo-exito': estado === 'exito' }"
+          etiqueta="Colibrí, floristería y decoración" />
+      </h1>
+      <p class="brand-bajada">Acceso del equipo</p>
 
       <form @submit.prevent="handleSubmit" class="login-form">
 
@@ -92,6 +85,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { useRouter, useRoute } from 'vue-router'
+import LogoColibri from '@/shared/components/LogoColibri.vue'
 
 /*
  * Tiempos de la coreografía de ingreso.
@@ -112,6 +106,8 @@ const DURACION = {
 
 export default {
   name: 'LoginView',
+
+  components: { LogoColibri },
 
   setup () {
     const store = useStore()
@@ -311,13 +307,12 @@ export default {
 
 .login-container {
   /*
-   * El fondo es el único color que NO sale de una superficie del tema: es un
-   * plano de marca, y tiene que quedar oscuro en claro y en oscuro. Si usara
-   * --bg, en tema claro sería casi blanco y la tarjeta desaparecería encima.
-   * Por eso se ancla contra un casi negro y se tiñe con el acento.
+   * Fondo de acuarela como el de la landing: manchas menta, rosa y lima
+   * sobre --bg (tokens --acuarela-*, que en oscuro van más tenues).
    */
-  --plano: color-mix(in srgb, var(--accent) 34%, #0a0c0b);
-  --plano-alto: color-mix(in srgb, var(--accent) 58%, #0a0c0b);
+  --mancha-menta: var(--acuarela-menta);
+  --mancha-rosa: var(--acuarela-rosa);
+  --mancha-lima: var(--acuarela-lima);
 
   display: flex;
   justify-content: center;
@@ -329,8 +324,12 @@ export default {
   padding:
     max(1.5rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
 
-  background-color: var(--plano);
-  background-image: radial-gradient(130% 95% at 50% 0%, var(--plano-alto) 0%, var(--plano) 62%);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(42% 38% at 22% 18%, var(--mancha-menta), transparent 70%),
+    radial-gradient(36% 34% at 82% 22%, var(--mancha-rosa), transparent 70%),
+    radial-gradient(40% 36% at 70% 88%, var(--mancha-menta), transparent 70%),
+    radial-gradient(30% 28% at 15% 85%, var(--mancha-lima), transparent 70%);
   overflow-y: auto;
 
   -webkit-text-size-adjust: 100%;
@@ -416,58 +415,58 @@ export default {
 }
 
 /* ---------- Logo ---------- */
-.brand-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(1rem, 4.5vw, 1.5rem);
-  margin-bottom: clamp(0.6rem, 2.5vw, 1rem);
-  border-radius: var(--r-full, 9999px);
-  background-color: var(--accent-soft);
-  color: var(--accent-text);
-}
+.brand { margin: 0; line-height: 0; }
 
-.brand-icon svg {
-  width: clamp(3.75rem, 15vw, 5.5rem);
-  height: clamp(3.75rem, 15vw, 5.5rem);
+/* El SVG no trae ancho propio: sin width el h1 lo encoge al mínimo */
+.brand-logo {
   display: block;
+  width: min(100%, 17rem);
+  height: auto;
+  margin: 0 auto;
+  overflow: visible;
 }
 
 /*
- * transform-box: fill-box hace que el porcentaje se calcule sobre la caja
- * del propio path y no sobre todo el viewBox. El pivote queda en el punto
- * donde el ala se une al cuerpo.
+ * El colibrí del logo (piezas en <g class="logo-ave">, ver LogoColibri.vue).
+ * transform-box: view-box hace que las 70 piezas se muevan desde el mismo
+ * punto, como una sola. Llega volando al cargar y revolotea; al ingresar
+ * se va volando hacia arriba a la derecha mientras se arma la salida.
  */
-.ala {
-  transform-box: fill-box;
-  transform-origin: 8% 94%;
+.brand-logo :deep(.logo-ave) {
+  transform-box: view-box;
+  transform-origin: 88px 40px;
+  animation:
+    llegar 1.3s cubic-bezier(.2, .8, .25, 1) .15s both,
+    revolotear 3.2s ease-in-out 1.45s infinite;
 }
 
-.icon-exito {
-  animation: pulso-icono 520ms cubic-bezier(0.34, 1.56, 0.64, 1);
+.brand-logo.logo-exito :deep(.logo-ave) {
+  animation: irse 700ms cubic-bezier(.5, 0, .75, .4) forwards;
 }
 
-.icon-exito .ala {
-  animation: aleteo 110ms ease-in-out 6;
+@keyframes llegar {
+  from { transform: translate(-70px, 34px) rotate(-14deg) scale(.7); opacity: 0; }
+  35% { opacity: 1; }
+  to { transform: none; opacity: 1; }
 }
 
-@keyframes pulso-icono {
-  0%, 100% { transform: scale(1); }
-  45% { transform: scale(1.16); }
+@keyframes revolotear {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-2.5px) rotate(-1.5deg); }
 }
 
-@keyframes aleteo {
-  0%, 100% { transform: rotate(0deg) scaleY(1); }
-  50% { transform: rotate(-26deg) scaleY(0.5); }
+@keyframes irse {
+  from { transform: none; opacity: 1; }
+  to { transform: translate(150px, -70px) rotate(12deg) scale(.6); opacity: 0; }
 }
 
-.brand-name {
-  margin: 0;
-  font-size: clamp(1.2rem, 5.5vw, 1.5rem);
-  line-height: 1.3;
-  font-weight: 700;
-  color: var(--text);
-  overflow-wrap: break-word;
+.brand-bajada {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-style: italic;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 /* ---------- Formulario ---------- */
@@ -805,15 +804,8 @@ input:disabled {
     align-items: flex-start;
   }
 
-  .brand-icon {
-    padding: 0.7rem;
-    margin-bottom: 0.5rem;
-  }
-
-  .brand-icon svg {
-    width: 2.75rem;
-    height: 2.75rem;
-  }
+  .brand-logo { width: min(100%, 12rem); }
+  .brand-bajada { margin-top: 2px; font-size: 1.1rem; }
 
   .login-form {
     gap: 0.7rem;
@@ -833,8 +825,8 @@ input:disabled {
   .btn-spinner,
   .card-exito,
   .card-sacudida,
-  .icon-exito,
-  .icon-exito .ala,
+  .brand-logo :deep(.logo-ave),
+  .brand-logo.logo-exito :deep(.logo-ave),
   .card-exito .card-barrido,
   .alert-error,
   .login-button.exito .btn-check path {

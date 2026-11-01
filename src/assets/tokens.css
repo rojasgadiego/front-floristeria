@@ -1,12 +1,14 @@
 /* ============================================================
-   TOKENS · Botanical Rose (Premium/Boutique)
+   TOKENS · Marca Colibrí (verde salvia + rosa, manual CSgrafic)
    ============================================================ */
 
 :root {
   /* --- Tipografía --- */
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+  --font: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
     Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* Títulos de marca (login, encabezados grandes): combina con el logo */
+  --font-display: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
 
   /* --- Marca Colibrí (manual de marca, CSgrafic) ---
      Los seis primeros son los del manual. Los "profundos" no están en el
@@ -22,33 +24,40 @@
   --colibri-verde-profundo:  #56685a;
   --colibri-verde-noche:     #2f3d34;
 
-  /* --- Neutrales (warm) — elevación escalonada --- */
-  --bg: #faf7f5;
+  /* Manchas de acuarela para fondos de marca (login) */
+  --acuarela-menta: color-mix(in srgb, var(--colibri-menta) 75%, transparent);
+  --acuarela-rosa:  color-mix(in srgb, var(--colibri-rosa) 45%, transparent);
+  --acuarela-lima:  color-mix(in srgb, var(--colibri-lima) 30%, transparent);
+
+  /* --- Neutrales con tinte menta — elevación escalonada --- */
+  --bg: #f5f8f4;
   --bg-elev: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f4efec;
+  --surface-2: #edf3ec;
   --sidebar-bg: #ffffff;
-  --border: #e9e0da;
-  --border-strong: #d8ccc4;
+  --border: #dde7db;
+  --border-strong: #c5d4c3;
 
   /* --- Texto --- */
-  --text: #2b2320;
-  --text-muted: #6b5e57;
-  --text-faint: #9a8b82;
+  --text: var(--colibri-verde-noche);
+  --text-muted: var(--colibri-verde-profundo);
+  --text-faint: #6f7f72;
 
   /* Alias de compatibilidad */
-  --text-soft: #6b5e57;
+  --text-soft: var(--colibri-verde-profundo);
 
-  /* --- Acento (Rose) --- */
-  --accent: #c2456e;
-  --accent-hover: #a83a5e;
-  --accent-soft: #f9e4ec;
-  --accent-text: #c2456e;
+  /* --- Acento: verde de la marca ---
+     El principal es verde y no rosa: los botones de peligro son rojos y
+     con un acento rosa un botón normal se confundía con uno de borrar. */
+  --accent: var(--colibri-verde-profundo);
+  --accent-hover: #475749;
+  --accent-soft: #e6eee5;
+  --accent-text: #4a5b4d;
   --accent-contrast: #ffffff;
 
-  /* --- Secundario (Sage) --- */
-  --secondary: #5a7d5a;
-  --secondary-soft: #e6efe6;
+  /* --- Secundario: rosa de la marca --- */
+  --secondary: var(--colibri-rosa-profundo);
+  --secondary-soft: #f6e7e6;
 
   /* --- Semánticos + borders --- */
   --success: #2f8f5b;
@@ -95,7 +104,7 @@
   --card-success-text: var(--success);
 
   /* Overlay para modales/backdrops */
-  --overlay: rgba(43, 35, 32, .55);
+  --overlay: rgba(47, 61, 52, .55);
 
 
 
@@ -107,15 +116,15 @@
   --r-full: 999px;
 
   /* --- Sombras --- */
-  --shadow-sm: 0 1px 2px rgba(43, 35, 32, .06);
-  --shadow-md: 0 4px 14px rgba(43, 35, 32, .08);
-  --shadow-lg: 0 12px 30px rgba(43, 35, 32, .12);
+  --shadow-sm: 0 1px 2px rgba(47, 61, 52, .06);
+  --shadow-md: 0 4px 14px rgba(47, 61, 52, .08);
+  --shadow-lg: 0 12px 30px rgba(47, 61, 52, .12);
 
   /* Alias legacy (--sh-*) */
-  --sh-sm: 0 1px 2px rgba(43, 35, 32, .06);
-  --sh-md: 0 4px 14px rgba(43, 35, 32, .08);
-  --sh-lg: 0 12px 30px rgba(43, 35, 32, .12);
-  --sh-accent: 0 6px 18px rgba(194, 69, 110, .28);
+  --sh-sm: 0 1px 2px rgba(47, 61, 52, .06);
+  --sh-md: 0 4px 14px rgba(47, 61, 52, .08);
+  --sh-lg: 0 12px 30px rgba(47, 61, 52, .12);
+  --sh-accent: 0 6px 18px rgba(86, 104, 90, .30);
 
   /* --- Transiciones --- */
   --t-fast: .15s ease;
@@ -129,33 +138,39 @@
    DARK MODE
    ============================================================ */
 :root[data-theme="dark"] {
-  /* Fondos: azul-gris frío, escalonado por elevación */
-  --bg: #0f1115;
-  --bg-elev: #171a21;
-  --surface: #1c2029;
-  --surface-2: #232834;
-  --sidebar-bg: #12141a;
+  /* Sobre el fondo oscuro las manchas plenas brillaban como niebla */
+  --acuarela-menta: color-mix(in srgb, var(--colibri-menta) 14%, transparent);
+  --acuarela-rosa:  color-mix(in srgb, var(--colibri-rosa) 12%, transparent);
+  --acuarela-lima:  color-mix(in srgb, var(--colibri-lima) 8%, transparent);
+
+  /* Fondos: verde casi negro, escalonado por elevación */
+  --bg: #121815;
+  --bg-elev: #18201b;
+  --surface: #1d2620;
+  --surface-2: #25302a;
+  --sidebar-bg: #141b17;
 
   /* Bordes */
-  --border: #2a2f3a;
-  --border-strong: #3a4150;
+  --border: #2b362f;
+  --border-strong: #3a4840;
 
   /* Texto */
-  --text: #e8eaed;
-  --text-muted: #9aa1ad;
-  --text-faint: #6b7280;
-  --text-soft: #9aa1ad;
+  --text: #e7ece8;
+  --text-muted: #a3b0a6;
+  --text-faint: #76857a;
+  --text-soft: #a3b0a6;
 
-  /* Acento rosa (más luminoso para oscuro) */
-  --accent: #e0608a;
-  --accent-hover: #ec7ba0;
-  --accent-soft: rgba(224, 96, 138, 0.14);
-  --accent-text: #f3a5be;
+  /* Acento verde: un tono medio que sirve de fondo con texto blanco
+     (3.7:1) y de texto sobre el fondo oscuro (4.8:1) */
+  --accent: #5f8f67;
+  --accent-hover: #557f5c;
+  --accent-soft: rgba(127, 168, 131, 0.16);
+  --accent-text: #b9d6b5;
   --accent-contrast: #ffffff;
 
-  /* Secundario (Sage) */
-  --secondary: #7fa87f;
-  --secondary-soft: rgba(127, 168, 127, 0.14);
+  /* Secundario: rosa */
+  --secondary: #e3a9a6;
+  --secondary-soft: rgba(204, 154, 152, 0.16);
 
   /* Semánticos */
   --success: #4ade80;
@@ -209,7 +224,7 @@
   --sh-sm: none;
   --sh-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --sh-lg: 0 12px 30px rgba(0, 0, 0, 0.5);
-  --sh-accent: 0 6px 18px rgba(224, 96, 138, .35);
+  --sh-accent: 0 6px 18px rgba(95, 143, 103, .35);
 
   color-scheme: dark;
 }

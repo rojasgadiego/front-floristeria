@@ -39,24 +39,19 @@
            overflow del contenedor. -->
       <div class="sidebar-header">
         <div class="logo-container">
-          <div class="logo-icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64" focusable="false">
-              <path
-                d="M44 15 C50 15 53 19 52 23 C50 32 40 40 26 43 L8 47 L15 37 C22 29 30 17 44 15 Z"
-                fill="currentColor"
-              />
-              <path
-                d="M30 27 C36 18 46 14 55 16 C50 25 41 31 32 32 Z"
-                fill="currentColor"
-                opacity="0.55"
-              />
-              <circle cx="46" cy="21" r="1.7" fill="#064e3b" />
-            </svg>
-          </div>
+          <!-- El colibrí del logo de la marca: es lo único que cabe con el
+               panel colapsado (76px), y el nombre aparece al expandir -->
+          <img
+            class="logo-icon"
+            src="@/assets/isotipo-colibri.svg"
+            alt=""
+            width="38"
+            height="34"
+          />
 
           <div class="logo-texto texto-plegable">
             <span class="logo-nombre">Colibrí</span>
-            <!-- <span class="logo-bajada">ERP &amp; Punto de Venta</span> -->
+            <span class="logo-bajada">Floristería y decoración</span>
           </div>
         </div>
 
@@ -357,27 +352,24 @@ function alPresionarTecla (e) {
   min-width: 0;
 }
 
+/* 38px de ancho centrado en el mismo eje que el logo anterior (35px):
+   el padding de la cabecera lo compensa con margen negativo */
 .logo-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 35px;
-  height: 35px;
+  display: block;
+  width: 38px;
+  height: auto;
+  margin-left: -1.5px;
   flex-shrink: 0;
-  border-radius: 50%;
-  background-color: var(--sb-accent-soft);
-  color: var(--sb-accent);
 }
-
-.logo-icon svg { width: 28px; height: 28px; display: block; }
 
 .logo-texto { display: flex; flex-direction: column; min-width: 0; }
 
 .logo-nombre {
-  font-size: 0.95rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--sb-text-strong);
-  line-height: 1.2;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -667,7 +659,6 @@ function alPresionarTecla (e) {
 }
 
 .sidebar.is-cajon.collapsed { width: 280px; }
-.sidebar.is-cajon .logo-nombre { font-size: 0.88rem; }
 .sidebar.is-cajon.is-open { transform: translateX(0); }
 
 /* El cajón siempre va ancho, así que ignora el plegado aunque la clase
