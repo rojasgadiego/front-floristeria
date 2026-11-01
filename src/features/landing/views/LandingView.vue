@@ -2,11 +2,13 @@
   <div ref="raiz" class="landing">
     <header class="barra">
       <router-link to="/" class="marca" aria-label="Floristería Colibrí, inicio">
-        <svg class="marca-ave" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-          <path d="M44 15 C50 15 53 19 52 23 C50 32 40 40 26 43 L8 47 L15 37 C22 29 30 17 44 15 Z" />
-          <path d="M30 27 C36 18 46 14 55 16 C50 25 41 31 32 32 Z" opacity="0.55" />
-        </svg>
-        <span>Colibrí</span>
+        <img
+          class="marca-logo"
+          src="@/assets/logo-colibri.png"
+          alt=""
+          width="800"
+          height="442"
+        />
       </router-link>
 
       <router-link v-if="autenticado" :to="{ name: 'Dashboard' }" class="acceso">
@@ -45,13 +47,13 @@
               <!-- Tonos de hoja compartidos con las enredaderas: viven acá
                    porque este SVG siempre está en la página -->
               <linearGradient id="enr-hoja" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stop-color="#3f7a4f" />
-                <stop offset="0.6" stop-color="#0f7c74" />
-                <stop offset="1" stop-color="#7fd1c0" />
+                <stop offset="0" stop-color="#56685a" />
+                <stop offset="0.6" stop-color="#78897a" />
+                <stop offset="1" stop-color="#bed5bc" />
               </linearGradient>
               <linearGradient id="enr-hoja-oscura" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0" stop-color="#1f4d36" />
-                <stop offset="1" stop-color="#2f8a6a" />
+                <stop offset="0" stop-color="#3a4b40" />
+                <stop offset="1" stop-color="#56685a" />
               </linearGradient>
 
               <!-- Una flor de chilco colgando, dibujada desde su punto de unión -->
@@ -84,8 +86,8 @@
               <!-- El tronco se desvanece abajo: la planta cuelga de la
                    enredadera de la derecha, no está plantada en el borde -->
               <linearGradient id="tronco-fade" gradientUnits="userSpaceOnUse" x1="0" y1="420" x2="0" y2="520">
-                <stop offset="0" stop-color="#17392c" />
-                <stop offset="1" stop-color="#17392c" stop-opacity="0" />
+                <stop offset="0" stop-color="#2f3d34" />
+                <stop offset="1" stop-color="#2f3d34" stop-opacity="0" />
               </linearGradient>
               <g class="solo-escritorio">
                 <path class="rama rama-tronco" d="M232 520 C236 420 214 330 238 240 C254 180 300 130 360 104" />
@@ -613,8 +615,8 @@ async function construirEnredaderas () {
      El color lo ponen las hojas y los chilcos. */
   const finPortada = Math.min(0.6, (el.querySelector('.portada').offsetHeight + 60) / H)
   const colores = [
-    [0, '#17392c'], [finPortada, '#17392c'],
-    [finPortada + (1 - finPortada) * 0.5, '#24574a'], [1, '#4f6f3c']
+    [0, '#2f3d34'], [finPortada, '#2f3d34'],
+    [finPortada + (1 - finPortada) * 0.5, '#56685a'], [1, '#78897a']
   ]
 
   Object.assign(enr, { w: W, h: H, colores, ramas: [der, izq], brotes: [] })
@@ -756,15 +758,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/*
+ * Paleta de la marca (tokens.css, --colibri-*). Los nombres locales son
+ * los de siempre para no tocar cada regla: --fucsia ahora es el rosa de la
+ * marca y --morado la corola rosada de las flores.
+ */
 .landing {
-  --petalo: #fcedf1;
-  --tallo: #17392c;
-  --tallo-suave: #3d5a4c;
-  --fucsia: #c8306e;
-  --fucsia-hover: #a92459;
-  --garganta: #0f7c74;
-  --hoja: #d5e6cc;
-  --morado: #5b2a86;
+  --petalo: #f4f8f3;
+  --tallo: var(--colibri-verde-noche);
+  --tallo-suave: var(--colibri-verde-profundo);
+  --banda: #3a4b40;
+  --fucsia: var(--colibri-rosa-profundo);
+  --fucsia-hover: #8c4441;
+  --garganta: var(--colibri-rosa-fuerte);
+  --hoja: var(--colibri-menta);
+  --morado: var(--colibri-rosa);
 
   --medida: 34rem;
   --gutter: 16px;
@@ -802,10 +810,10 @@ onUnmounted(() => {
 .enr-union { fill: none; stroke: var(--tallo); stroke-linecap: round; }
 .enr-hoja { fill: url(#enr-hoja); }
 .enr-hoja-oscura { fill: url(#enr-hoja-oscura); }
-.enr-rizo { fill: none; stroke: #2f6f52; stroke-width: 1.3; stroke-linecap: round; }
-.enr-ramilla { fill: none; stroke: #24574a; stroke-width: 1.8; stroke-linecap: round; }
-.enr-pedicelo { fill: none; stroke: #24574a; stroke-width: 1.4; }
-.enr-capullo { fill: #d8325f; }
+.enr-rizo { fill: none; stroke: #56685a; stroke-width: 1.3; stroke-linecap: round; }
+.enr-ramilla { fill: none; stroke: #56685a; stroke-width: 1.8; stroke-linecap: round; }
+.enr-pedicelo { fill: none; stroke: #56685a; stroke-width: 1.4; }
+.enr-capullo { fill: #b86460; }
 
 /* Todo gira y escala desde su punto de unión (el origen local) */
 .enr-brote, .enr-mecer { transform-origin: 0 0; }
@@ -836,17 +844,21 @@ onUnmounted(() => {
   margin: 0 auto;
   padding: 14px var(--gutter);
 }
+/* El logo lleva el nombre dibujado: el alto manda y el ancho sale de la
+   proporción del PNG (800×442) */
 .marca {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  color: var(--tallo);
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 1.25rem;
-  letter-spacing: -0.02em;
+  border-radius: 8px;
 }
-.marca-ave { width: 30px; height: 30px; fill: var(--fucsia); }
+.marca-logo {
+  display: block;
+  height: 52px;
+  width: auto;
+}
+@media (min-width: 720px) {
+  .marca-logo { height: 80px; }
+}
 .acceso {
   color: var(--tallo-suave);
   font-size: 0.9375rem;
@@ -959,7 +971,7 @@ h1 {
 .guia { fill: none; stroke: none; }
 .solo-movil { display: none; }
 .cuerpo-rama { fill: var(--tallo); }
-.zarcillo-h { fill: none; stroke: #2f6f52; stroke-width: 1.3; stroke-linecap: round; }
+.zarcillo-h { fill: none; stroke: #56685a; stroke-width: 1.3; stroke-linecap: round; }
 
 /* La rama de móvil se mece apenas, desde el punto donde cuelga. Ida y
    vuelta en un mismo ciclo con curva senoidal: sin frenadas en los
@@ -985,15 +997,15 @@ h1 {
 .hoja { fill: url(#enr-hoja); }
 .hoja-oscura { fill: url(#enr-hoja-oscura); }
 .pedicelo { fill: none; stroke: var(--tallo); stroke-width: 2; }
-.ovario { fill: #3f7a4f; }
-.sepalo { fill: #d8325f; }
+.ovario { fill: #78897a; }
+.sepalo { fill: #b86460; }
 .corola { fill: var(--morado); }
-.estambre { fill: none; stroke: #d8325f; stroke-width: 1.6; stroke-linecap: round; }
-.antera { fill: #f5d7e3; }
+.estambre { fill: none; stroke: #b86460; stroke-width: 1.6; stroke-linecap: round; }
+.antera { fill: var(--colibri-lima); }
 
-.ave-cuerpo { fill: var(--fucsia); }
-.ave-garganta { fill: var(--garganta); }
-.ave-ala { fill: #e98ab0; }
+.ave-cuerpo { fill: var(--colibri-rosa-fuerte); }
+.ave-garganta { fill: var(--colibri-verde-profundo); }
+.ave-ala { fill: #ecc9c7; }
 .ave-ojo { fill: var(--petalo); }
 .ave-pico { stroke: var(--tallo); stroke-width: 1.6; stroke-linecap: round; }
 
@@ -1107,7 +1119,7 @@ h3 {
 /* Cómo pedir: la única banda oscura */
 .pedir {
   max-width: none;
-  background: var(--tallo);
+  background: var(--banda);
   color: var(--petalo);
 }
 .pedir-interior { max-width: calc(72rem - 2 * var(--gutter)); margin: 0 auto; }
@@ -1130,7 +1142,7 @@ h3 {
   font-size: 3.25rem;
   font-weight: 800;
   line-height: 0.9;
-  color: #f28bb3;
+  color: var(--colibri-rosa);
 }
 .pasos p { margin-top: 4px; color: color-mix(in srgb, var(--petalo) 78%, transparent); max-width: 28rem; }
 

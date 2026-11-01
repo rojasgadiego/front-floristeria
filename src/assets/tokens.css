@@ -8,6 +8,20 @@
     Roboto, Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
 
+  /* --- Marca Colibrí (manual de marca, CSgrafic) ---
+     Los seis primeros son los del manual. Los "profundos" no están en el
+     manual: son sus tonos oscurecidos para que el texto pase contraste AA
+     (blanco sobre #b86460 da 4.2:1 y hace falta 4.5:1). */
+  --colibri-rosa:            #cc9a98;
+  --colibri-rosa-fuerte:     #b86460;
+  --colibri-lima:            #b4c460;
+  --colibri-menta:           #bed5bc;
+  --colibri-salvia:          #a1b89b;
+  --colibri-verde:           #78897a;
+  --colibri-rosa-profundo:   #a1504c;
+  --colibri-verde-profundo:  #56685a;
+  --colibri-verde-noche:     #2f3d34;
+
   /* --- Neutrales (warm) — elevación escalonada --- */
   --bg: #faf7f5;
   --bg-elev: #ffffff;
