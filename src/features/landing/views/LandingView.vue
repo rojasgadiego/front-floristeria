@@ -225,9 +225,21 @@ onMounted(cargarCatalogo)
   --ancho: 68rem;
   --gutter: 20px;
 
+  /* Degradado de marca para botones, títulos y adornos */
+  --degradado-rosa: linear-gradient(135deg, #b0544f 0%, var(--rosa) 55%, #8c4441 100%);
+  --degradado-marca: linear-gradient(90deg, var(--colibri-rosa), var(--colibri-lima), var(--colibri-salvia));
+
   position: relative;
   min-height: 100vh;
-  background: var(--fondo);
+  /* Al bajar la página el fondo pasa de menta a blanco, se tiñe de rosa
+     a media altura y vuelve a menta al pie */
+  background:
+    linear-gradient(180deg,
+      #eaf3e8 0%,
+      var(--fondo) 18%,
+      #fbf7f6 46%,
+      #f8faf7 66%,
+      #e8f1e6 100%);
   color: var(--tinta);
   font-family: var(--sans);
   font-size: 1.0625rem;
@@ -302,18 +314,30 @@ onMounted(cargarCatalogo)
   cursor: pointer;
   transition: background-color .15s, color .15s, box-shadow .15s, transform .15s;
 }
+/* El degradado mide el doble y al pasar el mouse se corre: así cambia de
+   tono suave, sin el salto de un background que no se puede animar */
 .btn-principal {
-  background: var(--rosa);
+  background: var(--degradado-rosa);
+  background-size: 200% 100%;
+  background-position: 0% 0;
   color: #fff;
-  box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--rosa) 70%, transparent);
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--rosa) 80%, transparent);
+  transition: background-position .35s ease, box-shadow .15s, transform .15s;
 }
-.btn-principal:hover { background: var(--rosa-hover); transform: translateY(-1px); }
+.btn-principal:hover {
+  background-position: 100% 0;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--rosa) 85%, transparent);
+}
 .btn-secundario {
-  background: #fff;
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--colibri-menta) 22%, #fff));
   color: var(--tinta);
   box-shadow: inset 0 0 0 1.5px var(--tinta-suave);
 }
-.btn-secundario:hover { background: var(--tinta); color: #fff; }
+.btn-secundario:hover {
+  background: linear-gradient(135deg, var(--colibri-verde-profundo), var(--tinta));
+  color: #fff;
+}
 
 .landing a:focus-visible,
 .landing button:focus-visible {
@@ -418,8 +442,16 @@ onMounted(cargarCatalogo)
   font-size: clamp(2rem, 7.5vw, 3.5rem);
   font-weight: 600;
   font-style: italic;
-  line-height: 1.05;
+  line-height: 1.15;
   color: var(--tinta);
+  /* Verde noche → verde → rosa: los tres tonos pasan AA sobre el fondo.
+     Si el navegador no recorta el fondo al texto, queda el color plano. */
+  background: linear-gradient(100deg, var(--tinta) 10%, var(--colibri-verde-profundo) 50%, var(--rosa) 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Sin este relleno, la cola de las cursivas queda fuera del recorte */
+  padding: 0 .08em .06em;
   text-wrap: balance;
 }
 .bajada {
@@ -469,6 +501,16 @@ h2 {
   text-align: center;
   margin-bottom: 12px;
 }
+/* Trazo bajo cada título con los tres colores de la marca */
+h2::after {
+  content: '';
+  display: block;
+  width: 72px;
+  height: 3px;
+  margin: 14px auto 0;
+  border-radius: 3px;
+  background: var(--degradado-marca);
+}
 h3 {
   font-size: 1.5rem;
   line-height: 1.15;
@@ -487,12 +529,30 @@ h3 {
   gap: 16px;
   margin-top: 28px;
 }
+/*
+ * Tarjetas con un degradado que baja de blanco a un tinte (menta en las
+ * impares, rosa en las pares). El borde también es degradado: dos fondos,
+ * uno recortado al relleno y otro al borde transparente.
+ */
 .servicio {
+  --tinte: color-mix(in srgb, var(--colibri-menta) 30%, #fff);
+  --borde: linear-gradient(160deg, color-mix(in srgb, var(--colibri-salvia) 70%, transparent), transparent 60%);
   padding: 26px 24px;
-  background: #fff;
-  border: 1px solid var(--linea);
+  background:
+    linear-gradient(170deg, #fff 45%, var(--tinte)) padding-box,
+    var(--borde) border-box;
+  border: 1px solid transparent;
   border-radius: 24px;
   box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--tinta) 40%, transparent);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.servicio:nth-child(even) {
+  --tinte: color-mix(in srgb, var(--colibri-rosa) 18%, #fff);
+  --borde: linear-gradient(160deg, color-mix(in srgb, var(--colibri-rosa) 80%, transparent), transparent 60%);
+}
+.servicio:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 36px -20px color-mix(in srgb, var(--tinta) 55%, transparent);
 }
 .servicio-icono {
   display: inline-grid;
@@ -501,11 +561,13 @@ h3 {
   height: 52px;
   margin-bottom: 14px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--colibri-menta) 70%, #fff);
+  background: radial-gradient(circle at 30% 25%, #fff 0%, color-mix(in srgb, var(--colibri-menta) 85%, #fff) 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--colibri-salvia) 45%, transparent);
   color: var(--tinta-suave);
 }
 .servicio:nth-child(even) .servicio-icono {
-  background: color-mix(in srgb, var(--colibri-rosa) 35%, #fff);
+  background: radial-gradient(circle at 30% 25%, #fff 0%, color-mix(in srgb, var(--colibri-rosa) 55%, #fff) 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--colibri-rosa) 50%, transparent);
   color: var(--rosa);
 }
 .servicio p { margin-top: 8px; color: var(--tinta-suave); }
@@ -522,7 +584,7 @@ h3 {
   flex-direction: column;
   gap: 2px;
   padding: 10px 10px 14px;
-  background: #fff;
+  background: linear-gradient(180deg, #fff 60%, color-mix(in srgb, var(--colibri-menta) 22%, #fff));
   border: 1px solid var(--linea);
   border-radius: 20px;
   color: inherit;
@@ -546,12 +608,18 @@ h3 {
 .catalogo-mas { display: flex; margin: 28px auto 0; }
 
 /* Cómo pedir: una caja suave en menta, con números rosados en círculo */
+/* Varias capas: luz blanca arriba al centro, rosa en una esquina, lima en
+   la otra, y debajo un degradado menta → salvia claro */
 .pedir-caja {
   padding: 40px 14px;
   border-radius: 32px;
   background:
-    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--colibri-rosa) 22%, transparent), transparent 60%),
-    color-mix(in srgb, var(--colibri-menta) 55%, #fff);
+    radial-gradient(60% 50% at 50% 0%, rgba(255, 255, 255, .7), transparent 70%),
+    /* Rosa claro casi opaco: translúcido sobre el verde se volvía beige */
+    radial-gradient(60% 65% at 100% 0%, rgba(248, 226, 225, .92), rgba(248, 226, 225, 0) 70%),
+    radial-gradient(60% 60% at 0% 100%, color-mix(in srgb, var(--colibri-lima) 26%, transparent), transparent 65%),
+    linear-gradient(160deg, color-mix(in srgb, var(--colibri-menta) 50%, #fff), color-mix(in srgb, var(--colibri-salvia) 42%, #fff));
+  box-shadow: 0 24px 50px -30px color-mix(in srgb, var(--tinta) 55%, transparent);
   text-align: center;
 }
 .pasos {
@@ -570,8 +638,12 @@ h3 {
   height: 54px;
   margin: 0 auto 12px;
   border-radius: 50%;
-  background: #fff;
-  border: 1.5px solid var(--colibri-rosa);
+  /* Anillo degradado en rosas (con lima en medio salía un tono dorado) */
+  background:
+    radial-gradient(circle at 35% 30%, #fff, color-mix(in srgb, var(--colibri-rosa) 14%, #fff)) padding-box,
+    linear-gradient(135deg, var(--colibri-rosa-fuerte), var(--colibri-rosa) 60%, #f1d6d5) border-box;
+  border: 2px solid transparent;
+  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--rosa) 70%, transparent);
   color: var(--rosa);
   font-family: var(--serif);
   font-size: 1.75rem;
@@ -589,9 +661,17 @@ h3 {
 .visita-direccion,
 .horario-caja {
   padding: 28px 24px;
-  background: #fff;
-  border: 1px solid var(--linea);
+  background:
+    linear-gradient(165deg, #fff 50%, color-mix(in srgb, var(--colibri-menta) 26%, #fff)) padding-box,
+    linear-gradient(160deg, color-mix(in srgb, var(--colibri-salvia) 60%, transparent), transparent 55%) border-box;
+  border: 1px solid transparent;
   border-radius: 24px;
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--tinta) 40%, transparent);
+}
+.horario-caja {
+  background:
+    linear-gradient(165deg, #fff 50%, color-mix(in srgb, var(--colibri-rosa) 16%, #fff)) padding-box,
+    linear-gradient(160deg, color-mix(in srgb, var(--colibri-rosa) 70%, transparent), transparent 55%) border-box;
 }
 .visita-icono { color: var(--rosa); }
 .direccion {
@@ -632,7 +712,9 @@ h3 {
   max-width: var(--ancho);
   margin: 24px auto 0;
   padding: 36px var(--gutter) 44px;
-  border-top: 1px solid var(--linea);
+  /* Línea superior que se desvanece en las puntas */
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--colibri-salvia) 25%, var(--colibri-rosa) 75%, transparent) 1;
   color: var(--tinta-suave);
   font-size: 0.9375rem;
 }
@@ -675,6 +757,8 @@ h3 {
   .portada-logo,
   .portada-logo :deep(.logo-ave) { animation: none; }
   .btn,
+  .btn-principal,
+  .servicio,
   .producto { transition: none; }
 }
 </style>
