@@ -1,5 +1,5 @@
 <template>
-  <div class="landing">
+  <div ref="raiz" class="landing">
     <header class="barra">
       <nav class="menu" aria-label="Secciones">
         <a v-if="catalogo.length" href="#catalogo">Catálogo</a>
@@ -151,7 +151,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useStore } from 'vuex'
 import { Clock, Flower2, Heart, Instagram, MapPin, MessageCircle, PartyPopper, Sprout } from 'lucide-vue-next'
 import { CONTACTO as c } from '../contacto'
@@ -203,7 +205,99 @@ async function cargarCatalogo () {
   }
 }
 
-onMounted(cargarCatalogo)
+/* ---------------- Animaciones (GSAP) ----------------
+ * Todo dentro de un matchMedia: con "reducir movimiento" activado no se
+ * crea ninguna animación y la página queda quieta y visible. Las entradas
+ * por scroll corren una sola vez; no se esconden de nuevo al subir.
+ */
+gsap.registerPlugin(ScrollTrigger)
+
+const raiz = ref(null)
+let mm = null
+
+const alEntrar = (trigger) => ({ trigger, start: 'top 85%', once: true })
+
+function animarPortada () {
+  gsap.timeline({ defaults: { ease: 'power3.out' } })
+    // El titular se descubre de izquierda a derecha. No se separa en
+    // palabras: el degradado del texto se cortaría en cada una.
+    .from('.portada-titular', { clipPath: 'inset(0 100% 0 0)', y: 12, duration: 1.1, clearProps: 'clipPath' }, 0.7)
+    .from('.bajada', { autoAlpha: 0, y: 16, duration: 0.8 }, 1.05)
+    .from('.acciones .btn', { autoAlpha: 0, y: 18, scale: 0.96, duration: 0.7, stagger: 0.12, clearProps: 'transform' }, 1.25)
+
+  // Las manchas de acuarela bajan más lento que la página: profundidad
+  gsap.to('.acuarela', {
+    yPercent: 22,
+    ease: 'none',
+    scrollTrigger: { trigger: '.portada', start: 'top top', end: 'bottom top', scrub: true }
+  })
+}
+
+function animarSecciones () {
+  // Títulos: suben y el trazo de colores se dibuja desde el centro
+  gsap.utils.toArray('.seccion h2').forEach((h2) => {
+    gsap.timeline({ scrollTrigger: alEntrar(h2) })
+      .from(h2, { autoAlpha: 0, y: 24, duration: 0.8, ease: 'power3.out' })
+      .from(h2, { '--trazo': 0, duration: 0.7, ease: 'power2.inOut' }, 0.3)
+  })
+
+  // La enredadera se "dibuja" desplegándose hacia los lados
+  gsap.utils.toArray('.separador img').forEach((img) => {
+    gsap.from(img, {
+      clipPath: 'inset(0 50% 0 50%)',
+      duration: 1.2,
+      ease: 'power2.inOut',
+      clearProps: 'clipPath',
+      scrollTrigger: alEntrar(img)
+    })
+  })
+
+  gsap.from('.servicio', {
+    autoAlpha: 0, y: 40, duration: 0.8, ease: 'power3.out', stagger: 0.12,
+    clearProps: 'transform',
+    scrollTrigger: alEntrar('.tarjetas')
+  })
+
+  const pasos = gsap.timeline({ scrollTrigger: alEntrar('.pedir-caja') })
+  pasos
+    .from('.pedir-caja', { autoAlpha: 0, scale: 0.97, y: 30, duration: 0.9, ease: 'power3.out' })
+    .from('.pasos li', { autoAlpha: 0, y: 24, duration: 0.6, ease: 'back.out(1.6)', stagger: 0.18 }, 0.35)
+    .from('.pedir-caja > .btn', { autoAlpha: 0, y: 14, duration: 0.5, ease: 'power2.out' }, '-=0.2')
+
+  gsap.from('.visita-direccion', { autoAlpha: 0, x: -36, duration: 0.9, ease: 'power3.out', scrollTrigger: alEntrar('.visita-grilla') })
+  gsap.from('.horario-caja', { autoAlpha: 0, x: 36, duration: 0.9, ease: 'power3.out', delay: 0.1, scrollTrigger: alEntrar('.visita-grilla') })
+  gsap.from('.horario tr', { autoAlpha: 0, x: 12, duration: 0.4, stagger: 0.07, delay: 0.4, scrollTrigger: alEntrar('.visita-grilla') })
+
+  gsap.from('.pie > *', { autoAlpha: 0, y: 16, duration: 0.7, stagger: 0.12, scrollTrigger: alEntrar('.pie') })
+}
+
+// El catálogo llega después (fetch) y se anima en tandas al aparecer
+function animarCatalogo () {
+  ScrollTrigger.batch('.catalogo-grilla li', {
+    start: 'top 90%',
+    once: true,
+    onEnter: (items) => gsap.from(items, { autoAlpha: 0, y: 30, duration: 0.6, stagger: 0.08, ease: 'power3.out', clearProps: 'transform' })
+  })
+}
+
+onMounted(async () => {
+  mm = gsap.matchMedia(raiz.value)
+  mm.add('(prefers-reduced-motion: no-preference)', () => {
+    animarPortada()
+    animarSecciones()
+  })
+
+  await cargarCatalogo()
+  await nextTick()
+  if (catalogo.value.length) {
+    mm.add('(prefers-reduced-motion: no-preference)', animarCatalogo)
+  }
+  // El catálogo y las fuentes cambian la altura: recalcular los disparadores
+  ScrollTrigger.refresh()
+  document.fonts?.ready.then(() => ScrollTrigger.refresh())
+})
+
+onBeforeUnmount(() => mm?.revert())
 </script>
 
 <style scoped>
@@ -500,6 +594,7 @@ h2 {
   line-height: 1;
   text-align: center;
   margin-bottom: 12px;
+  --trazo: 1;
 }
 /* Trazo bajo cada título con los tres colores de la marca */
 h2::after {
@@ -510,6 +605,8 @@ h2::after {
   margin: 14px auto 0;
   border-radius: 3px;
   background: var(--degradado-marca);
+  /* GSAP lleva --trazo de 0 a 1 para dibujar la línea desde el centro */
+  transform: scaleX(var(--trazo));
 }
 h3 {
   font-size: 1.5rem;
