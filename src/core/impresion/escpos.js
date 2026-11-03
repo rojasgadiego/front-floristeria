@@ -194,6 +194,57 @@ export function boletaEscPos (ticket, { ancho = 80 } = {}) {
   return Uint8Array.from(b)
 }
 
+/**
+ * El comprobante del repartidor. Sin precios: el contenido es el mismo que
+ * comprobanteDespacho.js arma para el navegador.
+ */
+export function despachoEscPos (d, { ancho = 80, fechaTexto = '' } = {}) {
+  const cols = COLUMNAS[ancho] || COLUMNAS[80]
+  const b = []
+  const linea = (t = '') => { b.push(...aBytes(t), LF) }
+  const separador = () => linea('-'.repeat(cols))
+
+  /* Respeta los saltos de línea: los productos vienen uno por línea. */
+  const envolver = (t) => String(t ?? '').split('\n').flatMap((parrafo) => {
+    const lineas = []
+    let actual = ''
+    for (const p of parrafo.split(/\s+/).filter(Boolean)) {
+      if (!actual) actual = p
+      else if ((actual + ' ' + p).length <= cols) actual += ' ' + p
+      else { lineas.push(actual); actual = p }
+    }
+    if (actual) lineas.push(actual)
+    return lineas
+  })
+
+  const seccion = (titulo, texto) => {
+    if (!texto) return
+    separador()
+    b.push(ESC, 0x45, 1); linea(titulo); b.push(ESC, 0x45, 0)
+    envolver(texto).forEach(l => linea(l))
+  }
+
+  b.push(ESC, 0x40, ESC, 0x74, CODEPAGE)
+  b.push(ESC, 0x61, 1, ESC, 0x45, 1, GS, 0x21, 0x11)
+  linea('DESPACHO')
+  b.push(GS, 0x21, 0)
+  envolver(fechaTexto + (d.hora ? ' - ' + d.hora : '')).forEach(l => linea(l))
+  b.push(ESC, 0x45, 0, ESC, 0x61, 0)
+
+  seccion('RECIBE', [d.recibe, d.telefono].filter(Boolean).join('\n'))
+  seccion('DIRECCION', d.direccion)
+  seccion('INDICACIONES', d.indicaciones)
+  seccion('PRODUCTOS', d.productos)
+  seccion('MENSAJE DE LA TARJETA', d.mensaje)
+
+  separador()
+  b.push(ESC, 0x61, 1)
+  linea('Boleta ' + d.folio + ' - Atencion #' + d.numeroAtencion)
+  b.push(ESC, 0x64, 3, GS, 0x56, 66, 0)
+
+  return Uint8Array.from(b)
+}
+
 /** Base64 de los bytes, en tramos: con fromCharCode(...todo) una boleta
     larga revienta la pila del navegador. */
 export function aBase64 (bytes) {

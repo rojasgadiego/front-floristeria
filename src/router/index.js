@@ -12,6 +12,7 @@ const MainLayout = () => import('@/layouts/MainLayout.vue') // ⚠️ AJUSTA LA 
 const Dashboard = () => import('@/features/reportes/views/DashboardView.vue')
 const Pos = () => import('@/features/ventas/views/PosView.vue')
 const Ventas = () => import('@/features/ventas/views/VentasView.vue')
+const Despachos = () => import('@/features/ventas/views/DespachosView.vue')
 
 // Inventario: la vista es solo el layout (menú ↔ sección vía <router-view/>)
 const Inventario = () => import('@/features/inventario/views/InventarioView.vue')
@@ -93,6 +94,12 @@ const routes = [
         name: 'Ventas',
         component: Ventas,
         meta: { permiso: 'ventas', title: 'Ventas y Caja' }
+      },
+      {
+        path: 'despachos',
+        name: 'Despachos',
+        component: Despachos,
+        meta: { permiso: 'despachos', title: 'Despachos' }
       },
 
       /* ---------------- Cotizaciones ---------------- */

@@ -142,6 +142,25 @@
             <input id="d-direccion" class="campo" v-model="despacho.direccion"
               maxlength="300" autocomplete="off" placeholder="Calle, número, depto, comuna">
 
+            <div class="rejilla">
+              <div>
+                <label for="d-fecha">Fecha de entrega</label>
+                <input id="d-fecha" class="campo" type="date" :min="fechaMinima" v-model="despacho.fecha">
+              </div>
+              <div>
+                <label for="d-hora">Hora (opcional)</label>
+                <input id="d-hora" class="campo" type="time" v-model="despacho.hora">
+              </div>
+            </div>
+
+            <label for="d-mensaje">Mensaje de la tarjeta (opcional)</label>
+            <textarea id="d-mensaje" class="campo" rows="2" maxlength="500"
+              v-model="despacho.mensaje" placeholder="Lo que va escrito en la tarjeta"></textarea>
+
+            <label for="d-indicaciones">Indicaciones de entrega (opcional)</label>
+            <input id="d-indicaciones" class="campo" v-model="despacho.indicaciones"
+              maxlength="300" autocomplete="off" placeholder="Ej.: dejar en conserjería">
+
             <label for="d-valor">Valor despacho</label>
             <input id="d-valor" class="campo dato" type="number" min="0" step="500"
               inputmode="numeric" v-model.number="despacho.valor">
@@ -207,6 +226,7 @@
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useStore } from 'vuex'
 import { MEDIOS_PAGO } from '@/features/ventas/store/ventas.module'
+import { hoy } from '@/core/utils/fechas'
 
 /* Los billetes que circulan en Chile. Ofrecer los que superan el total
    cubre casi todos los pagos sin que nadie tipee. */
@@ -243,7 +263,11 @@ export default {
     const codigoAuth = ref('')
     const enviandoCodigo = ref(false)
     const esDespacho = ref(false)
-    const despacho = reactive({ recibe: '', telefono: '', direccion: '', valor: 0 })
+    const fechaMinima = hoy()
+    const despacho = reactive({
+      recibe: '', telefono: '', direccion: '', valor: 0,
+      fecha: fechaMinima, hora: '', mensaje: '', indicaciones: ''
+    })
     const error = ref('')
     const campoRecibido = ref(null)
 
@@ -284,6 +308,7 @@ export default {
 
     const despachoCompleto = computed(() =>
       Boolean(despacho.recibe.trim() && despacho.telefono.trim() && despacho.direccion.trim()) &&
+      despacho.fecha >= fechaMinima &&
       (despacho.valor || 0) >= 0
     )
 
@@ -362,7 +387,11 @@ export default {
                 recibe: despacho.recibe.trim(),
                 telefono: despacho.telefono.trim(),
                 direccion: despacho.direccion.trim(),
-                valor: valorDespacho.value
+                valor: valorDespacho.value,
+                fecha: despacho.fecha,
+                hora: despacho.hora || null,
+                mensaje: despacho.mensaje.trim() || null,
+                indicaciones: despacho.indicaciones.trim() || null
               }
             : null
         })
@@ -387,7 +416,7 @@ export default {
       carrito, unidades, bruto, descuentoPromo, abonoPrevio, promocionElegida, cliente, cobrando,
       valorPunto, clubActivo, canjeMinimo, umbral, primerNombre,
       medioPago, recibido, puntos, descuento, codigoEnviado, codigoAuth, enviandoCodigo,
-      esDespacho, despacho, valorDespacho, alternarDespacho, error, campoRecibido,
+      esDespacho, despacho, fechaMinima, valorDespacho, alternarDespacho, error, campoRecibido,
       maxCanjeable, descuentoCanje, totalEstimado, vuelto, faltaEfectivo,
       billetesUtiles, necesitaAutorizacion, puedeCobrar,
       elegirMedio, solicitarCodigo, cobrar, clp

@@ -56,6 +56,14 @@ export const MENU_COLIBRI = [
     roles: ['Admin', 'Vendedor'],
     icon: ico('<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9.5 8.5h5M9.5 12.5h5"/>')
   },
+  {
+    path: '/despachos',
+    clave: 'despachos',
+    name: 'Despachos',
+    seccion: 'Operación',
+    roles: ['Admin', 'Vendedor'],
+    icon: ico('<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>')
+  },
 
   // // ---------------- Catálogo ----------------
   {

@@ -340,7 +340,11 @@ export default {
           direccionDespacho: despacho?.direccion ?? null,
           despachoRecibe: despacho?.recibe ?? null,
           despachoTelefono: despacho?.telefono ?? null,
-          despachoValor: despacho?.valor ?? 0
+          despachoValor: despacho?.valor ?? 0,
+          despachoFecha: despacho?.fecha ?? null,
+          despachoHora: despacho?.hora ?? null,
+          despachoMensaje: despacho?.mensaje ?? null,
+          despachoIndicaciones: despacho?.indicaciones ?? null
         })
 
         commit('SET_ULTIMA', venta)
