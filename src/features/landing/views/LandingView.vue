@@ -1,5 +1,22 @@
 <template>
   <div ref="raiz" class="landing">
+    <!-- Hojas que caen detrás del contenido: solo adorno -->
+    <div class="hojas" aria-hidden="true">
+      <svg v-for="h in hojas" :key="h.x" class="hoja" viewBox="0 0 24 24" :style="{
+        left: `${h.x}%`,
+        width: `${h.tam}px`,
+        height: `${h.tam}px`,
+        color: `var(--colibri-${h.color})`,
+        opacity: h.opacidad,
+        '--caida': `${h.caida}s`,
+        '--retraso': `${h.retraso}s`,
+        '--vaiven': `${h.vaiven}s`
+      }">
+        <path fill="currentColor" d="M12 2C6 6 4 12 6 18c1 2 3 3 6 4 3-1 5-2 6-4 2-6 0-12-6-16Z" />
+        <path fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1" stroke-linecap="round" d="M12 5v16M12 11l-3-2M12 11l3-2M12 16l-3.5-2.5M12 16l3.5-2.5" />
+      </svg>
+    </div>
+
     <header class="barra">
       <nav class="menu" aria-label="Secciones">
         <a v-if="catalogo.length" href="#catalogo">Catálogo</a>
@@ -187,6 +204,11 @@
             </table>
           </div>
         </div>
+
+        <div class="visita-mapa">
+          <iframe :src="mapaIntegrado" title="Ubicación de Colibrí en el mapa" loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+        </div>
       </section>
     </main>
 
@@ -220,9 +242,9 @@ const store = useStore()
 const autenticado = computed(() => store.getters['auth/isAuthenticated'])
 
 const enlaceWhatsapp = `https://wa.me/${c.whatsapp}?text=${encodeURIComponent(c.mensajeWhatsapp)}`
-const enlaceMapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-  [c.direccion, c.comuna, c.ciudad].join(', ')
-)}`
+const consultaMapa = encodeURIComponent([c.direccion, c.comuna, c.ciudad].join(', '))
+const enlaceMapa = `https://www.google.com/maps/search/?api=1&query=${consultaMapa}`
+const mapaIntegrado = `https://www.google.com/maps?q=${consultaMapa}&output=embed`
 
 const servicios = [
   { icono: Flower2, titulo: 'Ramos para regalar', texto: 'Cumpleaños, aniversarios o un simple porque sí. Nos dices el presupuesto y lo armamos.' },
@@ -259,6 +281,19 @@ async function cargarCatalogo () {
     catalogo.value = []
   }
 }
+
+/* Valores fijos y no al azar: cada hoja con su lugar, ritmo y tono.
+ * El retraso negativo hace que ya estén repartidas al abrir la página. */
+const hojas = [
+  { x: 4, tam: 29, color: 'salvia', opacidad: 0.4, caida: 24, retraso: -3, vaiven: 5 },
+  { x: 16, tam: 24, color: 'rosa', opacidad: 0.45, caida: 30, retraso: -17, vaiven: 6.5 },
+  { x: 29, tam: 32, color: 'menta', opacidad: 0.7, caida: 27, retraso: -9, vaiven: 4.5 },
+  { x: 43, tam: 24, color: 'lima', opacidad: 0.45, caida: 33, retraso: -24, vaiven: 7 },
+  { x: 57, tam: 28, color: 'rosa', opacidad: 0.4, caida: 26, retraso: -13, vaiven: 5.5 },
+  { x: 70, tam: 25, color: 'salvia', opacidad: 0.4, caida: 31, retraso: -5, vaiven: 6 },
+  { x: 83, tam: 30, color: 'menta', opacidad: 0.7, caida: 25, retraso: -20, vaiven: 4.8 },
+  { x: 94, tam: 24, color: 'lima', opacidad: 0.45, caida: 29, retraso: -11, vaiven: 6.8 }
+]
 
 /* ---------------- Galería ----------------
  * Fotos estáticas de public/galeria. Se muestran por tandas y cada imagen
@@ -461,20 +496,59 @@ onBeforeUnmount(() => mm?.revert())
   letter-spacing: 0;
 }
 
+/* ---------------- Hojas ----------------
+ * La caída va en translate y el vaivén en transform: son dos propiedades
+ * para que cada una tenga su propio ritmo sin pisarse.
+ */
+.hojas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hoja {
+  position: absolute;
+  top: 0;
+  animation:
+    hoja-caer var(--caida) linear var(--retraso) infinite,
+    hoja-vaiven var(--vaiven) ease-in-out var(--retraso) infinite alternate;
+}
+@keyframes hoja-caer {
+  from { translate: 0 -40px; }
+  to { translate: 0 calc(100vh + 40px); }
+}
+@keyframes hoja-vaiven {
+  from { transform: translateX(-26px) rotate(-28deg); }
+  to { transform: translateX(26px) rotate(32deg); }
+}
+/* El contenido va sobre las hojas: no tapan texto ni fotos */
+main,
+.pie { position: relative; z-index: 1; }
+/* En el teléfono, menos hojas */
+@media (max-width: 719px) {
+  .hoja:nth-child(even) { display: none; }
+}
+
 /* ---------------- Barra ---------------- */
 .barra {
   position: relative;
   z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
   max-width: var(--ancho);
   margin: 0 auto;
   padding: 16px var(--gutter);
 }
-/* En el teléfono el menú no cabe junto al botón: queda solo el acceso */
-.menu { display: none; }
+.menu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 20px;
+}
 .menu a {
   color: var(--tinta-suave);
   font-weight: 600;
@@ -485,7 +559,6 @@ onBeforeUnmount(() => mm?.revert())
 }
 .menu a:hover { color: var(--tinta); border-bottom-color: var(--colibri-rosa); }
 .acceso {
-  margin-left: auto;
   color: var(--tinta-suave);
   font-size: 0.9375rem;
   font-weight: 600;
@@ -964,6 +1037,20 @@ h3 {
     linear-gradient(165deg, #fff 50%, color-mix(in srgb, var(--colibri-rosa) 16%, #fff)) padding-box,
     linear-gradient(160deg, color-mix(in srgb, var(--colibri-rosa) 70%, transparent), transparent 55%) border-box;
 }
+.visita-mapa {
+  margin-top: 20px;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid var(--linea);
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--tinta) 40%, transparent);
+  background: color-mix(in srgb, var(--colibri-menta) 40%, #fff);
+}
+.visita-mapa iframe {
+  display: block;
+  width: 100%;
+  height: 320px;
+  border: 0;
+}
 .visita-icono { color: var(--rosa); }
 .direccion {
   margin: 10px 0 20px;
@@ -1027,8 +1114,9 @@ h3 {
 
 /* ---------------- Tablet y escritorio ---------------- */
 @media (min-width: 720px) {
-  .menu { display: flex; gap: 24px; }
-  .acceso { margin-left: 0; }
+  .menu { gap: 24px; }
+  /* Fuera del flujo: así no descentra el menú cuando hay sesión */
+  .acceso { position: absolute; right: var(--gutter); top: 50%; translate: 0 -50%; }
   .portada { padding-top: 40px; padding-bottom: 64px; }
   .tarjetas { grid-template-columns: repeat(2, 1fr); gap: 20px; }
   .catalogo-grilla { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
@@ -1036,6 +1124,7 @@ h3 {
   .pedir-caja { padding: 56px 48px; }
   .pasos { grid-template-columns: repeat(3, 1fr); gap: 32px; }
   .visita-grilla { grid-template-columns: 1.1fr 1fr; }
+  .visita-mapa iframe { height: 400px; }
   .pie { flex-direction: row; justify-content: space-between; }
 }
 
@@ -1045,6 +1134,7 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hojas { display: none; }
   .mancha,
   .portada-logo,
   .portada-logo :deep(.logo-ave) { animation: none; }
