@@ -11,9 +11,6 @@
       <router-link v-if="autenticado" :to="{ name: 'Dashboard' }" class="acceso">
         Ir al sistema
       </router-link>
-      <router-link v-else :to="{ name: 'Login' }" class="acceso">
-        Acceso equipo
-      </router-link>
     </header>
 
     <main>

@@ -14,7 +14,7 @@ export const CONTACTO = {
   whatsappVisible: '+56 9 8199 9014',
   mensajeWhatsapp: 'Hola, quiero hacer un pedido de flores.',
 
-  direccion: 'Av. Guillermo Ulriksen',
+  direccion: 'Jumbo, Av. Guillermo Ulriksen',
   comuna: 'La Serena',
   ciudad: 'Chile',
 
