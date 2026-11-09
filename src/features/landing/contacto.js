@@ -10,15 +10,15 @@
 
 export const CONTACTO = {
   /* Solo dígitos, con código de país: es lo que pide wa.me */
-  whatsapp: '56900000000',
-  whatsappVisible: '+56 9 0000 0000',
+  whatsapp: '56981999014',
+  whatsappVisible: '+56 9 8199 9014',
   mensajeWhatsapp: 'Hola, quiero hacer un pedido de flores.',
 
-  direccion: 'Av. Siempre Viva 123',
-  comuna: 'Comuna',
-  ciudad: 'Ciudad',
+  direccion: 'Av. Guillermo Ulriksen',
+  comuna: 'La Serena',
+  ciudad: 'Chile',
 
-  instagram: 'floristeriacolibri',
+  instagram: 'colibri.creacion',
 
   horarios: [
     { dias: 'Lunes a viernes', horas: '9:00 a 19:00' },

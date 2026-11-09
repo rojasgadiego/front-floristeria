@@ -3,6 +3,7 @@
     <header class="barra">
       <nav class="menu" aria-label="Secciones">
         <a v-if="catalogo.length" href="#catalogo">Catálogo</a>
+        <a href="#galeria">Galería</a>
         <a href="#pedir">Cómo pedir</a>
         <a href="#visitanos">Visítanos</a>
       </nav>
@@ -31,7 +32,7 @@
 
         <p class="portada-titular">Flores frescas, armadas a mano.</p>
         <p class="bajada">
-          Ramos, arreglos y flores por tallo en {{ c.comuna }}.
+          Ramos, arreglos y flores por tallo.
           Escríbenos por WhatsApp y lo dejamos listo para retirar o despachar.
         </p>
 
@@ -83,6 +84,62 @@
           Ver los {{ catalogo.length }} productos
         </button>
       </section>
+
+      <!-- ============ Galería ============ -->
+      <section id="galeria" class="seccion galeria" aria-labelledby="t-galeria">
+        <h2 id="t-galeria">Galería</h2>
+        <p class="seccion-bajada">Algunos de los ramos y arreglos que hemos armado.</p>
+        <ul class="galeria-grilla">
+          <li v-for="(foto, i) in galeriaVisible" :key="foto">
+            <button class="galeria-foto" type="button" :aria-label="`Ampliar foto ${i + 1}`" @click="abrirVisor(i)">
+              <img :src="urlFoto(foto)" :alt="`Trabajo de Colibrí, foto ${i + 1}`" loading="lazy">
+            </button>
+          </li>
+        </ul>
+        <button v-if="FOTOS_GALERIA.length > galeriaVisible.length" class="btn btn-secundario galeria-mas"
+          type="button" @click="verMasFotos">
+          Ver más fotos
+        </button>
+
+        <h3 class="galeria-subtitulo">Reels</h3>
+        <ul class="galeria-grilla">
+          <li v-for="(reel, i) in reelsVisibles" :key="reel.codigo">
+            <button class="galeria-foto reel-portada" type="button" :aria-label="`Ver reel ${i + 1}`" @click="abrirReel(reel)">
+              <img :src="urlFoto(reel.portada)" alt="" loading="lazy">
+              <span class="reel-play" aria-hidden="true"><Play :size="26" /></span>
+            </button>
+          </li>
+        </ul>
+        <button v-if="REELS_GALERIA.length > reelsVisibles.length" class="btn btn-secundario galeria-mas"
+          type="button" @click="verMasReels">
+          Ver más reels
+        </button>
+      </section>
+
+      <!-- El iframe existe solo mientras el visor está abierto: así Instagram
+           no carga con la página y el video se detiene al cerrar. -->
+      <dialog ref="visorReel" class="visor" aria-label="Reel" @click.self="cerrarReel" @close="reelAbierto = null">
+        <iframe v-if="reelAbierto" class="visor-reel" :src="`https://www.instagram.com/reel/${reelAbierto}/embed/`"
+          title="Reel de Colibrí en Instagram" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        <button class="visor-btn visor-cerrar" type="button" aria-label="Cerrar" @click="cerrarReel">
+          <X :size="24" aria-hidden="true" />
+        </button>
+      </dialog>
+
+      <dialog ref="visor" class="visor" aria-label="Foto ampliada" @click.self="cerrarVisor"
+        @close="fotoAbierta = null" @keydown.left="moverVisor(-1)" @keydown.right="moverVisor(1)">
+        <img v-if="fotoAbierta !== null" :src="urlFoto(FOTOS_GALERIA[fotoAbierta])"
+          :alt="`Trabajo de Colibrí, foto ${fotoAbierta + 1}`">
+        <button class="visor-btn visor-cerrar" type="button" aria-label="Cerrar" @click="cerrarVisor">
+          <X :size="24" aria-hidden="true" />
+        </button>
+        <button class="visor-btn visor-anterior" type="button" aria-label="Foto anterior" @click="moverVisor(-1)">
+          <ChevronLeft :size="28" aria-hidden="true" />
+        </button>
+        <button class="visor-btn visor-siguiente" type="button" aria-label="Foto siguiente" @click="moverVisor(1)">
+          <ChevronRight :size="28" aria-hidden="true" />
+        </button>
+      </dialog>
 
       <div class="separador separador-espejo" aria-hidden="true"><img :src="enredadera" alt="" width="148" height="50" loading="lazy"></div>
 
@@ -155,8 +212,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useStore } from 'vuex'
-import { Clock, Flower2, Heart, Instagram, MapPin, MessageCircle, PartyPopper, Sprout } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Clock, Flower2, Heart, Instagram, MapPin, MessageCircle, PartyPopper, Play, Sprout, X } from 'lucide-vue-next'
 import { CONTACTO as c } from '../contacto'
+import { FOTOS_GALERIA, REELS_GALERIA } from '../galeria'
 import LogoColibri from '@/shared/components/LogoColibri.vue'
 import enredadera from '@/assets/enredadera.svg'
 import { imagenesService } from '@/features/inventario/services/imagenes.service'
@@ -203,6 +261,58 @@ async function cargarCatalogo () {
   } catch {
     catalogo.value = []
   }
+}
+
+/* ---------------- Galería ----------------
+ * Fotos estáticas de public/galeria. Se muestran por tandas y cada imagen
+ * carga recién al acercarse a la pantalla.
+ */
+const FOTOS_POR_TANDA = 12
+const cantidadFotos = ref(FOTOS_POR_TANDA)
+const galeriaVisible = computed(() => FOTOS_GALERIA.slice(0, cantidadFotos.value))
+const urlFoto = (archivo) => `/galeria/${archivo}`
+
+async function verMasFotos () {
+  cantidadFotos.value += FOTOS_POR_TANDA
+  // La página creció: las animaciones de más abajo deben recalcular su lugar
+  await nextTick()
+  ScrollTrigger.refresh()
+}
+
+const visor = ref(null)
+const fotoAbierta = ref(null)
+
+function abrirVisor (i) {
+  fotoAbierta.value = i
+  visor.value.showModal()
+}
+function cerrarVisor () {
+  visor.value.close()
+}
+function moverVisor (paso) {
+  const total = FOTOS_GALERIA.length
+  fotoAbierta.value = (fotoAbierta.value + paso + total) % total
+}
+
+const REELS_POR_TANDA = 8
+const cantidadReels = ref(REELS_POR_TANDA)
+const reelsVisibles = computed(() => REELS_GALERIA.slice(0, cantidadReels.value))
+
+async function verMasReels () {
+  cantidadReels.value += REELS_POR_TANDA
+  await nextTick()
+  ScrollTrigger.refresh()
+}
+
+const visorReel = ref(null)
+const reelAbierto = ref(null)
+
+function abrirReel (reel) {
+  reelAbierto.value = reel.codigo
+  visorReel.value.showModal()
+}
+function cerrarReel () {
+  visorReel.value.close()
 }
 
 /* ---------------- Animaciones (GSAP) ----------------
@@ -704,6 +814,93 @@ h3 {
 .producto-precio { color: var(--rosa); font-weight: 700; }
 .catalogo-mas { display: flex; margin: 28px auto 0; }
 
+/* Galería: dos columnas en el teléfono, cuatro en escritorio */
+.galeria-grilla {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.galeria-foto {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--colibri-menta) 50%, #fff);
+  cursor: zoom-in;
+}
+.galeria-foto img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  transition: transform .3s ease;
+}
+.galeria-foto:hover img { transform: scale(1.04); }
+.galeria-mas { display: flex; margin: 28px auto 0; }
+.galeria-subtitulo { text-align: center; margin: 48px 0 20px; font-size: 2rem; }
+.reel-portada { position: relative; }
+.reel-portada img { aspect-ratio: 9 / 16; }
+.reel-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  pointer-events: none;
+}
+.reel-play svg {
+  box-sizing: content-box;
+  padding: 12px;
+  border-radius: 50%;
+  background: rgba(16, 26, 21, .55);
+}
+
+/* Visor a pantalla completa. Tocar el fondo lo cierra. */
+.visor {
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  padding: 16px;
+  border: 0;
+  background: rgba(16, 26, 21, .94);
+}
+.visor[open] {
+  display: grid;
+  place-items: center;
+}
+.visor::backdrop { background: transparent; }
+.visor > img {
+  max-width: 100%;
+  max-height: calc(100dvh - 32px);
+  border-radius: 10px;
+}
+.visor-reel {
+  width: min(100%, 420px);
+  height: min(calc(100dvh - 32px), 760px);
+  border: 0;
+  border-radius: 10px;
+  background: #fff;
+}
+.visor-btn {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .9);
+  color: var(--tinta);
+  cursor: pointer;
+}
+.visor-cerrar { top: 14px; right: 14px; }
+.visor-anterior { left: 14px; top: 50%; translate: 0 -50%; }
+.visor-siguiente { right: 14px; top: 50%; translate: 0 -50%; }
+
 /* Cómo pedir: una caja suave en menta, con números rosados en círculo */
 /* Varias capas: luz blanca arriba al centro, rosa en una esquina, lima en
    la otra, y debajo un degradado menta → salvia claro */
@@ -838,6 +1035,7 @@ h3 {
   .portada { padding-top: 40px; padding-bottom: 64px; }
   .tarjetas { grid-template-columns: repeat(2, 1fr); gap: 20px; }
   .catalogo-grilla { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  .galeria-grilla { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
   .pedir-caja { padding: 56px 48px; }
   .pasos { grid-template-columns: repeat(3, 1fr); gap: 32px; }
   .visita-grilla { grid-template-columns: 1.1fr 1fr; }
@@ -856,6 +1054,7 @@ h3 {
   .btn,
   .btn-principal,
   .servicio,
-  .producto { transition: none; }
+  .producto,
+  .galeria-foto img { transition: none; }
 }
 </style>
