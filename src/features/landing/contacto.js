@@ -3,8 +3,6 @@
  * =========================================================================
  * Datos públicos del local para la landing. Viven acá y no se piden a
  * /configuracion porque ese endpoint exige sesión y la landing es anónima.
- *
- * ⚠️ PENDIENTE: reemplazar por los datos reales antes de desplegar.
  * =========================================================================
  */
 
@@ -21,8 +19,6 @@ export const CONTACTO = {
   instagram: 'colibri.creacion',
 
   horarios: [
-    { dias: 'Lunes a viernes', horas: '9:00 a 19:00' },
-    { dias: 'Sábado', horas: '9:00 a 14:00' },
-    { dias: 'Domingo', horas: 'Cerrado' }
+    { dias: 'Lunes a domingo', horas: '9:30 AM a 8:00 PM' }
   ]
 }
