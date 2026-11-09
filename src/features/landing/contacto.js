@@ -19,6 +19,7 @@ export const CONTACTO = {
   instagram: 'colibri.creacion',
 
   horarios: [
-    { dias: 'Lunes a domingo', horas: '9:30 AM a 8:00 PM' }
+    { dias: 'Primavera / verano', horas: '9:30 a 20:00' },
+    { dias: 'Otoño / invierno', horas: '9:30 a 19:00' }
   ]
 }
